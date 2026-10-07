@@ -1,0 +1,74 @@
+:root {
+  color: #e8edf7;
+  background: #0b1020;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .6; }
+
+main {
+  min-height: 100vh;
+  padding: 24px 16px;
+  background: radial-gradient(circle at 15% 5%, #21436e 0, transparent 40%), #0b1020;
+}
+
+.card {
+  width: min(100%, 640px);
+  margin: 0 auto;
+  padding: 28px;
+  border: 1px solid #31405f;
+  border-radius: 20px;
+  background: rgba(18, 27, 48, .96);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
+}
+
+.eyebrow { margin: 0; color: #7dd3fc; font-size: .76rem; font-weight: 800; letter-spacing: .13em; }
+h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
+.intro { margin: 0 0 24px; color: #b7c4d8; line-height: 1.55; }
+
+.page-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0 0 18px; padding: 4px; border: 1px solid #31405f; border-radius: 11px; background: #0d1729; }
+.page-tabs button { min-height: 42px; padding: 9px 12px; color: #bdc9dd; background: transparent; }
+.page-tabs button.selected { color: #06111f; background: #7dd3fc; }
+
+.connection { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 16px; border-radius: 13px; background: #101a2e; }
+.connection strong { display: block; font-size: .92rem; }
+.connection code { display: block; max-width: 220px; overflow: hidden; color: #a8c7ff; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.dot { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%; background: #f59e0b; }
+.dot.ok { background: #34d399; box-shadow: 0 0 12px #34d399; }
+
+button { border: 0; border-radius: 10px; padding: 11px 14px; color: #06111f; background: #7dd3fc; font-weight: 800; }
+form { margin-top: 24px; }
+label { display: block; margin: 14px 0; color: #c7d2e3; font-size: .88rem; font-weight: 700; }
+input { width: 100%; margin-top: 7px; padding: 13px; border: 1px solid #405174; border-radius: 10px; outline: none; color: #f8fafc; background: #0b1427; }
+input:focus { border-color: #7dd3fc; box-shadow: 0 0 0 3px rgba(125, 211, 252, .15); }
+.grid { display: grid; grid-template-columns: 1fr 1.45fr; gap: 12px; }
+aside { margin: 18px 0; padding: 12px 14px; border-left: 3px solid #7dd3fc; color: #b7c4d8; background: #0d1729; font-size: .85rem; line-height: 1.45; }
+.mint { width: 100%; padding: 15px; background: #5eead4; }
+.status { min-height: 2.5em; color: #c9d6e9; line-height: 1.45; }
+.result { overflow-wrap: anywhere; padding: 12px; border-radius: 10px; font-size: .86rem; }
+.success { color: #bbf7d0; background: #123326; }
+.error { color: #fecaca; background: #421d29; }
+details { color: #bdc9dd; font-size: .85rem; line-height: 1.5; }
+summary { cursor: pointer; color: #d9e7fb; font-weight: 800; }
+li { margin: 7px 0; }
+
+.receive-panel { margin-top: 24px; padding-top: 22px; border-top: 1px solid #31405f; text-align: center; }
+.transfer-panel { margin-top: 24px; padding-top: 22px; border-top: 1px solid #31405f; }
+.transfer-panel h2 { margin: 0 0 18px; font-size: 1.15rem; }
+.receive-panel h2 { margin: 0 0 18px; font-size: 1.15rem; }
+.qr-frame { display: grid; width: min(100%, 280px); aspect-ratio: 1; place-items: center; margin: 0 auto 18px; padding: 16px; border-radius: 8px; background: #fff; }
+.qr-frame svg { display: block; width: 100%; height: 100%; }
+.receive-notice { max-width: 440px; margin: 0 auto 18px; color: #b7c4d8; font-size: .9rem; line-height: 1.5; }
+.receive-address { display: block; overflow-wrap: anywhere; padding: 12px; border: 1px solid #405174; border-radius: 8px; color: #a8c7ff; background: #0b1427; font-size: .82rem; line-height: 1.5; }
+.copy-address { margin-top: 12px; }
+
+@media (max-width: 440px) {
+  .card { padding: 21px; border-radius: 16px; }
+  .connection { align-items: flex-start; flex-direction: column; }
+  .connection button { width: 100%; }
+  .grid { grid-template-columns: 1fr; gap: 0; }
+}
