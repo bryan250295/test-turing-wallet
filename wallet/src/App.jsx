@@ -15,6 +15,7 @@ export default function App() {
   const wallet = useTuringWallet();
   const [address, setAddress] = useState('');
   const [network, setNetwork] = useState(null);
+  const [walletInfo, setWalletInfo] = useState(null);
   const [name, setName] = useState('My Devnet Token');
   const [symbol, setSymbol] = useState('MDT');
   const [decimal, setDecimal] = useState('2');
@@ -30,6 +31,15 @@ export default function App() {
   const networkIsDevnet = network?.network === 'tbc' && network?.type === 'testnet';
   const parsedDecimal = Number(decimal);
   const parsedAmount = Number(amount);
+  const walletName = typeof walletInfo?.walletName === 'string'
+    ? walletInfo.walletName
+    : typeof walletInfo?.name === 'string' ? walletInfo.name : 'Turing Wallet';
+  const walletVersion = typeof walletInfo?.version === 'string' || typeof walletInfo?.version === 'number'
+    ? walletInfo.version
+    : null;
+  const networkLabel = network
+    ? [network.network, network.type].filter(Boolean).join(' / ') || 'Connected'
+    : 'Not connected';
   const preview = useMemo(
     () => (Number.isInteger(parsedDecimal) && parsedDecimal >= 0 && parsedDecimal <= 15 && Number.isSafeInteger(parsedAmount) && parsedAmount > 0
       ? formatRawAmount(parsedAmount, parsedDecimal)
@@ -38,15 +48,50 @@ export default function App() {
   );
 
   useEffect(() => {
-    const onNetworkChanged = (event) => setNetwork(event.detail?.network ?? null);
+    let active = true;
+    const refreshWalletDetails = async (networkOverride) => {
+      if (!wallet.isReady) return false;
+      try {
+        const [walletAddresses, currentNetwork, info] = await Promise.all([
+          wallet.getAddress(),
+          wallet.getNetwork(),
+          wallet.getInfo(),
+        ]);
+        if (!active) return false;
+        setAddress(walletAddresses?.tbcAddress ?? walletAddresses?.addresses?.tbcAddress ?? '');
+        setNetwork(networkOverride ?? currentNetwork ?? null);
+        setWalletInfo(info ?? null);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const onNetworkChanged = (event) => {
+      void refreshWalletDetails(event.detail?.network);
+    };
+    const onAccountChanged = () => {
+      void refreshWalletDetails();
+    };
+    const onVisibilityChanged = () => {
+      if (document.visibilityState === 'visible' && address) void refreshWalletDetails();
+    };
+
     window.addEventListener('TuringNetworkChanged', onNetworkChanged);
-    return () => window.removeEventListener('TuringNetworkChanged', onNetworkChanged);
-  }, []);
+    window.addEventListener('TuringAccountChanged', onAccountChanged);
+    document.addEventListener('visibilitychange', onVisibilityChanged);
+    return () => {
+      active = false;
+      window.removeEventListener('TuringNetworkChanged', onNetworkChanged);
+      window.removeEventListener('TuringAccountChanged', onAccountChanged);
+      document.removeEventListener('visibilitychange', onVisibilityChanged);
+    };
+  }, [wallet, address]);
 
   async function connect() {
     setResult(null);
     setAddress('');
     setNetwork(null);
+    setWalletInfo(null);
     if (!wallet.isReady) {
       setStatus('Turing Wallet was not detected. Open this URL inside the Turing Wallet mobile DApp browser, not Safari or Chrome.');
       return;
@@ -55,18 +100,16 @@ export default function App() {
     setBusy(true);
     try {
       const connectResult = await wallet.connect();
-      console.log('Turing Wallet connect result:', connectResult);
       const [walletAddresses, currentNetwork, info] = await Promise.all([
         wallet.getAddress(),
         wallet.getNetwork(),
         wallet.getInfo(),
       ]);
-      console.log('Turing Wallet addresses:', walletAddresses);
-      console.log('Turing Wallet info:', info);
       const connectedAddress = walletAddresses?.tbcAddress
         ?? connectResult?.tbcAddress
         ?? connectResult?.addresses?.tbcAddress
         ?? '';
+      setWalletInfo(info ?? null);
       if (!connectedAddress) {
         setNetwork(currentNetwork);
         setStatus('Connected, but Turing Wallet did not return a TBC address. Select a TBC account in the extension and reconnect.');
@@ -74,7 +117,6 @@ export default function App() {
       }
       setAddress(connectedAddress);
       setNetwork(currentNetwork);
-      console.log('Connected to network:', currentNetwork);
       setStatus(currentNetwork?.network === 'tbc' && currentNetwork?.type === 'testnet'
         ? 'Devnet connected. Review your token details, then mint.'
         : 'Connected, but switch the wallet to TBC Devnet before minting.');
@@ -219,10 +261,14 @@ export default function App() {
         </nav>
 
         <div className="connection">
-          <div>
-            <span className={`dot ${networkIsDevnet ? 'ok' : ''}`} />
-            <strong>{networkIsDevnet ? 'TBC Devnet connected' : 'Wallet not connected to Devnet'}</strong>
-            {address && <code>{address}</code>}
+          <div className="connection-info">
+            <strong><span className={`dot ${networkIsDevnet ? 'ok' : ''}`} />{networkIsDevnet ? 'TBC Devnet connected' : 'Wallet not connected to Devnet'}</strong>
+            <dl className="wallet-details">
+              <div><dt>Wallet</dt><dd>{walletName}</dd></div>
+              <div><dt>Network</dt><dd>{networkLabel}</dd></div>
+              <div className="account-detail"><dt>Account</dt><dd><code title={address}>{address || 'Not connected'}</code></dd></div>
+              {walletVersion !== null && <div><dt>Version</dt><dd>{walletVersion}</dd></div>}
+            </dl>
           </div>
           <button type="button" onClick={connect} disabled={busy}>
             {busy ? 'Working…' : address ? 'Reconnect' : 'Connect wallet'}

@@ -37,6 +37,13 @@ h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
 .connection { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 16px; border-radius: 13px; background: #101a2e; }
 .connection strong { display: block; font-size: .92rem; }
 .connection code { display: block; max-width: 220px; overflow: hidden; color: #a8c7ff; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.connection-info { min-width: 0; flex: 1; }
+.wallet-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px 16px; margin: 14px 0 0; }
+.wallet-details div { min-width: 0; }
+.wallet-details dt { color: #91a2ba; font-size: .7rem; font-weight: 700; text-transform: uppercase; }
+.wallet-details dd { margin: 4px 0 0; color: #e8edf7; font-size: .84rem; overflow-wrap: anywhere; }
+.wallet-details .account-detail { grid-column: 1 / -1; }
+.wallet-details code { max-width: 100%; overflow: visible; color: #a8c7ff; line-height: 1.5; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .dot { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%; background: #f59e0b; }
 .dot.ok { background: #34d399; box-shadow: 0 0 12px #34d399; }
 
