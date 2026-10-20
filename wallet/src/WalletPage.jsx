@@ -28,6 +28,43 @@ function formatTokenBalance(token) {
 	return formatRawAmount(token.balance, decimals);
 }
 
+function tokenAmountToRaw(amount, decimals) {
+	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
+		throw new Error('The selected token has invalid decimals.');
+	}
+	if (!/^\d+(\.\d+)?$/.test(amount)) {
+		throw new Error('Enter a positive token amount using a decimal point, for example 1.5.');
+	}
+	const [whole, fraction = ''] = amount.split('.');
+	if (fraction.length > decimals) {
+		throw new Error(`This token supports up to ${decimals} decimal places.`);
+	}
+	const raw = BigInt(whole + fraction.padEnd(decimals, '0'));
+	if (raw <= 0n) throw new Error('Token amount must be greater than zero.');
+	return raw;
+}
+
+function getTransferPreview(token, amount) {
+	if (!token) return { valid: false, remaining: '—', error: '' };
+	try {
+		const decimals = Number(token.decimal);
+		if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255 ||
+			(typeof token.balance === 'number' && !Number.isSafeInteger(token.balance)) ||
+			!/^\d+$/.test(String(token.balance))) {
+			throw new Error('Token balance or decimals are unavailable. Reopen the token list to retry.');
+		}
+		const balance = BigInt(token.balance);
+		if (!amount.trim()) return { valid: false, remaining: formatRawAmount(balance, decimals), error: '' };
+		const rawAmount = tokenAmountToRaw(amount.trim(), decimals);
+		if (rawAmount > balance) {
+			return { valid: false, remaining: '—', error: 'Amount exceeds your available token balance.' };
+		}
+		return { valid: true, remaining: formatRawAmount(balance - rawAmount, decimals), error: '' };
+	} catch (error) {
+		return { valid: false, remaining: '—', error: error.message };
+	}
+}
+
 export default function WalletPage({ session, hidden }) {
 	const { wallet, address, networkIsDevnet, status, setStatus, result, setResult, busy, setBusy } = session;
 	const [tokenName, setTokenName] = useState('Bryan Devnet Token');
@@ -68,6 +105,7 @@ export default function WalletPage({ session, hidden }) {
 	const selectedToken = tokenList.address === address && networkIsDevnet
 		? tokenList.tokens.find((token) => token.contract_id === tokenContract)
 		: null;
+	const transferPreview = getTransferPreview(selectedToken, transferAmount);
 
 	const parsedDecimal = Number(decimal);
 	const parsedAmount = Number(amount);
@@ -171,8 +209,8 @@ export default function WalletPage({ session, hidden }) {
 				recordStatus('Enter the recipient address and choose a token from your wallet.');
 				return;
 			}
-			if (!/^\d+$/.test(transferAmount.trim()) || BigInt(transferAmount.trim()) < 1n) {
-				recordStatus('FT amount must be a positive whole number of raw units.');
+			if (!transferPreview.valid) {
+				recordStatus(transferPreview.error || 'Enter the token amount to send.');
 				return;
 			}
 
@@ -183,7 +221,7 @@ export default function WalletPage({ session, hidden }) {
 					flag: 'FT_TRANSFER',
 					ft_contract_address: tokenContract.trim(),
 					address: recipient.trim(),
-					ft_amount: transferAmount.trim(),
+					ft_amount: transferAmount.trim(), // Wallet accepts token units, not the API's raw balance units.
 					broadcastEnabled: true,
 					domain: DEVNET_DOMAIN,
 				}]);
@@ -325,13 +363,14 @@ export default function WalletPage({ session, hidden }) {
 						</details>
 						{selectedToken && <p className="selected-contract">Contract: <code>{tokenContract}</code><br />Balance: {formatTokenBalance(selectedToken)} {selectedToken.symbol} ({String(selectedToken.balance)} raw units). Decimals: {selectedToken.decimal}.</p>}
 						<label>
-							Amount (raw units)
-							<input value={transferAmount} inputMode="numeric" onChange={(event) => setTransferAmount(event.target.value)} placeholder="For example, 1000" required />
+							<span className="amount-label"><span>Amount{selectedToken ? ` (${selectedToken.symbol})` : ''}</span>{selectedToken && <span className="amount-available" aria-live="polite">Available {transferPreview.remaining} {selectedToken.symbol}</span>}</span>
+							<input value={transferAmount} inputMode="decimal" onChange={(event) => setTransferAmount(event.target.value)} placeholder="For example, 1.5" aria-invalid={Boolean(transferPreview.error)} aria-describedby={transferPreview.error ? 'transfer-amount-error' : undefined} required />
 						</label>
+						{transferPreview.error && <p id="transfer-amount-error" className="amount-error" role="status">{transferPreview.error}</p>}
 						<aside>
 							Use the exact contract address supplied by the token issuer; token names and symbols are not unique. Native TBC Devnet is required to pay the transaction fee.
 						</aside>
-						<button className="mint" type="submit" disabled={busy || !networkIsDevnet || tokenList.loading || !selectedToken}>
+						<button className="mint" type="submit" disabled={busy || !networkIsDevnet || tokenList.loading || !selectedToken || !transferPreview.valid}>
 							{busy ? 'Waiting for wallet…' : 'Transfer token'}
 						</button>
 					</form>
