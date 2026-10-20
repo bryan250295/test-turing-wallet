@@ -37,6 +37,7 @@ dist/
 .vite/
 
 # Local environment files and logs
+wallet/logs/
 .env
 .env.*
 !**/.env.example

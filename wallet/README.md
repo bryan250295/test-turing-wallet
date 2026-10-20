@@ -22,6 +22,25 @@ Vite prints a LAN URL such as `http://192.168.1.10:5173`. With the phone and com
 
 `amount` is submitted as raw smallest-unit amount. For example, `100000` with `decimal: 2` displays as `1000.00` tokens.
 
+## Daily action logs
+
+While running `npm run dev`, `npm run dev:tunnel`, or `npm run preview`, each call to
+`connect()`, `mint()`, or `transfer()` appends one entry to `wallet/logs/YYYY-MM-DD`
+(for example, `wallet/logs/2026-10-19`, with no file extension). Dates use
+`Asia/Kuala_Lumpur` time. The directory is created automatically and ignored by Git.
+
+```text
+2026-10-19 13:10:00 Connect: {"response":{},"addresses":{},"network":{},"info":{}}
+2026-10-19 13:10:05 Mint: {"txid":"example"}
+2026-10-19 13:10:10 Transfer: {"error":{"name":"Error","message":"Request rejected"}}
+```
+
+Wallet responses are stored as JSON; connection entries also include address,
+network, and wallet information. Calls stopped by validation store a status message.
+Logging failures appear in the browser console and do not change the wallet result.
+The `/__wallet-log` endpoint runs in Vite's development and preview servers; a
+statically hosted build needs a backend implementing that endpoint to save files.
+
 ## Verify before using
 
 Build the site before serving it:
