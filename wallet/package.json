@@ -1,23 +1,23 @@
 {
-  "name": "tbc-devnet-token-minter",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "dev:tunnel": "concurrently --kill-others --names VITE,TUNNEL \"vite --host 0.0.0.0 --port 5173 --strictPort\" \"cloudflared tunnel --url http://localhost:5173\"",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@vitejs/plugin-react": "^6.1.1",
-    "qrcode.react": "^4.2.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "turing-wallet-provider": "^1.5.8",
-    "vite": "^8.3.0"
-  },
-  "devDependencies": {
-    "concurrently": "^10.0.5"
-  }
+	"name": "tbc-devnet-token-minter",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite --host 0.0.0.0",
+		"dev:tunnel": "concurrently --kill-others --names VITE,TUNNEL \"vite --host 0.0.0.0 --port 5173 --strictPort\" \"cloudflared tunnel --url http://localhost:5173\"",
+		"build": "vite build",
+		"preview": "vite preview"
+	},
+	"dependencies": {
+		"@vitejs/plugin-react": "^6.1.1",
+		"qrcode.react": "^4.2.0",
+		"react": "^19.3.0",
+		"react-dom": "^19.3.0",
+		"turing-wallet-provider": "^1.5.8",
+		"vite": "^8.3.0"
+	},
+	"devDependencies": {
+		"concurrently": "^10.0.5"
+	}
 }

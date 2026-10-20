@@ -5,9 +5,9 @@ import App from './App.jsx';
 import './styles.css';
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <TuringProvider>
-      <App />
-    </TuringProvider>
-  </StrictMode>,
+	<StrictMode>
+		<TuringProvider>
+			<App />
+		</TuringProvider>
+	</StrictMode>,
 );
