@@ -4,6 +4,10 @@ export const DEVNET_API_BASE = `https://${DEVNET_DOMAIN}/api/tbc`;
 
 export const API_URLS = {
 	actionLog: '/__wallet-log',
+	tokenTransaction: (txid) =>
+		`${DEVNET_API_BASE}/ft/decode/txid/${encodeURIComponent(txid)}`,
+	tokenInfo: (contractId) =>
+		`${DEVNET_API_BASE}/ft/info/contract/${encodeURIComponent(contractId)}`,
 	nativeHistory: (address, start, end) =>
 		`${DEVNET_API_BASE}/history/address/${encodeURIComponent(address)}/start/${start}/end/${end}`,
 	tokenHistory: (address, start, end) =>

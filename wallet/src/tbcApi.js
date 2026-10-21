@@ -45,6 +45,14 @@ export function getTransaction(txid, options) {
 	return getApiData(API_URLS.transaction(txid), options);
 }
 
+export function getTokenTransaction(txid, options) {
+	return getApiData(API_URLS.tokenTransaction(txid), options);
+}
+
+export function getTokenInfo(contractId, options) {
+	return getApiData(API_URLS.tokenInfo(contractId), options);
+}
+
 async function getAllHistory(endpoint, address, options) {
 	const records = [];
 	const seen = new Set();

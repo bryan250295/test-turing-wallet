@@ -5,6 +5,8 @@
 }
 
 * { box-sizing: border-box; }
+.history-address { display: block; white-space: normal; overflow-wrap: anywhere; font-size: .72rem; color: #a9bdd7; margin: 4px 0; }
+.history-amount { white-space: nowrap; font-variant-numeric: tabular-nums; color: #7ce6bc; }
 .amount-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .amount-available { color: #7ce6bc; font-size: .8rem; font-weight: 500; }
 .amount-error { color: #fca5a5; font-size: .8rem; margin: -4px 0 14px; }
