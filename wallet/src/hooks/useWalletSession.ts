@@ -1,20 +1,22 @@
+import { getErrorMessage } from '../utils/errors';
+import type { WalletAddresses, WalletInfo, WalletNetwork, WalletResult } from '../types/wallet';
 import { useEffect, useState } from 'react';
 import { useTuringWallet } from 'turing-wallet-provider';
-import { logAction } from './services/actionLog';
+import { logAction } from '../services/actionLog';
 
 export default function useWalletSession() {
 	const wallet = useTuringWallet();
 	const [address, setAddress] = useState('');
-	const [network, setNetwork] = useState(null);
-	const [walletInfo, setWalletInfo] = useState(null);
+	const [network, setNetwork] = useState<WalletNetwork | null>(null);
+	const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
 	const [status, setStatus] = useState('Connect Turing Wallet to get started.');
-	const [result, setResult] = useState(null);
+	const [result, setResult] = useState<WalletResult | null>(null);
 	const [busy, setBusy] = useState(false);
 	const networkIsDevnet = network?.network === 'tbc' && network?.type === 'testnet';
 
 	useEffect(() => {
 		let active = true;
-		const refreshWalletDetails = async (networkOverride) => {
+		const refreshWalletDetails = async (networkOverride?: WalletNetwork) => {
 			if (!wallet.isReady) return false;
 			try {
 				const [walletAddresses, currentNetwork, info] = await Promise.all([
@@ -24,7 +26,7 @@ export default function useWalletSession() {
 				]);
 				console.log("Wallet: ", wallet);
 				if (!active) return false;
-				setAddress(walletAddresses?.tbcAddress ?? walletAddresses?.addresses?.tbcAddress ?? '');
+				setAddress(walletAddresses?.tbcAddress ?? (walletAddresses as WalletAddresses | undefined)?.addresses?.tbcAddress ?? '');
 				setNetwork(networkOverride ?? currentNetwork ?? null);
 				setWalletInfo(info ?? null);
 				return true;
@@ -32,8 +34,8 @@ export default function useWalletSession() {
 				return false;
 			}
 		};
-		const onNetworkChanged = (event) => {
-			void refreshWalletDetails(event.detail?.network);
+		const onNetworkChanged = (event: Event) => {
+			void refreshWalletDetails((event as CustomEvent<{ network?: WalletNetwork }>).detail?.network);
 		};
 		const onAccountChanged = () => {
 			void refreshWalletDetails();
@@ -42,7 +44,7 @@ export default function useWalletSession() {
 			if (document.visibilityState === 'visible' && address) void refreshWalletDetails();
 		};
 
-		let readinessPoll;
+		let readinessPoll: number | undefined;
 		window.addEventListener('TuringNetworkChanged', onNetworkChanged);
 		window.addEventListener('TuringAccountChanged', onAccountChanged);
 		document.addEventListener('visibilitychange', onVisibilityChanged);
@@ -63,8 +65,8 @@ export default function useWalletSession() {
 	}, [wallet, address]);
 
 	async function connect() {
-		let logData;
-		const recordStatus = (message) => {
+		let logData: unknown;
+		const recordStatus = (message: string) => {
 			setStatus(message);
 			if (logData === undefined) logData = { status: message };
 		};
@@ -90,22 +92,22 @@ export default function useWalletSession() {
 				logData = { response: connectResult, addresses: walletAddresses, network: currentNetwork, info };
 				const connectedAddress = walletAddresses?.tbcAddress
 					?? connectResult?.tbcAddress
-					?? connectResult?.addresses?.tbcAddress
+					?? (connectResult as WalletAddresses | undefined)?.addresses?.tbcAddress
 					?? '';
 				setWalletInfo(info ?? null);
 				if (!connectedAddress) {
-					setNetwork(currentNetwork);
+					setNetwork(currentNetwork ?? null);
 					recordStatus('Connected, but Turing Wallet did not return a TBC address. Select a TBC account in the extension and reconnect.');
 					return;
 				}
 				setAddress(connectedAddress);
-				setNetwork(currentNetwork);
+				setNetwork(currentNetwork ?? null);
 				recordStatus(currentNetwork?.network === 'tbc' && currentNetwork?.type === 'testnet'
 					? 'Devnet connected. Review your token details, then mint.'
 					: 'Connected, but switch the wallet to TBC Devnet before minting.');
 			} catch (error) {
 				logData = { error };
-				recordStatus(`Connection failed: ${error.message ?? String(error)}`);
+				recordStatus(`Connection failed: ${getErrorMessage(error) ?? String(error)}`);
 			} finally {
 				setBusy(false);
 			}

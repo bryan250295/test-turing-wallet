@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
-
-import { getNativeUtxos, getTokens, getTokenUtxos } from '../tbcApi';
+import type { WalletPageProps } from '../types/wallet';
 import WalletConnection from '../components/WalletConnection';
+import useUtxos from '../hooks/useUtxos';
 
-export default function UtxoPage({ session }) {
+export default function UtxoPage({ session }: WalletPageProps) {
 	return (
 		<section className="card">
 			<p className="eyebrow">TBC TEST NETWORK ONLY</p>
@@ -16,54 +15,8 @@ export default function UtxoPage({ session }) {
 	);
 }
 
-function UtxoList({ address, networkIsDevnet }) {
-	const [refresh, setRefresh] = useState(0);
-	const [state, setState] = useState({ loading: true, groups: [], errors: [] });
-
-	useEffect(() => {
-		const controller = new AbortController();
-		const { signal } = controller;
-		setState({ loading: true, groups: [], errors: [] });
-		if (!address || !networkIsDevnet) return () => controller.abort();
-
-		async function load() {
-			const groups = [];
-			const errors = [];
-			const results = await Promise.allSettled([
-				getNativeUtxos(address, { signal }),
-				getTokens(address, { signal }),
-			]);
-			if (results[0].status === 'fulfilled') {
-				groups.push({ id: 'native', name: 'Native TBC', outputs: results[0].value });
-			} else errors.push(`Native TBC: ${results[0].reason.message}`);
-			if (results[1].status === 'fulfilled') {
-				const tokens = results[1].value;
-				// Fetch token groups in sequence to avoid flooding the public API.
-				for (const token of tokens) {
-					if (signal.aborted) return;
-					try {
-						const outputs = await getTokenUtxos(address, token.contract_id, { signal });
-						groups.push({ id: token.contract_id, name: token.name || token.symbol || 'Unnamed token', symbol: token.symbol, outputs });
-					} catch (error) {
-						errors.push(`${token.name || token.contract_id}: ${error.message}`);
-					}
-				}
-			} else errors.push(`Token list: ${results[1].reason.message}`);
-			if (!signal.aborted) setState({ loading: false, groups, errors });
-		}
-		// Start after the mount effects finish. StrictMode's initial cleanup
-		// cancels this scheduled load before it can send duplicate requests.
-		const loadTimer = window.setTimeout(() => {
-			if (signal.aborted) return;
-			load().catch((error) => {
-				if (!signal.aborted) setState({ loading: false, groups: [], errors: [error.message] });
-			});
-		}, 0);
-		return () => {
-			window.clearTimeout(loadTimer);
-			controller.abort();
-		};
-	}, [address, networkIsDevnet, refresh]);
+function UtxoList({ address, networkIsDevnet }: { address: string; networkIsDevnet: boolean }) {
+	const state = useUtxos(address, networkIsDevnet);
 
 	if (!address || !networkIsDevnet) return <p className="status">Connect your wallet on TBC Devnet to view unspent outputs.</p>;
 	const count = state.groups.reduce((total, group) => total + group.outputs.length, 0);
@@ -71,7 +24,7 @@ function UtxoList({ address, networkIsDevnet }) {
 	return <section className="utxo-panel" aria-labelledby="utxo-heading" aria-busy={state.loading}>
 		<div className="utxo-heading">
 			<h2 id="utxo-heading">Unspent outputs</h2>
-			<button type="button" disabled={state.loading} onClick={() => setRefresh((value) => value + 1)}>Refresh</button>
+			<button type="button" disabled={state.loading} onClick={state.refresh}>Refresh</button>
 		</div>
 		<p className="status" role="status">{state.loading ? 'Loading native TBC and token UTXOs…' : `${count} outputs loaded${state.errors.length ? ' — some requests failed; list is incomplete.' : '.'}`}</p>
 		<p>Native TBC and fungible tokens for this address. Amounts are shown in raw units. NFTs and other contract types are not included.</p>

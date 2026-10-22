@@ -1,71 +1,18 @@
+import { formatRawAmount, formatTokenBalance, getTransferPreview } from '../utils/tokenAmounts';
+import { getErrorMessage } from '../utils/errors';
+import type { FormEvent } from 'react';
+import type { Token } from '../types/api';
+import type { WalletPageProps } from '../types/wallet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { logAction } from '../services/actionLog';
 import WalletConnection from '../components/WalletConnection';
 import { DEVNET_DOMAIN } from '../config/constants';
-import { getTokens } from '../tbcApi';
+import { getTokens } from '../services/tbcApi';
 
 const MAX_SAFE_AMOUNT = Number.MAX_SAFE_INTEGER;
 
-function formatRawAmount(rawAmount, decimal) {
-	const raw = BigInt(rawAmount).toString().padStart(decimal + 1, '0');
-	const whole = decimal === 0 ? raw : raw.slice(0, -decimal);
-	const fraction = decimal === 0 ? '' : raw.slice(-decimal).replace(/0+$/, '');
-	const formatter = new Intl.NumberFormat(undefined, { useGrouping: true, maximumFractionDigits: 0 });
-	const groupedWhole = formatter.format(BigInt(whole));
-	if (!fraction) return groupedWhole;
-	const decimalSeparator = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1 })
-		.formatToParts(1.1)
-		.find((part) => part.type === 'decimal')?.value ?? '.';
-	return `${groupedWhole}${decimalSeparator}${fraction}`;
-}
-
-function formatTokenBalance(token) {
-	const decimals = Number(token.decimal);
-	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return '—';
-	if (typeof token.balance === 'number' && !Number.isSafeInteger(token.balance)) return '—';
-	if (!/^\d+$/.test(String(token.balance))) return '—';
-	return formatRawAmount(token.balance, decimals);
-}
-
-function tokenAmountToRaw(amount, decimals) {
-	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
-		throw new Error('The selected token has invalid decimals.');
-	}
-	if (!/^\d+(\.\d+)?$/.test(amount)) {
-		throw new Error('Enter a positive token amount using a decimal point, for example 1.5.');
-	}
-	const [whole, fraction = ''] = amount.split('.');
-	if (fraction.length > decimals) {
-		throw new Error(`This token supports up to ${decimals} decimal places.`);
-	}
-	const raw = BigInt(whole + fraction.padEnd(decimals, '0'));
-	if (raw <= 0n) throw new Error('Token amount must be greater than zero.');
-	return raw;
-}
-
-function getTransferPreview(token, amount) {
-	if (!token) return { valid: false, remaining: '—', error: '' };
-	try {
-		const decimals = Number(token.decimal);
-		if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255 ||
-			(typeof token.balance === 'number' && !Number.isSafeInteger(token.balance)) ||
-			!/^\d+$/.test(String(token.balance))) {
-			throw new Error('Token balance or decimals are unavailable. Reopen the token list to retry.');
-		}
-		const balance = BigInt(token.balance);
-		if (!amount.trim()) return { valid: false, remaining: formatRawAmount(balance, decimals), error: '' };
-		const rawAmount = tokenAmountToRaw(amount.trim(), decimals);
-		if (rawAmount > balance) {
-			return { valid: false, remaining: '—', error: 'Amount exceeds your available token balance.' };
-		}
-		return { valid: true, remaining: formatRawAmount(balance - rawAmount, decimals), error: '' };
-	} catch (error) {
-		return { valid: false, remaining: '—', error: error.message };
-	}
-}
-
-export default function WalletPage({ session, hidden }) {
+export default function WalletPage({ session, hidden }: WalletPageProps) {
 	const { wallet, address, networkIsDevnet, status, setStatus, result, setResult, busy, setBusy } = session;
 	const [tokenName, setTokenName] = useState('Bryan Devnet Token');
 	const [symbol, setSymbol] = useState('MDT');
@@ -75,8 +22,8 @@ export default function WalletPage({ session, hidden }) {
 	const [tokenContract, setTokenContract] = useState('');
 	const [transferAmount, setTransferAmount] = useState('');
 	const [page, setPage] = useState('mint');
-	const [tokenList, setTokenList] = useState({ address: '', tokens: [], loading: false, error: '' });
-	const tokenRequest = useRef(null);
+	const [tokenList, setTokenList] = useState<{ address: string; tokens: Token[]; loading: boolean; error: string }>({ address: '', tokens: [], loading: false, error: '' });
+	const tokenRequest = useRef<AbortController | null>(null);
 
 	useEffect(() => {
 		tokenRequest.current?.abort();
@@ -98,7 +45,7 @@ export default function WalletPage({ session, hidden }) {
 				setTokenContract((current) => tokens.some((token) => token.contract_id === current) ? current : '');
 			}
 		} catch (error) {
-			if (!controller.signal.aborted) setTokenList({ address, tokens: [], loading: false, error: error.message });
+			if (!controller.signal.aborted) setTokenList({ address, tokens: [], loading: false, error: getErrorMessage(error) });
 		}
 	}
 
@@ -116,9 +63,9 @@ export default function WalletPage({ session, hidden }) {
 		[parsedAmount, parsedDecimal],
 	);
 
-	async function mint(event) {
-		let logData;
-		const recordStatus = (message) => {
+	async function mint(event: FormEvent<HTMLFormElement>) {
+		let logData: unknown;
+		const recordStatus = (message: string) => {
 			setStatus(message);
 			if (logData === undefined) logData = { status: message };
 		};
@@ -176,7 +123,7 @@ export default function WalletPage({ session, hidden }) {
 				}
 			} catch (error) {
 				logData = { error };
-				setResult({ type: 'error', message: error.message ?? String(error) });
+				setResult({ type: 'error', message: getErrorMessage(error) ?? String(error) });
 				recordStatus('Minting failed or was rejected in the wallet.');
 			} finally {
 				setBusy(false);
@@ -187,9 +134,9 @@ export default function WalletPage({ session, hidden }) {
 		}
 	}
 
-	async function transfer(event) {
-		let logData;
-		const recordStatus = (message) => {
+	async function transfer(event: FormEvent<HTMLFormElement>) {
+		let logData: unknown;
+		const recordStatus = (message: string) => {
 			setStatus(message);
 			if (logData === undefined) logData = { status: message };
 		};
@@ -238,7 +185,7 @@ export default function WalletPage({ session, hidden }) {
 				}
 			} catch (error) {
 				logData = { error };
-				setResult({ type: 'error', message: error.message ?? String(error) });
+				setResult({ type: 'error', message: getErrorMessage(error) ?? String(error) });
 				recordStatus('Transfer failed or was rejected in the wallet.');
 			} finally {
 				setBusy(false);
@@ -280,11 +227,11 @@ export default function WalletPage({ session, hidden }) {
 				<form onSubmit={mint}>
 					<label>
 						Token name
-						<input value={tokenName} maxLength="64" onChange={(event) => setTokenName(event.target.value)} placeholder="Example Token" required />
+						<input value={tokenName} maxLength={64} onChange={(event) => setTokenName(event.target.value)} placeholder="Example Token" required />
 					</label>
 					<label>
 						Symbol
-						<input value={symbol} maxLength="12" onChange={(event) => setSymbol(event.target.value.toUpperCase())} placeholder="EXT" required />
+						<input value={symbol} maxLength={12} onChange={(event) => setSymbol(event.target.value.toUpperCase())} placeholder="EXT" required />
 					</label>
 					<div className="grid">
 						<label>
@@ -355,7 +302,8 @@ export default function WalletPage({ session, hidden }) {
 								{tokenList.loading ? <p>Loading tokens…</p> : tokenList.error ? <p className="result error" role="alert">Could not load tokens: {tokenList.error}. Close and reopen to retry.</p>
 									: tokenList.tokens.length ? tokenList.tokens.map((token) => <button type="button" key={token.contract_id} disabled={busy} onClick={(event) => {
 										setTokenContract(token.contract_id);
-										event.currentTarget.closest('details').open = false;
+										const picker = event.currentTarget.closest('details');
+										if (picker) picker.open = false;
 									}}>
 										{`${token.name} | ${token.symbol} | ${formatTokenBalance(token)} | ${token.decimal} | ${token.contract_id.slice(0, 8)}…${token.contract_id.slice(-6)}`}
 									</button>) : <p>No FT tokens found for this wallet.</p>}

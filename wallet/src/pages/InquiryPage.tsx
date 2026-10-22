@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Health } from '../types/api';
 import { BITBUS_API_BASE } from '../config/constants';
-import { getBitbusHealth, getBitbusAssets, getBitbusTradingPairs } from '../bitbusApi';
+import useInquiry from '../hooks/useInquiry';
 
-const initialState = { loading: true, health: null, assets: null, pairs: null, errors: [], updated: null };
-
-function getHealthDisplay(health, loading) {
+function getHealthDisplay(health: Health | null, loading: boolean) {
 	if (loading) return { tone: 'warning', label: 'Checking…' };
 	if (!health) return { tone: 'danger', label: 'Unavailable' };
 	if (health.status.trim().toLowerCase() === 'ok') {
@@ -15,49 +13,14 @@ function getHealthDisplay(health, loading) {
 }
 
 export default function InquiryPage() {
-	const [state, setState] = useState(initialState);
-	const request = useRef(null);
-
-	const loadInquiry = useCallback(async () => {
-		request.current?.abort();
-		const controller = new AbortController();
-		request.current = controller;
-		setState({ ...initialState });
-		const results = await Promise.allSettled([
-			getBitbusHealth({ signal: controller.signal }),
-			getBitbusAssets({ signal: controller.signal }),
-			getBitbusTradingPairs({ signal: controller.signal }),
-		]);
-		if (controller.signal.aborted) return;
-		const labels = ['Service health', 'Assets', 'Trading pairs'];
-		results.forEach((result, index) => {
-			if (result.status === 'fulfilled') {
-				console.log(`[Inquiry] ${labels[index]}:`, result.value);
-			} else {
-				console.error(`[Inquiry] ${labels[index]}:`, result.reason);
-			}
-		});
-		setState({
-			loading: false,
-			health: results[0].status === 'fulfilled' ? results[0].value : null,
-			assets: results[1].status === 'fulfilled' ? results[1].value : null,
-			pairs: results[2].status === 'fulfilled' ? results[2].value : null,
-			errors: results.flatMap((result, index) => result.status === 'rejected' ? [`${labels[index]}: ${result.reason.message}`] : []),
-			updated: new Date(),
-		});
-	}, []);
-
-	useEffect(() => {
-		void loadInquiry();
-		return () => request.current?.abort();
-	}, [loadInquiry]);
+	const state = useInquiry();
 
 	const healthDisplay = getHealthDisplay(state.health, state.loading);
 
 	return <section className="card history-card inquiry-page" aria-busy={state.loading}>
 		<div className="history-titlebar">
 			<div><p className="eyebrow">BITBUS / PUBLIC SERVICE</p><h1>Inquiry</h1><p className="intro">Explore BitBus assets and available trading pairs.</p></div>
-			<button type="button" disabled={state.loading} onClick={loadInquiry}>{state.loading ? 'Loading…' : '↻ Refresh'}</button>
+			<button type="button" disabled={state.loading} onClick={state.refresh}>{state.loading ? 'Loading…' : '↻ Refresh'}</button>
 		</div>
 		<aside className="inquiry-environment"><strong>Public BitBus service · Query only</strong><p>This page reads <code>{BITBUS_API_BASE}</code>. A Devnet endpoint has not been verified. These results are independent of your wallet’s selected network.</p><p>No wallet connection is needed. No orders, signatures or transfers are submitted.</p></aside>
 		<div className="history-stats">

@@ -1,4 +1,6 @@
-export default function WalletConnection({ session }) {
+import type { WalletPageProps } from '../types/wallet';
+
+export default function WalletConnection({ session }: WalletPageProps) {
 	const { address, network, walletInfo, networkIsDevnet, busy, connect } = session;
 	const walletName = typeof walletInfo?.walletName === 'string'
 		? walletInfo.walletName

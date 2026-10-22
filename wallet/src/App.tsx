@@ -1,7 +1,7 @@
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import WalletPage from './pages/WalletPage';
 import UtxoPage from './pages/UtxoPage';
-import useWalletSession from './useWalletSession';
+import useWalletSession from './hooks/useWalletSession';
 import TransactionPage from './pages/TransactionPage';
 import InquiryPage from './pages/InquiryPage';
 

@@ -1,114 +1,23 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { getNativeHistory, getTokenHistory, getTokenTransaction, getTokenInfo } from '../tbcApi';
+import type { Amount, TransactionEntry } from '../types/api';
+import type { WalletPageProps } from '../types/wallet';
+import type { TransactionRow } from '../types/transaction';
 import WalletConnection from '../components/WalletConnection';
+import useTransactionHistory from '../hooks/useTransactionHistory';
+import { statusOf, shortId, timeOf, dateOf, formatFeeTbc, transactionParties, transactionAmount } from '../utils/transactions';
 
-function statusOf(row) {
-	if (row.records.some(({ data }) => data.confirmations === 0 || data.height === -1)) {
-		return 'Pending';
-	}
-	if (row.records.some(({ data }) => data.confirmations > 0)) {
-		return 'Confirmed';
-	}
-	return 'Unknown';
-}
-
-async function fetchTransactionHistory(address, signal) {
-	const results = await Promise.allSettled([
-		getNativeHistory(address, { signal }),
-		getTokenHistory(address, { signal }),
-	]);
-	const grouped = new Map();
-	const errors = [];
-	results.forEach((result, index) => {
-		const source = index === 0 ? 'Native TBC' : 'FT tokens';
-		if (result.status === 'rejected') {
-			errors.push(`${source}: ${result.reason.message}`);
-			return;
-		}
-		for (const data of result.value) {
-			if (!grouped.has(data.txid)) grouped.set(data.txid, { txid: data.txid, records: [] });
-			grouped.get(data.txid).records.push({ source, data });
-		}
-	});
-	const rows = [...grouped.values()];
-	const pending = (row) => statusOf(row) === 'Pending';
-	const newest = (row, key) => Math.max(0, ...row.records.map(({ data }) => Number(data[key]) || 0));
-	rows.sort((a, b) => Number(pending(b)) - Number(pending(a)) || newest(b, 'time') - newest(a, 'time') || newest(b, 'height') - newest(a, 'height') || a.txid.localeCompare(b.txid));
-	return { rows, errors };
-}
-
-function detectConfirmations(rows, tracking) {
-	const confirmedTxids = [];
-	for (const row of rows) {
-		const status = statusOf(row);
-		if (tracking.statuses.get(row.txid) === 'Pending' && status === 'Confirmed' && !tracking.notified.has(row.txid)) {
-			tracking.notified.add(row.txid);
-			confirmedTxids.push(row.txid);
-		}
-		// A missing record or failed fetch is not proof that a transaction failed.
-		tracking.statuses.set(row.txid, status);
-	}
-	return confirmedTxids;
-}
-
-const shortId = (value) => `${value.slice(0, 10)}…${value.slice(-8)}`;
-const timeOf = (row) => Math.max(0, ...row.records.map(({ data }) => Number(data.time) || 0));
-const dateOf = (time) => time ? new Date(time * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', dateStyle: 'medium', timeStyle: 'medium' }) : 'Awaiting confirmation';
-
-function formatHistoryAmount(raw, decimals) {
-	const negative = raw < 0n;
-	const digits = (negative ? -raw : raw).toString().padStart(decimals + 1, '0');
-	const whole = decimals ? digits.slice(0, -decimals) : digits;
-	const fraction = decimals ? digits.slice(-decimals).replace(/0+$/, '') : '';
-	return `${negative ? '−' : raw > 0n ? '+' : ''}${BigInt(whole).toLocaleString('en-US')}${fraction ? `.${fraction}` : ''}`;
-}
-
-function formatFeeTbc(satoshis) {
-	if ((typeof satoshis === 'number' && !Number.isSafeInteger(satoshis)) || !/^\d+$/.test(String(satoshis))) return 'Unavailable';
-	// TBCNODE defines TBCCOIN as 1,000,000 satoshis (6 decimal places).
-	return `${formatHistoryAmount(BigInt(satoshis), 6).replace(/^\+/, '')} TBC`;
-}
-
-function transactionParties(row) {
-	const data = row.tokenDetails || row.records.find((record) => record.source === 'FT tokens')?.data || row.records[0].data;
-	return { inputs: data.input || data.vin || [], outputs: data.output || data.vout || [] };
-}
-
-function transactionAmount(row, address) {
-	const { inputs, outputs } = transactionParties(row);
-	const token = row.records.some((record) => record.source === 'FT tokens');
-	const decimals = token ? Number(row.tokenDetails?.decimal ?? row.tokenInfo?.decimal ?? row.records[0].data.decimal) : 0;
-	const unit = token ? row.tokenInfo?.symbol || 'token units' : 'satoshis';
-	const amount = (entry) => {
-		const value = entry.balance ?? entry.value;
-		if ((typeof value === 'number' && !Number.isSafeInteger(value)) || !/^\d+$/.test(String(value))) throw new Error('Invalid amount');
-		return BigInt(value);
-	};
-	try {
-		if (!Array.isArray(inputs) || !Array.isArray(outputs) || !outputs.length) return 'Unavailable';
-		const sum = (items) => items.filter((entry) => entry.address === address).reduce((total, entry) => total + amount(entry), 0n);
-		const net = sum(outputs) - sum(inputs);
-		if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return `${formatHistoryAmount(net, 0)} raw units`;
-		return `${formatHistoryAmount(net, decimals)} ${unit}`;
-	} catch { return 'Unavailable'; }
-}
-
-function AddressList({ entries }) {
-	const addresses = [...new Set(entries.map((entry) => entry.address).filter(Boolean))];
+function AddressList({ entries }: { entries: TransactionEntry[] }) {
+	const addresses = [...new Set(entries.map((entry) => entry.address).filter((value): value is string => typeof value === 'string' && Boolean(value)))];
 	return addresses.length ? addresses.map((value) => <code className="history-address" key={value} title={value}>{value}</code>) : '—';
 }
 
-export default function TransactionPage({ session, hidden }) {
+export default function TransactionPage({ session, hidden }: WalletPageProps) {
 	const { address, networkIsDevnet } = session;
 
-	const historyRequest = useRef(null);
-	const detailRequests = useRef(new Map());
-	const [detailsByTxid, setDetailsByTxid] = useState({});
-	const [notices, setNotices] = useState([]);
+	const [notices, setNotices] = useState<string[]>([]);
 	const [notificationMessage, setNotificationMessage] = useState('');
 	const [desktopEnabled, setDesktopEnabled] = useState(false);
 	const desktopRef = useRef(false);
-	const observed = useRef({ address: '', statuses: new Map(), notified: new Set() });
 	async function enableNotifications() {
 		if (!('Notification' in window)) {
 			setNotificationMessage('Desktop notifications are not supported in this browser.');
@@ -124,7 +33,7 @@ export default function TransactionPage({ session, hidden }) {
 		}
 	}
 
-	const notifyConfirmation = useCallback((txid) => {
+	const notifyConfirmation = useCallback((txid: string) => {
 		setNotices((previous) => [...previous, txid].slice(-5));
 		if (!desktopRef.current || !('Notification' in window) || Notification.permission !== 'granted') return;
 		try {
@@ -132,93 +41,26 @@ export default function TransactionPage({ session, hidden }) {
 		} catch { /* In-app alert remains available. */ }
 	}, []);
 
-	function dismissNotice(txid) {
+	function dismissNotice(txid: string) {
 		setNotices((previous) => previous.filter((value) => value !== txid));
 	}
-	const [state, setState] = useState({ address: '', loading: true, rows: [], errors: [] });
-	const loadHistory = useCallback(async () => {
-		historyRequest.current?.abort();
-		for (const controller of detailRequests.current.values()) controller.abort();
-		detailRequests.current.clear();
-		setDetailsByTxid({});
-		if (hidden || !address || !networkIsDevnet) return;
+	const { state, detailsByTxid, refresh: loadHistory, loadTransactionDetails } =
+		useTransactionHistory(address, networkIsDevnet, hidden, notifyConfirmation);
 
-		const controller = new AbortController();
-		historyRequest.current = controller;
-		if (observed.current.address !== address) {
-			observed.current = { address, statuses: new Map(), notified: new Set() };
-			setNotices([]);
-		}
-		setState((previous) => previous.address === address
-			? { ...previous, loading: true, errors: [] }
-			: { address, loading: true, rows: [], errors: [] });
-
-		try {
-			const { rows, errors } = await fetchTransactionHistory(address, controller.signal);
-			if (controller.signal.aborted) return;
-
-			const confirmedTxids = detectConfirmations(rows, observed.current);
-			confirmedTxids.forEach(notifyConfirmation);
-			setState((previous) => ({
-				address,
-				loading: false,
-				rows: errors.length === 2 ? previous.rows : rows,
-				errors,
-			}));
-		} catch (error) {
-			if (!controller.signal.aborted) {
-				setState((previous) => ({ ...previous, loading: false, errors: [error.message] }));
-			}
-		} finally {
-			if (historyRequest.current === controller) historyRequest.current = null;
-		}
-	}, [address, networkIsDevnet, hidden, notifyConfirmation]);
-
-	useEffect(() => {
-		void loadHistory();
-		return () => {
-			historyRequest.current?.abort();
-			for (const controller of detailRequests.current.values()) controller.abort();
-			detailRequests.current.clear();
-		};
-	}, [loadHistory]);
+	useEffect(() => { setNotices([]); }, [address]);
 
 	const [search, setSearch] = useState('');
 	const [statusFilter, setStatusFilter] = useState('All statuses');
 	const [activityFilter, setActivityFilter] = useState('All assets');
 	const [page, setPage] = useState(1);
-	const [expanded, setExpanded] = useState(null);
+	const [expanded, setExpanded] = useState<string | null>(null);
 	const [copyMessage, setCopyMessage] = useState('');
 	useEffect(() => {
 		setPage(1);
 		setExpanded(null);
 	}, [address, search, statusFilter, activityFilter]);
 
-	async function loadTransactionDetails(row) {
-		if (!row.records.some((record) => record.source === 'FT tokens') ||
-			detailsByTxid[row.txid]?.loaded || detailRequests.current.has(row.txid)) return;
-		const controller = new AbortController();
-		detailRequests.current.set(row.txid, controller);
-		setDetailsByTxid((previous) => ({ ...previous, [row.txid]: { ...previous[row.txid], loading: true, error: '' } }));
-		let tokenDetails;
-		try {
-			tokenDetails = await getTokenTransaction(row.txid, { signal: controller.signal });
-			const tokenInfo = tokenDetails.contract_id
-				? await getTokenInfo(tokenDetails.contract_id, { signal: controller.signal })
-				: null;
-			if (!controller.signal.aborted) setDetailsByTxid((previous) => ({
-				...previous, [row.txid]: { loaded: true, loading: false, tokenDetails, tokenInfo },
-			}));
-		} catch (error) {
-			if (!controller.signal.aborted) setDetailsByTxid((previous) => ({
-				...previous, [row.txid]: { loading: false, tokenDetails, error: error.message },
-			}));
-		} finally {
-			if (detailRequests.current.get(row.txid) === controller) detailRequests.current.delete(row.txid);
-		}
-	}
-
-	function toggleTransactionDetails(row) {
+	function toggleTransactionDetails(row: TransactionRow) {
 		if (expanded === row.txid) {
 			setExpanded(null);
 			return;
@@ -240,7 +82,7 @@ export default function TransactionPage({ session, hidden }) {
 	const confirmed = rows.filter((row) => statusOf(row) === 'Confirmed').length;
 	const pending = rows.filter((row) => statusOf(row) === 'Pending').length;
 
-	async function copyTxid(txid) {
+	async function copyTxid(txid: string) {
 		try {
 			await navigator.clipboard.writeText(txid);
 			setCopyMessage('Transaction ID copied.');
@@ -278,12 +120,12 @@ export default function TransactionPage({ session, hidden }) {
 				<tbody>{visible.map((row) => {
 					const status = statusOf(row);
 					const parties = transactionParties(row);
-					const fees = [...new Set(row.records.map(({ data }) => data.fee).filter((value) => value != null))];
+					const fees = [...new Set(row.records.map(({ data }) => data.fee).filter((value): value is Amount => value != null))];
 					const confirmations = row.records.map(({ data }) => data.confirmations).filter((value) => typeof value === 'number');
 					return <Fragment key={row.txid}><tr
 						className={`history-transaction-row${expanded === row.txid ? ' is-expanded' : ''}`}
 						onClick={(event) => {
-							if (event.target.closest('button, a, input, select, textarea')) return;
+							if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea')) return;
 							toggleTransactionDetails(row);
 						}}
 					>

@@ -1,3 +1,5 @@
+
+
 // Shared by the browser app and Vite server. Keep this file free of browser globals.
 export const DEVNET_DOMAIN = 'api.tbcdev.org';
 export const DEVNET_API_BASE = `https://${DEVNET_DOMAIN}/api/tbc`;
@@ -11,20 +13,20 @@ export const BITBUS_API_URLS = {
 
 export const API_URLS = {
 	actionLog: '/__wallet-log',
-	tokenTransaction: (txid) =>
+	tokenTransaction: (txid: string) =>
 		`${DEVNET_API_BASE}/ft/decode/txid/${encodeURIComponent(txid)}`,
-	tokenInfo: (contractId) =>
+	tokenInfo: (contractId: string) =>
 		`${DEVNET_API_BASE}/ft/info/contract/${encodeURIComponent(contractId)}`,
-	nativeHistory: (address, start, end) =>
+	nativeHistory: (address: string, start: number, end: number) =>
 		`${DEVNET_API_BASE}/history/address/${encodeURIComponent(address)}/start/${start}/end/${end}`,
-	tokenHistory: (address, start, end) =>
+	tokenHistory: (address: string, start: number, end: number) =>
 		`${DEVNET_API_BASE}/ft/allhistory/address/${encodeURIComponent(address)}/start/${start}/end/${end}`,
-	transaction: (txid) =>
+	transaction: (txid: string) =>
 		`${DEVNET_API_BASE}/decode/txid/${encodeURIComponent(txid)}`,
-	nativeUtxos: (address) =>
+	nativeUtxos: (address: string) =>
 		`${DEVNET_API_BASE}/utxo/address/${encodeURIComponent(address)}`,
-	tokenList: (address) =>
+	tokenList: (address: string) =>
 		`${DEVNET_API_BASE}/ft/tokenlist/address/${encodeURIComponent(address)}`,
-	tokenUtxos: (address, contractId) =>
+	tokenUtxos: (address: string, contractId: string) =>
 		`${DEVNET_API_BASE}/ft/utxo/address/${encodeURIComponent(address)}/contract/${encodeURIComponent(contractId)}`,
 };

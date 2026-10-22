@@ -1,13 +1,14 @@
-import { defineConfig } from 'vite';
+import type { Plugin, ViteDevServer, PreviewServer } from 'vite';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { API_URLS } from './src/config/constants.js';
+import { API_URLS } from '../src/config/constants.ts';
+import { getErrorMessage } from '../src/utils/errors.ts';
 
-const logsDirectory = fileURLToPath(new URL('./logs/', import.meta.url));
+const logsDirectory = fileURLToPath(new URL('../logs/', import.meta.url));
 
-function walletLogger() {
-	const install = (server) => {
+export default function walletLogger(): Plugin {
+	const install = (server: ViteDevServer | PreviewServer) => {
 		server.middlewares.use(API_URLS.actionLog, async (request, response) => {
 			if (request.method !== 'POST') {
 				response.writeHead(405).end();
@@ -22,14 +23,14 @@ function walletLogger() {
 						return;
 					}
 				}
-				let entry;
+				let entry: unknown;
 				try {
 					entry = JSON.parse(body);
 				} catch {
 					response.writeHead(400).end();
 					return;
 				}
-				if (!['Connect', 'Mint', 'Transfer'].includes(entry?.action) || !Object.hasOwn(entry, 'data')) {
+				if (!entry || typeof entry !== 'object' || !('action' in entry) || typeof entry.action !== 'string' || !['Connect', 'Mint', 'Transfer'].includes(entry.action) || !('data' in entry)) {
 					response.writeHead(400).end();
 					return;
 				}
@@ -44,7 +45,7 @@ function walletLogger() {
 				await appendFile(join(logsDirectory, date), `${date} ${time} ${entry.action}: ${JSON.stringify(entry.data)}\n`, 'utf8');
 				response.writeHead(204).end();
 			} catch (error) {
-				server.config.logger.error(`Wallet log failed: ${error.message}`);
+				server.config.logger.error(`Wallet log failed: ${getErrorMessage(error)}`);
 				response.writeHead(500).end();
 			}
 		});
@@ -52,9 +53,3 @@ function walletLogger() {
 	return { name: 'wallet-action-logger', configureServer: install, configurePreviewServer: install };
 }
 
-export default defineConfig({
-	plugins: [walletLogger()],
-	server: {
-		allowedHosts: ['.trycloudflare.com'],
-	},
-});
