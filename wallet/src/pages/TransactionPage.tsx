@@ -47,7 +47,9 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 	const { state, detailsByTxid, refresh: loadHistory, loadTransactionDetails } =
 		useTransactionHistory(address, networkIsDevnet, hidden, notifyConfirmation);
 
-	useEffect(() => { setNotices([]); }, [address]);
+	useEffect(() => {
+		setNotices([]);
+	}, [address]);
 
 	const [search, setSearch] = useState('');
 	const [statusFilter, setStatusFilter] = useState('All statuses');

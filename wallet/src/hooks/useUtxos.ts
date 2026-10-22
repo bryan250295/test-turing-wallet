@@ -1,56 +1,39 @@
-import { useEffect, useState } from 'react';
-import { getNativeUtxos, getTokens, getTokenUtxos } from '../services/tbcApi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchUtxos } from '../services/utxos';
+import type { UtxoState } from '../types/utxo';
 import { getErrorMessage } from '../utils/errors';
-import type { UtxoGroup, UtxoState } from '../types/utxo';
+
+const initialState: UtxoState = { loading: true, groups: [], errors: [] };
 
 export default function useUtxos(address: string, networkIsDevnet: boolean) {
-	const [refresh, setRefresh] = useState(0);
-	const [state, setState] = useState<UtxoState>({ loading: true, groups: [], errors: [] });
+	const [state, setState] = useState(initialState);
+	const request = useRef<AbortController | null>(null);
+
+	const loadUtxos = useCallback(async () => {
+		request.current?.abort();
+		setState({ ...initialState });
+		if (!address || !networkIsDevnet) return;
+
+		const controller = new AbortController();
+		request.current = controller;
+
+		try {
+			const { groups, errors } = await fetchUtxos(address, controller.signal);
+			if (controller.signal.aborted) return;
+			setState({ loading: false, groups, errors });
+		} catch (error) {
+			if (!controller.signal.aborted) {
+				setState({ loading: false, groups: [], errors: [getErrorMessage(error)] });
+			}
+		} finally {
+			if (request.current === controller) request.current = null;
+		}
+	}, [address, networkIsDevnet]);
 
 	useEffect(() => {
-		const controller = new AbortController();
-		const { signal } = controller;
-		setState({ loading: true, groups: [], errors: [] });
-		if (!address || !networkIsDevnet) return () => controller.abort();
+		void loadUtxos();
+		return () => request.current?.abort();
+	}, [loadUtxos]);
 
-		async function load() {
-			const groups: UtxoGroup[] = [];
-			const errors: string[] = [];
-			const results = await Promise.allSettled([
-				getNativeUtxos(address, { signal }),
-				getTokens(address, { signal }),
-			]);
-			if (results[0].status === 'fulfilled') {
-				groups.push({ id: 'native', name: 'Native TBC', outputs: results[0].value });
-			} else errors.push(`Native TBC: ${getErrorMessage(results[0].reason)}`);
-			if (results[1].status === 'fulfilled') {
-				const tokens = results[1].value;
-				// Fetch token groups in sequence to avoid flooding the public API.
-				for (const token of tokens) {
-					if (signal.aborted) return;
-					try {
-						const outputs = await getTokenUtxos(address, token.contract_id, { signal });
-						groups.push({ id: token.contract_id, name: token.name || token.symbol || 'Unnamed token', symbol: token.symbol, outputs });
-					} catch (error) {
-						errors.push(`${token.name || token.contract_id}: ${getErrorMessage(error)}`);
-					}
-				}
-			} else errors.push(`Token list: ${getErrorMessage(results[1].reason)}`);
-			if (!signal.aborted) setState({ loading: false, groups, errors });
-		}
-		// Start after the mount effects finish. StrictMode's initial cleanup
-		// cancels this scheduled load before it can send duplicate requests.
-		const loadTimer = window.setTimeout(() => {
-			if (signal.aborted) return;
-			load().catch((error) => {
-				if (!signal.aborted) setState({ loading: false, groups: [], errors: [getErrorMessage(error)] });
-			});
-		}, 0);
-		return () => {
-			window.clearTimeout(loadTimer);
-			controller.abort();
-		};
-	}, [address, networkIsDevnet, refresh]);
-
-	return { ...state, refresh: () => setRefresh((value) => value + 1) };
+	return { ...state, refresh: loadUtxos };
 }

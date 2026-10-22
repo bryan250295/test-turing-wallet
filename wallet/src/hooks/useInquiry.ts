@@ -1,7 +1,7 @@
-import { getErrorMessage } from '../utils/errors';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Health, Asset, TradingPair } from '../types/api';
 import { getBitbusHealth, getBitbusAssets, getBitbusTradingPairs } from '../services/bitbusApi';
+import type { Health, Asset, TradingPair } from '../types/api';
+import { getErrorMessage } from '../utils/errors';
 
 interface InquiryState {
 	loading: boolean;

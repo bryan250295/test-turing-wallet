@@ -55,7 +55,8 @@ wallet/
 │   │   ├── apiValidation.ts
 │   │   ├── bitbusApi.ts
 │   │   ├── tbcApi.ts
-│   │   └── transactionHistory.ts
+│   │   ├── transactionHistory.ts
+│   │   └── utxos.ts
 │   ├── styles/
 │   │   └── global.css
 │   ├── types/               # api.ts, wallet.ts, transaction.ts, utxo.ts
