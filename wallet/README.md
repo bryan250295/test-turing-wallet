@@ -18,6 +18,19 @@ npm run dev
 
 Vite prints a LAN URL such as `http://192.168.1.10:5173`. With the phone and computer on the same Wi-Fi network, open that URL from Turing Wallet's built-in DApp browser. The wallet must inject `window.Turing`; opening the page in Safari or Chrome will show the “wallet not detected” message.
 
+## Page routes
+
+- `/` redirects to `/wallet`.
+- `/wallet` opens the wallet page.
+- `/utxo` opens the UTXO list.
+- `/transaction` opens transaction history.
+- `/inquiry` opens BitBus inquiries.
+
+Navigation supports browser Back/Forward and direct page links. When deploying,
+configure the web server to serve `index.html` for these frontend routes so direct
+links and page reloads work. The wallet session is shared across routes; page-local
+forms and filters reset when leaving a page.
+
 ## Amounts
 
 `amount` is submitted as raw smallest-unit amount. For example, `100000` with `decimal: 2` displays as `1000.00` tokens.

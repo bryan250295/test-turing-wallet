@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { getNativeUtxos, getTokens, getTokenUtxos } from './tbcApi';
+import { getNativeUtxos, getTokens, getTokenUtxos } from '../tbcApi';
 
 export default function UtxoPage({ address, networkIsDevnet }) {
 	const [refresh, setRefresh] = useState(0);
@@ -37,10 +37,18 @@ export default function UtxoPage({ address, networkIsDevnet }) {
 			} else errors.push(`Token list: ${results[1].reason.message}`);
 			if (!signal.aborted) setState({ loading: false, groups, errors });
 		}
-		load().catch((error) => {
-			if (!signal.aborted) setState({ loading: false, groups: [], errors: [error.message] });
-		});
-		return () => controller.abort();
+		// Start after the mount effects finish. StrictMode's initial cleanup
+		// cancels this scheduled load before it can send duplicate requests.
+		const loadTimer = window.setTimeout(() => {
+			if (signal.aborted) return;
+			load().catch((error) => {
+				if (!signal.aborted) setState({ loading: false, groups: [], errors: [error.message] });
+			});
+		}, 0);
+		return () => {
+			window.clearTimeout(loadTimer);
+			controller.abort();
+		};
 	}, [address, networkIsDevnet, refresh]);
 
 	if (!address || !networkIsDevnet) return <p className="status">Connect your wallet on TBC Devnet to view unspent outputs.</p>;

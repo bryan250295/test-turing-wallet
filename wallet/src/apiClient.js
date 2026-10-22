@@ -7,7 +7,7 @@ export class ApiError extends Error {
 	}
 }
 
-// Read-only TBC requests. Callers control cancellation; every request has a timeout.
+// Read-only API requests. Callers control cancellation; every request has a timeout.
 export async function getApiData(url, { signal, timeoutMs = 20000 } = {}) {
 	const controller = new AbortController();
 	const cancel = () => controller.abort();
@@ -25,7 +25,7 @@ export async function getApiData(url, { signal, timeoutMs = 20000 } = {}) {
 			throw new ApiError('The server returned an invalid JSON response.', { status: response.status, code: 'INVALID_RESPONSE', cause });
 		}
 		if (!response.ok || body?.error || (body?.code != null && String(body.code) !== '200')) {
-			throw new ApiError(typeof body?.message === 'string' ? body.message : `Request failed (HTTP ${response.status}).`, {
+			throw new ApiError(typeof body?.message === 'string' ? body.message : typeof body?.msg === 'string' ? body.msg : `Request failed (HTTP ${response.status}).`, {
 				status: response.status, code: body?.error || 'HTTP_ERROR',
 			});
 		}

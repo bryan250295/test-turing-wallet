@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { getNativeHistory, getTokenHistory, getTokenTransaction, getTokenInfo } from './tbcApi';
+import { getNativeHistory, getTokenHistory, getTokenTransaction, getTokenInfo } from '../tbcApi';
 
 function statusOf(row) {
 	if (row.records.some(({ data }) => data.confirmations === 0 || data.height === -1)) {
