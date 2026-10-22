@@ -279,7 +279,13 @@ export default function TransactionPage({ session, hidden }) {
 					const parties = transactionParties(row);
 					const fees = [...new Set(row.records.map(({ data }) => data.fee).filter((value) => value != null))];
 					const confirmations = row.records.map(({ data }) => data.confirmations).filter((value) => typeof value === 'number');
-					return <Fragment key={row.txid}><tr className={expanded === row.txid ? 'is-expanded' : ''}>
+					return <Fragment key={row.txid}><tr
+						className={`history-transaction-row${expanded === row.txid ? ' is-expanded' : ''}`}
+						onClick={(event) => {
+							if (event.target.closest('button, a, input, select, textarea')) return;
+							toggleTransactionDetails(row);
+						}}
+					>
 						<td><div className="history-txid"><code title={row.txid}>{shortId(row.txid)}</code><button type="button" className="copy-txid" aria-label={`Copy transaction ID ${row.txid}`} onClick={() => copyTxid(row.txid)}>Copy</button></div></td>
 						<td>{[...new Set(row.records.map(({ source }) => source))].join(' / ')}</td>
 						<td><span className={`status-badge status-${status.toLowerCase()}`}><span aria-hidden="true">●</span> {status}</span></td>
@@ -287,7 +293,7 @@ export default function TransactionPage({ session, hidden }) {
 						<td className="history-fee" title={fees.length ? `${fees.join(' / ')} satoshis` : undefined}>{fees.length ? fees.map(formatFeeTbc).join(' / ') : '—'}</td>
 						<td className="history-date">{dateOf(timeOf(row))}</td>
 						<td>{confirmations.length ? Math.min(...confirmations).toLocaleString() : '—'}</td>
-						<td><button type="button" className="history-detail-button" aria-expanded={expanded === row.txid} aria-controls={`details-${row.txid}`} onClick={() => toggleTransactionDetails(row)}>{expanded === row.txid ? 'Close ↑' : 'Details ↓'}</button></td>
+						<td><button type="button" className="history-detail-button" aria-label={`${expanded === row.txid ? 'Close' : 'Details for'} transaction ${row.txid}`} aria-expanded={expanded === row.txid} aria-controls={expanded === row.txid ? `details-${row.txid}` : undefined} onClick={() => toggleTransactionDetails(row)}>{expanded === row.txid ? 'Close ↑' : 'Details ↓'}</button></td>
 					</tr>
 					{expanded === row.txid && <tr id={`details-${row.txid}`} className="history-detail-row"><td colSpan={8}><div className="history-detail-content"><h3>Transaction details</h3>{row.loading && <p role="status">Loading token transaction details…</p>}{row.error && <div><p className="result error" role="alert">{row.error}</p><button type="button" onClick={() => loadTransactionDetails(row)}>Retry details</button></div>}<dl className="history-detail-grid"><div><dt>Sender</dt><dd><AddressList entries={parties.inputs} /></dd></div><div><dt>Receiver / change</dt><dd><AddressList entries={parties.outputs} /></dd></div></dl><p>Amounts in the table show the net change for your connected address; native TBC net change includes fees. Receiver lists include change outputs. Raw fields below retain their API units.</p>{[...row.records, ...(row.tokenDetails ? [{ source: 'Token transfer details', data: row.tokenDetails }] : []), ...(row.tokenInfo ? [{ source: 'Token metadata', data: row.tokenInfo }] : [])].map((record, index) => <section key={index}><h4>{record.source}</h4><dl className="history-detail-grid">{Object.entries(record.data).map(([field, value]) => <div key={field}><dt>{field}</dt><dd>{value !== null && typeof value === 'object' ? <pre className="history-json">{JSON.stringify(value, null, 2)}</pre> : <code>{value == null ? '—' : String(value)}</code>}</dd></div>)}</dl></section>)}</div></td></tr>}
 					</Fragment>;

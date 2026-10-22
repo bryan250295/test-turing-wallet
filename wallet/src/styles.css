@@ -192,6 +192,8 @@ button:focus-visible, summary:focus-visible, .top-menu a:focus-visible { outline
 .status-pending { color: #f7d18c; background: #42351e; }
 .history-date { color: #a8b8cf; font-size: .76rem; min-width: 160px !important; }
 .history-detail-button { background: transparent; color: #8ed5fa; padding: 6px; font-size: .74rem; white-space: nowrap; }
+.history-transaction-row { cursor: pointer; }
+.history-transaction-row:focus-within { background: #15233a; }
 .history-table .history-detail-row > td { padding: 0; background: #0c1628; }
 .history-detail-content { padding: 24px; }
 .history-detail-content h3 { font-size: 1rem; margin: 0 0 8px; }
