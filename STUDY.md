@@ -1,9 +1,11 @@
 # Bridge and Swap
-- 只要可以证明从哪个source chain到哪个destination chain和rules就能成立bridging
+- 只要可以证明从哪个source chain到哪个destination chain和rules就能成立bridging ( 跨链需要实际支持 source chain、destination chain 和目标资产的协议，以及可验证的交易和执行规则。)
 - source chain 就是从哪里来
 - destination chain 就是要换到哪里去
 - rules 包含 （lock and mint，burn and mint， liquidity）
 - what you get will not always be token, it can be anything that they provided
+
+> 以下兑换比例和跨链路线都是学习假设，不表示 TBC 当前存在可用的 USDC 或 Ethereum 桥。兑换需要交易对手／流动性；桥接需要实际支持该资产的协议。
 
 ## Bridging 的 flow example (lock and mint)：
 ```
@@ -53,5 +55,5 @@ Estimate 100 USDC = 1 ETH
 ```
 
 - Attestation（证明／签名凭证）- 负责验证的系统确认交易后，出具一份带数字签名的证明（Digital Sign）
-- Smart Contract（智能合约）- kind of contract to avoid 一直被拿来重复领取
-- Liquidity Pool（资金池）- 把全部资金集中存放的地方
+- Smart Contract（智能合约）- kind of contract to avoid 一直被拿来重复领取 (按代码验证条件和执行状态变化；防止重复领取还需要正确的状态／消息唯一性设计。)
+- Liquidity Pool（资金池）- 把全部资金集中存放的地方 (流动性提供者存入资产、按协议规则用于兑换或支付的资金储备。)
