@@ -1,8 +1,22 @@
 import { useEffect, useState } from 'react';
 
 import { getNativeUtxos, getTokens, getTokenUtxos } from '../tbcApi';
+import WalletConnection from '../WalletConnection';
 
-export default function UtxoPage({ address, networkIsDevnet }) {
+export default function UtxoPage({ session }) {
+	return (
+		<section className="card">
+			<p className="eyebrow">TBC TEST NETWORK ONLY</p>
+			<h1>UTXO List</h1>
+			<p className="intro">Inspect the unspent outputs holding your native TBC and tokens.</p>
+			<WalletConnection session={session} />
+			<p className="status" role="status">{session.status}</p>
+			<UtxoList key={`${session.address}:${session.networkIsDevnet}`} address={session.address} networkIsDevnet={session.networkIsDevnet} />
+		</section>
+	);
+}
+
+function UtxoList({ address, networkIsDevnet }) {
 	const [refresh, setRefresh] = useState(0);
 	const [state, setState] = useState({ loading: true, groups: [], errors: [] });
 
