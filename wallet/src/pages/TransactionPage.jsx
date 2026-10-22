@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { getNativeHistory, getTokenHistory, getTokenTransaction, getTokenInfo } from '../tbcApi';
+import WalletConnection from '../components/WalletConnection';
 
 function statusOf(row) {
 	if (row.records.some(({ data }) => data.confirmations === 0 || data.height === -1)) {
@@ -256,7 +257,7 @@ export default function TransactionPage({ session, hidden }) {
 			{/* <button type="button" className="history-refresh" onClick={() => notifyConfirmation(`test-${crypto.randomUUID()}`)}>Test Notification</button> */}
 			<button type="button" className="history-refresh" disabled={state.loading || !address || !networkIsDevnet} onClick={loadHistory}>{state.loading ? 'Refreshing…' : '↻ Refresh'}</button>
 		</div>
-		<div className="history-account"><div><span className={`dot ${networkIsDevnet ? 'ok' : ''}`} /><strong>{networkIsDevnet && address ? 'Connected account' : 'Wallet connection required'}</strong><code title={address}>{address || 'No account connected'}</code></div><span className="network-pill">Devnet · Test assets</span><button type="button" className="history-secondary" disabled={session.busy} onClick={session.connect}>{session.busy ? 'Connecting…' : address ? 'Reconnect' : 'Connect wallet'}</button></div>
+		<WalletConnection session={session} />
 		{!address || !networkIsDevnet ? <div className="history-empty"><h2>Connect to see your activity</h2><p>Select TBC Devnet in your wallet, then connect your account.</p></div> : <>
 			<div className="notification-settings"><span>Manual updates · Click Refresh to check transaction status</span><button type="button" className="history-secondary" disabled={desktopEnabled} onClick={enableNotifications}>{desktopEnabled ? 'Desktop alerts enabled' : 'Enable desktop alerts'}</button></div>
 			{notificationMessage && <p className="history-feedback" role="status">{notificationMessage}</p>}
