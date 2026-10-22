@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import type { Health } from '../types/api';
 import { BITBUS_API_BASE } from '../config/constants';
 import useInquiry from '../hooks/useInquiry';
@@ -12,14 +14,70 @@ function getHealthDisplay(health: Health | null, loading: boolean) {
 	return { tone: 'warning', label: health.status.trim() || 'Unknown' };
 }
 
-export default function InquiryPage() {
+const tabs = [
+	{ id: 'overview', label: 'Overview' },
+	{ id: 'htlc', label: 'HTLC Testnet' },
+] as const;
+
+type BridgeTab = typeof tabs[number]['id'];
+
+export default function BridgeLabPage() {
+	const [activeTab, setActiveTab] = useState<BridgeTab>('overview');
+
+	function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+		const current = tabs.findIndex((tab) => tab.id === activeTab);
+		let next: number;
+		switch (event.key) {
+			case 'ArrowRight': next = (current + 1) % tabs.length; break;
+			case 'ArrowLeft': next = (current + tabs.length - 1) % tabs.length; break;
+			case 'Home': next = 0; break;
+			case 'End': next = tabs.length - 1; break;
+			default: return;
+		}
+		event.preventDefault();
+		setActiveTab(tabs[next].id);
+		event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`#bridge-${tabs[next].id}-tab`)?.focus();
+	}
+
+	return (
+		<section className="card history-card inquiry-page">
+			<p className="eyebrow">BRIDGE LAB</p>
+			<h1>Bridge Lab</h1>
+			<p className="intro">Explore BitBus data and TBC Testnet experiments.</p>
+			<div className="page-tabs bridge-lab-tabs" role="tablist" aria-label="Bridge Lab sections">
+				{tabs.map((tab) => (
+					<button
+						key={tab.id}
+						id={`bridge-${tab.id}-tab`}
+						type="button"
+						role="tab"
+						className={activeTab === tab.id ? 'selected' : ''}
+						aria-selected={activeTab === tab.id}
+						aria-controls={`bridge-${tab.id}-panel`}
+						tabIndex={activeTab === tab.id ? 0 : -1}
+						onClick={() => setActiveTab(tab.id)}
+						onKeyDown={handleTabKeyDown}
+					>
+						{tab.label}
+					</button>
+				))}
+			</div>
+			<div id="bridge-overview-panel" role="tabpanel" aria-labelledby="bridge-overview-tab" hidden={activeTab !== 'overview'} tabIndex={0}>
+				<BridgeOverview />
+			</div>
+			<div id="bridge-htlc-panel" role="tabpanel" aria-labelledby="bridge-htlc-tab" hidden={activeTab !== 'htlc'} tabIndex={0} />
+		</section>
+	);
+}
+
+function BridgeOverview() {
 	const state = useInquiry();
 
 	const healthDisplay = getHealthDisplay(state.health, state.loading);
 
-	return <section className="card history-card inquiry-page" aria-busy={state.loading}>
+	return <section aria-label="BitBus overview" aria-busy={state.loading}>
 		<div className="history-titlebar">
-			<div><p className="eyebrow">BITBUS / PUBLIC SERVICE</p><h1>Inquiry</h1><p className="intro">Explore BitBus assets and available trading pairs.</p></div>
+			<div><h2>BitBus overview</h2><p className="intro">Explore BitBus assets and available trading pairs.</p></div>
 			<button type="button" disabled={state.loading} onClick={state.refresh}>{state.loading ? 'Loading…' : '↻ Refresh'}</button>
 		</div>
 		<aside className="inquiry-environment"><strong>Public BitBus service · Query only</strong><p>This page reads <code>{BITBUS_API_BASE}</code>. A Devnet endpoint has not been verified. These results are independent of your wallet’s selected network.</p><p>No wallet connection is needed. No orders, signatures or transfers are submitted.</p></aside>

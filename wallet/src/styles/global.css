@@ -90,6 +90,7 @@ h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
 .page-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0 0 18px; padding: 4px; border: 1px solid #31405f; border-radius: 11px; background: #0d1729; }
 .page-tabs button { min-height: 42px; padding: 9px 12px; color: #bdc9dd; background: transparent; }
 .page-tabs button.selected { color: #06111f; background: #7dd3fc; }
+.bridge-lab-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .connection { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 16px; border-radius: 13px; background: #101a2e; }
 .connection strong { display: block; font-size: .92rem; }

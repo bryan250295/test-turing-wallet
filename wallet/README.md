@@ -45,7 +45,7 @@ wallet/
 │   │   ├── useUtxos.ts
 │   │   └── useWalletSession.ts
 │   ├── pages/
-│   │   ├── InquiryPage.tsx
+│   │   ├── BridgeLabPage.tsx
 │   │   ├── TransactionPage.tsx
 │   │   ├── UtxoPage.tsx
 │   │   └── WalletPage.tsx
@@ -91,7 +91,8 @@ Tabs use a display width of four.
 - `/wallet` opens the wallet page.
 - `/utxo` opens the UTXO list.
 - `/transaction` opens transaction history.
-- `/inquiry` opens BitBus inquiries.
+- `/bridge-lab` opens Bridge Lab: Overview shows the existing BitBus data, and HTLC Testnet is a blank tab reserved for future work.
+- `/inquiry` redirects to `/bridge-lab` for existing links.
 
 Navigation supports browser Back/Forward and direct page links. When deploying,
 configure the web server to serve `index.html` for these frontend routes so direct
