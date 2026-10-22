@@ -1,6 +1,13 @@
 // Shared by the browser app and Vite server. Keep this file free of browser globals.
 export const DEVNET_DOMAIN = 'api.tbcdev.org';
 export const DEVNET_API_BASE = `https://${DEVNET_DOMAIN}/api/tbc`;
+export const BITBUS_API_BASE = 'https://api.bitbus.net';
+
+export const BITBUS_API_URLS = {
+	health: `${BITBUS_API_BASE}/health`,
+	assets: (offset = 0, limit = 100) => `${BITBUS_API_BASE}/assets?offset=${offset}&limit=${limit}`,
+	tradingPairs: (offset = 0, limit = 100) => `${BITBUS_API_BASE}/trading-pairs?offset=${offset}&limit=${limit}`,
+};
 
 export const API_URLS = {
 	actionLog: '/__wallet-log',

@@ -1,4 +1,4 @@
-import { ApiError, getApiData } from './apiClient';
+import { ApiError, getApiData } from './services/apiClient';
 import { API_URLS } from './apiUrls';
 
 function invalidResponse(message) {
