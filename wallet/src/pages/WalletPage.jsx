@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { logAction } from '../services/actionLog';
-import WalletConnection from '../WalletConnection';
+import WalletConnection from '../components/WalletConnection';
 import { DEVNET_DOMAIN } from '../config/constants';
 import { getTokens } from '../tbcApi';
 

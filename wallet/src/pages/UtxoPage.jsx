@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { getNativeUtxos, getTokens, getTokenUtxos } from '../tbcApi';
-import WalletConnection from '../WalletConnection';
+import WalletConnection from '../components/WalletConnection';
 
 export default function UtxoPage({ session }) {
 	return (
