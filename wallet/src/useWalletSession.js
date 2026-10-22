@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTuringWallet } from 'turing-wallet-provider';
-import { logAction } from './actionLog';
+import { logAction } from './services/actionLog';
 
 export default function useWalletSession() {
 	const wallet = useTuringWallet();

@@ -1,4 +1,4 @@
-import { API_URLS } from './config/constants';
+import { API_URLS } from '../config/constants';
 
 export async function logAction(action, data) {
 	try {
