@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { API_URLS } from './src/apiUrls.js';
+import { API_URLS } from './src/config/constants.js';
 
 const logsDirectory = fileURLToPath(new URL('./logs/', import.meta.url));
 

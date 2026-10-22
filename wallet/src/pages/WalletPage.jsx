@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { logAction } from '../actionLog';
 import WalletConnection from '../WalletConnection';
-import { DEVNET_DOMAIN } from '../apiUrls';
+import { DEVNET_DOMAIN } from '../config/constants';
 import { getTokens } from '../tbcApi';
 
 const MAX_SAFE_AMOUNT = Number.MAX_SAFE_INTEGER;

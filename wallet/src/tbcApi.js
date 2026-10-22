@@ -1,5 +1,5 @@
 import { ApiError, getApiData } from './services/apiClient';
-import { API_URLS } from './apiUrls';
+import { API_URLS } from './config/constants';
 
 function invalidResponse(message) {
 	return new ApiError(message, { code: 'INVALID_RESPONSE' });
