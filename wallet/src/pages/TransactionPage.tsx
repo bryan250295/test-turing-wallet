@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Amount, TransactionEntry } from '../types/api';
 import type { WalletPageProps } from '../types/wallet';
 import type { TransactionRow } from '../types/transaction';
 import WalletConnection from '../components/WalletConnection';
 import useTransactionHistory from '../hooks/useTransactionHistory';
+import useLinkedTransaction from '../hooks/useLinkedTransaction';
 import { statusOf, shortId, timeOf, dateOf, formatFeeTbc, transactionParties, transactionAmount } from '../utils/transactions';
 
 function AddressList({ entries }: { entries: TransactionEntry[] }) {
@@ -11,8 +13,32 @@ function AddressList({ entries }: { entries: TransactionEntry[] }) {
 	return addresses.length ? addresses.map((value) => <code className="history-address" key={value} title={value}>{value}</code>) : '—';
 }
 
+const dateFieldLabels: Record<string, string> = {
+	create_timestamp: 'Created at (MYT)',
+	timestamp: 'Date & time (MYT)',
+	time: 'Transaction date & time (MYT)',
+	blocktime: 'Block date & time (MYT)',
+	block_time: 'Block date & time (MYT)',
+};
+
+function TransactionFieldValue({ field, value }: { field: string; value: unknown }) {
+	if (dateFieldLabels[field]) {
+		const seconds = typeof value === 'number' || typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+		const date = new Date(seconds * 1000);
+		return Number.isFinite(seconds) && seconds > 0 && Number.isFinite(date.getTime())
+			? <time dateTime={date.toISOString()}>{dateOf(seconds)}</time>
+			: <span>{field === 'time' || field === 'blocktime' || field === 'block_time' ? 'Awaiting confirmation' : 'Unavailable'}</span>;
+	}
+	return value !== null && typeof value === 'object'
+		? <pre className="history-json">{JSON.stringify(value, null, 2)}</pre>
+		: <code>{value == null ? '—' : String(value)}</code>;
+}
+
 export default function TransactionPage({ session, hidden }: WalletPageProps) {
 	const { address, networkIsDevnet } = session;
+	const [searchParams] = useSearchParams();
+	const requestedTxid = searchParams.get('txid') ?? '';
+	const targetTxid = /^[0-9a-f]{64}$/i.test(requestedTxid) ? requestedTxid.toLowerCase() : '';
 
 	const [notices, setNotices] = useState<string[]>([]);
 	const [notificationMessage, setNotificationMessage] = useState('');
@@ -51,12 +77,17 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 		setNotices([]);
 	}, [address]);
 
-	const [search, setSearch] = useState('');
+	const [search, setSearch] = useState(targetTxid);
 	const [statusFilter, setStatusFilter] = useState('All statuses');
 	const [activityFilter, setActivityFilter] = useState('All assets');
 	const [page, setPage] = useState(1);
 	const [expanded, setExpanded] = useState<string | null>(null);
 	const [copyMessage, setCopyMessage] = useState('');
+	useEffect(() => {
+		setSearch(targetTxid);
+		setStatusFilter('All statuses');
+		setActivityFilter('All assets');
+	}, [targetTxid]);
 	useEffect(() => {
 		setPage(1);
 		setExpanded(null);
@@ -71,8 +102,21 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 		void loadTransactionDetails(row);
 	}
 
+	const historyRows = state.address === address && networkIsDevnet ? state.rows : [];
+	const linked = useLinkedTransaction(targetTxid, !!address && networkIsDevnet && !hidden && state.address === address && !state.loading && !historyRows.some((row) => row.txid === targetTxid));
+	const targetRow = historyRows.find((row) => row.txid === targetTxid) ?? linked.row;
+	const openedTarget = useRef<TransactionRow | null>(null);
+	useEffect(() => {
+		if (hidden || !targetRow || search !== targetTxid || state.loading || openedTarget.current === targetRow) return;
+		openedTarget.current = targetRow;
+		setExpanded(targetTxid);
+		void loadTransactionDetails(targetRow);
+	}, [hidden, targetRow, targetTxid, search, state.loading, loadTransactionDetails]);
+	useEffect(() => {
+		if (!hidden && targetTxid && expanded === targetTxid) document.getElementById(`transaction-${targetTxid}`)?.scrollIntoView({ block: 'start' });
+	}, [hidden, expanded, targetTxid]);
 	const rows = state.address === address && networkIsDevnet
-		? state.rows.map((row) => ({ ...row, ...detailsByTxid[row.txid] }))
+		? [...historyRows, ...(linked.row ? [linked.row] : [])].map((row) => ({ ...row, ...detailsByTxid[row.txid] }))
 		: [];
 	const filtered = rows.filter((row) =>
 		(statusFilter === 'All statuses' || statusOf(row) === statusFilter) &&
@@ -102,6 +146,10 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 			<button type="button" className="history-refresh" disabled={state.loading || !address || !networkIsDevnet} onClick={loadHistory}>{state.loading ? 'Refreshing…' : '↻ Refresh'}</button>
 		</div>
 		<WalletConnection session={session} />
+		{requestedTxid && !targetTxid && <p className="result error" role="alert">Invalid transaction ID in this link.</p>}
+		{linked.loading && <p className="history-feedback" role="status">Looking up the linked transaction on Testnet…</p>}
+		{linked.error && <p className="result error" role="alert">{linked.error}</p>}
+		{linked.row && <p className="history-note">This transaction was loaded directly by TXID because it is absent from the loaded wallet history. Amounts are relative to your connected address.</p>}
 		{!address || !networkIsDevnet ? <div className="history-empty"><h2>Connect to see your activity</h2><p>Select TBC Devnet in your wallet, then connect your account.</p></div> : <>
 			<div className="notification-settings"><span>Manual updates · Click Refresh to check transaction status</span><button type="button" className="history-secondary" disabled={desktopEnabled} onClick={enableNotifications}>{desktopEnabled ? 'Desktop alerts enabled' : 'Enable desktop alerts'}</button></div>
 			{notificationMessage && <p className="history-feedback" role="status">{notificationMessage}</p>}
@@ -125,6 +173,7 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 					const fees = [...new Set(row.records.map(({ data }) => data.fee).filter((value): value is Amount => value != null))];
 					const confirmations = row.records.map(({ data }) => data.confirmations).filter((value) => typeof value === 'number');
 					return <Fragment key={row.txid}><tr
+						id={`transaction-${row.txid}`}
 						className={`history-transaction-row${expanded === row.txid ? ' is-expanded' : ''}`}
 						onClick={(event) => {
 							if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea')) return;
@@ -140,7 +189,7 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 						<td>{confirmations.length ? Math.min(...confirmations).toLocaleString() : '—'}</td>
 						<td><button type="button" className="history-detail-button" aria-label={`${expanded === row.txid ? 'Close' : 'Details for'} transaction ${row.txid}`} aria-expanded={expanded === row.txid} aria-controls={expanded === row.txid ? `details-${row.txid}` : undefined} onClick={() => toggleTransactionDetails(row)}>{expanded === row.txid ? 'Close ↑' : 'Details ↓'}</button></td>
 					</tr>
-					{expanded === row.txid && <tr id={`details-${row.txid}`} className="history-detail-row"><td colSpan={8}><div className="history-detail-content"><h3>Transaction details</h3>{row.loading && <p role="status">Loading token transaction details…</p>}{row.error && <div><p className="result error" role="alert">{row.error}</p><button type="button" onClick={() => loadTransactionDetails(row)}>Retry details</button></div>}<dl className="history-detail-grid"><div><dt>Sender</dt><dd><AddressList entries={parties.inputs} /></dd></div><div><dt>Receiver / change</dt><dd><AddressList entries={parties.outputs} /></dd></div></dl><p>Amounts in the table show the net change for your connected address; native TBC net change includes fees. Receiver lists include change outputs. Raw fields below retain their API units.</p>{[...row.records, ...(row.tokenDetails ? [{ source: 'Token transfer details', data: row.tokenDetails }] : []), ...(row.tokenInfo ? [{ source: 'Token metadata', data: row.tokenInfo }] : [])].map((record, index) => <section key={index}><h4>{record.source}</h4><dl className="history-detail-grid">{Object.entries(record.data).map(([field, value]) => <div key={field}><dt>{field}</dt><dd>{value !== null && typeof value === 'object' ? <pre className="history-json">{JSON.stringify(value, null, 2)}</pre> : <code>{value == null ? '—' : String(value)}</code>}</dd></div>)}</dl></section>)}</div></td></tr>}
+					{expanded === row.txid && <tr id={`details-${row.txid}`} className="history-detail-row"><td colSpan={8}><div className="history-detail-content"><h3>Transaction details</h3>{row.loading && <p role="status">Loading token transaction details…</p>}{row.error && <div><p className="result error" role="alert">{row.error}</p><button type="button" onClick={() => loadTransactionDetails(row)}>Retry details</button></div>}<dl className="history-detail-grid"><div><dt>Sender</dt><dd><AddressList entries={parties.inputs} /></dd></div><div><dt>Receiver / change</dt><dd><AddressList entries={parties.outputs} /></dd></div></dl><p>Amounts in the table show the net change for your connected address; native TBC net change includes fees. Receiver lists include change outputs. Dates below use Malaysia time (MYT); other fields retain their API units.</p>{[...row.records, ...(row.tokenDetails ? [{ source: 'Token transfer details', data: row.tokenDetails }] : []), ...(row.tokenInfo ? [{ source: 'Token metadata', data: row.tokenInfo }] : [])].map((record, index) => <section key={index}><h4>{record.source}</h4><dl className="history-detail-grid">{Object.entries(record.data).map(([field, value]) => <div key={field}><dt>{dateFieldLabels[field] ?? field}</dt><dd><TransactionFieldValue field={field} value={value} /></dd></div>)}</dl></section>)}</div></td></tr>}
 					</Fragment>;
 				})}
 				{!visible.length && <tr><td colSpan={8}><div className="history-empty"><h3>{state.loading ? 'Loading your activity…' : state.errors.length ? 'History unavailable' : rows.length ? 'No matching transactions' : 'No activity yet'}</h3><p>{state.loading ? 'Fetching your native TBC and token transactions.' : rows.length ? 'Try another search or change your filters.' : state.errors.length ? 'Refresh to try loading your transactions again.' : 'Your transactions will appear here after you send, receive or mint.'}</p></div></td></tr>}

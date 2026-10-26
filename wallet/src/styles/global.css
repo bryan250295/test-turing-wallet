@@ -90,7 +90,43 @@ h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
 .page-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0 0 18px; padding: 4px; border: 1px solid #31405f; border-radius: 11px; background: #0d1729; }
 .page-tabs button { min-height: 42px; padding: 9px 12px; color: #bdc9dd; background: transparent; }
 .page-tabs button.selected { color: #06111f; background: #7dd3fc; }
-.bridge-lab-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bridge-lab-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.htlc-lab > header p, .htlc-section > p { color: #bdc9dd; line-height: 1.7; }
+.htlc-lab aside p { margin-bottom: 0; }
+.htlc-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #293751; }
+.htlc-secret-field { display: flex; align-items: center; gap: 10px; }
+.htlc-secret-field input { flex: 1; min-width: 0; }
+.htlc-lab input { font-family: monospace; }
+.htlc-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.saved-claim-secret { margin-top: 12px; }
+.saved-claim-secret input { min-width: 120px; }
+.saved-claim-secret .htlc-secret-field { flex-wrap: wrap; }
+.recipient-combobox { position: relative; }
+.recipient-control { display: flex; align-items: center; border: 1px solid #405174; border-radius: 10px; background: #0b1427; }
+.recipient-control:focus-within { border-color: #7dd3fc; box-shadow: 0 0 0 2px #7dd3fc25; }
+.recipient-control.is-disabled { opacity: .65; }
+.recipient-control input { flex: 1; min-width: 0; width: 100%; margin: 0; padding: 13px; border: 0; outline: 0; background: transparent; box-shadow: none; }
+.recipient-control input:focus { outline: 0; box-shadow: none; }
+.recipient-control .recipient-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 36px; min-height: 44px; padding: 8px; border: 0; color: #bdc9dd; background: transparent; }
+.recipient-control .recipient-icon:last-child { margin-right: 3px; }
+.recipient-icon:hover { color: #7dd3fc; }
+.recipient-icon svg.is-open { transform: rotate(180deg); }
+.recipient-suggestions { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 20; max-height: 280px; overflow-y: auto; border: 1px solid #405174; border-radius: 10px; background: #0d1729; box-shadow: 0 12px 30px #0005; }
+.recipient-suggestions ul { margin: 0; padding: 4px; list-style: none; }
+.recipient-suggestions li > button { display: block; width: 100%; padding: 12px; text-align: left; color: #e8edf7; background: transparent; font-weight: 400; }
+.recipient-suggestions li > button:hover, .recipient-suggestions .is-highlighted { background: #1d304c; }
+.recipient-suggestions code { display: block; font-size: .84rem; overflow-wrap: anywhere; }
+.recipient-suggestions > p { margin: 12px; color: #98aac2; font-size: .85rem; }
+.htlc-mode-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 20px; }
+.htlc-lab form { max-width: 760px; }
+.htlc-secret-backup { margin-top: 20px; padding: 18px; border: 1px solid #31405f; border-radius: 12px; background: #0d1729; }
+.htlc-secret-backup h4 { margin-top: 0; }
+.htlc-secret-backup p { color: #bdc9dd; font-size: .85rem; }
+@media (max-width: 560px) {
+	.htlc-secret-field { flex-wrap: wrap; }
+	.htlc-secret-field input { flex-basis: 100%; }
+}
+.htlc-lab .result code { overflow-wrap: anywhere; }
 
 .connection { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 16px; border-radius: 13px; background: #101a2e; }
 .connection strong { display: block; font-size: .92rem; }
@@ -204,6 +240,28 @@ button:focus-visible, summary:focus-visible, .top-menu a:focus-visible { outline
 .history-detail-grid > div { min-width: 0; padding: 12px; border: 1px solid #25334b; border-radius: 8px; }
 .history-detail-grid dt { color: #92a6c2; font-size: .7rem; margin-bottom: 8px; }
 .history-detail-grid dd { margin: 0; font-size: .78rem; overflow-wrap: anywhere; }
+.htlc-request-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.htlc-request-filters button { display: inline-flex; align-items: center; gap: 10px; padding: 9px 14px; border: 1px solid #30415c; background: #101b2e; color: #bdc9dd; font-size: .8rem; }
+.htlc-request-filters button.selected { color: #06111f; background: #7dd3fc; border-color: #7dd3fc; }
+.htlc-request-filters button span { padding: 2px 7px; border-radius: 20px; background: #7d9bc22b; font-size: .72rem; font-variant-numeric: tabular-nums; }
+.htlc-row-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 150px; max-width: 210px; }
+.htlc-row-actions small { font-size: .7rem; line-height: 1.5; }
+.status-unavailable { color: #fca5a5; background: #45212c; }
+.htlc-details-dialog { width: min(800px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid #405174; border-radius: 18px; color: #e8edf7; background: #101b2e; box-shadow: 0 24px 90px #0009; overflow: hidden; }
+.htlc-details-dialog[open] { display: flex; flex-direction: column; }
+.htlc-details-dialog::backdrop { background: #040a16b3; }
+.htlc-details-heading { display: flex; flex-shrink: 0; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px clamp(16px, 4vw, 26px); border-bottom: 1px solid #293751; }
+.htlc-details-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px clamp(16px, 4vw, 26px) 26px; }
+.htlc-details-heading h3 { margin: 8px 0 0; font-size: 1.25rem; }
+.htlc-details-heading .eyebrow { margin: 0; font-size: .7rem; }
+.htlc-details-heading button { flex-shrink: 0; }
+.htlc-details-dialog h4 { font-size: .95rem; margin: 24px 0 12px; }
+.htlc-details-dialog .history-detail-grid { gap: 12px; }
+.htlc-related-transactions { list-style: none; padding: 0; margin: 0; }
+.htlc-related-transactions li { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid #293751; }
+.htlc-related-transactions strong { font-size: .83rem; }
+.htlc-related-transactions a { overflow-wrap: anywhere; color: #9edfff; font-size: .76rem; }
+.htlc-related-transactions span { color: #98aac2; font-size: .74rem; }
 .history-json { min-width: 0; max-height: 300px; margin: 0; font-size: .72rem; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .history-empty { padding: 44px 20px; text-align: center; }
 .history-empty h2, .history-empty h3 { margin: 0 0 10px; font-size: 1rem; }
@@ -212,6 +270,40 @@ button:focus-visible, summary:focus-visible, .top-menu a:focus-visible { outline
 .history-footer > div { display: flex; align-items: center; gap: 14px; }
 .history-note { margin: 22px 0 0; color: #7e93b0; font-size: .71rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.htlc-receipt-download { display: block; margin-top: 16px; }
+.htlc-secret-confirmation { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; line-height: 1.6; }
+.htlc-secret-confirmation input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; padding: 0; margin: 5px 0 0; accent-color: #7dd3fc; }
+.htlc-raw-preview { margin: 20px 0; padding: 14px; border: 1px solid #30415c; border-radius: 10px; }
+.htlc-raw-preview summary { cursor: pointer; color: #9edfff; }
+.htlc-refund-picker { margin: 24px 0; min-width: 0; }
+.refund-picker-trigger { display: flex; justify-content: space-between; align-items: center; gap: 16px; width: 100%; padding: 14px; border: 1px solid #405174; background: #0b1427; color: #e8edf7; font-weight: 500; text-align: left; }
+.refund-picker-trigger:hover:not(:disabled) { border-color: #7dd3fc; }
+.refund-calendar-icon { flex-shrink: 0; color: #7dd3fc; }
+.refund-picker-summary { margin-top: 10px; color: #93a7c2; font-size: .8rem; }
+.refund-picker-summary p { margin: 5px 0; }
+.refund-picker-summary p:first-child:not(:last-child) { color: #a5e4d3; }
+.refund-picker-dialog { box-sizing: border-box; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; border: 1px solid #405174; border-radius: 18px; color: #e8edf7; background: #101b2e; box-shadow: 0 24px 90px #0009; overflow-y: auto; }
+.refund-picker-dialog::backdrop { background: #040a16b3; }
+.refund-dialog-heading, .refund-calendar-heading, .refund-picker-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.refund-dialog-heading h3 { margin: 0; font-size: 1rem; }
+.refund-picker-dialog .refund-icon-button { display: grid; place-items: center; padding: 0; width: 34px; height: 34px; flex-shrink: 0; color: #bdd1e9; background: transparent; font-size: 1.4rem; font-weight: 400; }
+.refund-picker-dialog .refund-icon-button:hover:not(:disabled) { background: #23354e; }
+.refund-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.refund-shortcuts button { padding: 8px 12px; color: #9edfff; background: #192e45; border: 1px solid #345069; font-size: .8rem; font-weight: 600; }
+.refund-shortcuts button:hover { background: #24415c; }
+.refund-calendar-heading { margin-bottom: 10px; font-size: .9rem; }
+.refund-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.refund-weekday { padding: 8px 0; text-align: center; font-size: .7rem; color: #90a5c2; }
+.refund-calendar button { aspect-ratio: 1; padding: 0; color: #c9d7ea; background: transparent; font-size: .85rem; font-weight: 500; border: 1px solid transparent; border-radius: 8px; }
+.refund-calendar button[aria-current="date"] { border-color: #456a87; }
+.refund-calendar button:disabled { opacity: .3; }
+.refund-calendar button:hover:not(:disabled) { background: #25405b; }
+.refund-calendar button.is-selected { color: #06111f; background: #7dd3fc; font-weight: 700; }
+.refund-calendar button.is-selected:hover { background: #a2e3ff; }
+.refund-time-hint { color: #90a5c2; font-size: .7rem; font-weight: 400; }
+.refund-draft-summary { margin: 16px 0; padding: 12px; background: #0b1427; border-radius: 8px; color: #b8d8ed; font-size: .85rem; line-height: 1.6; }
+.refund-draft-summary small { color: #90a5c2; }
+.refund-picker-actions { justify-content: flex-end; padding-top: 8px; }
 @media (max-width: 700px) {
 	.card.history-card { padding: 20px 16px; }
 	.site-header { align-items: flex-start; }

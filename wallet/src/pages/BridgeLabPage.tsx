@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { Health } from '../types/api';
+import type { WalletPageProps } from '../types/wallet';
 import { BITBUS_API_BASE } from '../config/constants';
 import useInquiry from '../hooks/useInquiry';
+import HtlcTestnet from '../components/bridge/HtlcTestnet';
+import HtlcRequests from '../components/bridge/HtlcRequests';
+import type { HtlcRecoveryTarget } from '../types/htlc';
 
 function getHealthDisplay(health: Health | null, loading: boolean) {
 	if (loading) return { tone: 'warning', label: 'Checking…' };
@@ -17,12 +21,14 @@ function getHealthDisplay(health: Health | null, loading: boolean) {
 const tabs = [
 	{ id: 'overview', label: 'Overview' },
 	{ id: 'htlc', label: 'HTLC Testnet' },
+	{ id: 'requests', label: 'My HTLC Requests' },
 ] as const;
 
 type BridgeTab = typeof tabs[number]['id'];
 
-export default function BridgeLabPage() {
+export default function BridgeLabPage({ session }: WalletPageProps) {
 	const [activeTab, setActiveTab] = useState<BridgeTab>('overview');
+	const [recoveryTarget, setRecoveryTarget] = useState<HtlcRecoveryTarget>();
 
 	function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 		const current = tabs.findIndex((tab) => tab.id === activeTab);
@@ -43,7 +49,7 @@ export default function BridgeLabPage() {
 		<section className="card history-card inquiry-page">
 			<p className="eyebrow">BRIDGE LAB</p>
 			<h1>Bridge Lab</h1>
-			<p className="intro">Explore BitBus data and TBC Testnet experiments.</p>
+			<p className="intro">Explore BitBus data and manage TBC Testnet token locks.</p>
 			<div className="page-tabs bridge-lab-tabs" role="tablist" aria-label="Bridge Lab sections">
 				{tabs.map((tab) => (
 					<button
@@ -65,7 +71,15 @@ export default function BridgeLabPage() {
 			<div id="bridge-overview-panel" role="tabpanel" aria-labelledby="bridge-overview-tab" hidden={activeTab !== 'overview'} tabIndex={0}>
 				<BridgeOverview />
 			</div>
-			<div id="bridge-htlc-panel" role="tabpanel" aria-labelledby="bridge-htlc-tab" hidden={activeTab !== 'htlc'} tabIndex={0} />
+			<div id="bridge-htlc-panel" role="tabpanel" aria-labelledby="bridge-htlc-tab" hidden={activeTab !== 'htlc'} tabIndex={0}>
+				<HtlcTestnet active={activeTab === 'htlc'} session={session} recoveryTarget={recoveryTarget} onViewRequests={() => setActiveTab('requests')} />
+			</div>
+			<div id="bridge-requests-panel" role="tabpanel" aria-labelledby="bridge-requests-tab" hidden={activeTab !== 'requests'} tabIndex={0}>
+				<HtlcRequests session={session} active={activeTab === 'requests'} onRecover={(target) => {
+					setRecoveryTarget(target);
+					setActiveTab('htlc');
+				}} />
+			</div>
 		</section>
 	);
 }

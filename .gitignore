@@ -38,6 +38,8 @@ dist/
 
 # Local environment files and logs
 wallet/logs/
+wallet/storage/**
+!wallet/storage/.gitkeep
 .env
 .env.*
 !**/.env.example

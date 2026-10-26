@@ -12,7 +12,7 @@ export async function getTokens(address: string, options?: RequestOptions) {
 	return data.token_list.map(parseToken);
 }
 
-async function getAllUtxos(endpoint: string, options?: RequestOptions) {
+export async function getAllUtxos(endpoint: string, options?: RequestOptions) {
 	const outputs: Utxo[] = [];
 	const cursors = new Set<string>();
 	let cursor = '';
