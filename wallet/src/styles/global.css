@@ -90,7 +90,28 @@ h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
 .page-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0 0 18px; padding: 4px; border: 1px solid #31405f; border-radius: 11px; background: #0d1729; }
 .page-tabs button { min-height: 42px; padding: 9px 12px; color: #bdc9dd; background: transparent; }
 .page-tabs button.selected { color: #06111f; background: #7dd3fc; }
-.bridge-lab-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bridge-lab-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.testnet-bridge-wallets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.testnet-bridge-wallet { min-width: 0; padding: 22px; border: 1px solid #293751; border-radius: 14px; background: #0e182a; }
+.testnet-bridge-wallet h3 { margin: 10px 0 20px; }
+.testnet-bridge-wallet .connection { padding: 0; align-items: flex-start; flex-direction: column; background: transparent; }
+.testnet-bridge-wallet .connection-info { width: 100%; }
+.testnet-bridge-wallet .wallet-details { width: 100%; margin: 18px 0; }
+.testnet-bridge-wallet .wallet-details dd { overflow-wrap: anywhere; }
+.testnet-bridge-wallet .htlc-actions { margin-top: 20px; }
+.testnet-bridge-wallet a { color: #9edfff; }
+.testnet-bridge-status { font-weight: 700; }
+.testnet-bridge-summary { margin-top: 22px; padding: 20px; border: 1px solid #293751; border-radius: 12px; }
+.testnet-bridge-summary h3 { margin-top: 0; }
+.testnet-bridge-summary p, .testnet-bridge-summary li { color: #a9bdd7; font-size: .85rem; line-height: 1.7; }
+@media (max-width: 800px) {
+	.testnet-bridge-wallets { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+	.bridge-lab-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.testnet-bridge-wallet { padding: 18px 14px; }
+	.testnet-bridge > .history-titlebar { flex-wrap: wrap; }
+}
 .htlc-lab > header p, .htlc-section > p { color: #bdc9dd; line-height: 1.7; }
 .htlc-lab aside p { margin-bottom: 0; }
 .htlc-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #293751; }

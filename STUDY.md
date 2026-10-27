@@ -187,9 +187,12 @@ Hyperliquid
 - [x] 已确定两侧网络：TBC Testnet 与 HyperEVM Testnet，使用测试资产学习。
 - [x] 已明确是自建学习桥，不是调用官方桥完成全部流程，也不宣称复制官方底层协议。官方教程展示 TBC 主网 → HyperEVM 的订单流程；仅凭该教程，尚不能确认其采用 Lock and Mint 或其他结算机制。
 - [x] 目标链钱包已准备（2026-10-27，用户截图）：创建 MetaMask 账户 `HyperEVM Learning`，已有公开 `0x...` 地址。
-- [x] 目标链测试网络已添加并切换（2026-10-27，用户截图）：按 chain ID `998`、RPC `https://rpc.hyperliquid-testnet.xyz/evm`、gas 币 HYPE 配置；钱包筛选显示 `Hyperliquid EVM Testnet`。应用接入时仍需读取 chain ID 核对实际连接网络。
+- [x] 目标链测试网络已添加并切换（2026-10-27，用户截图）：按 chain ID `998`、RPC `https://rpc.hyperliquid-testnet.xyz/evm`、gas 币 HYPE 配置；钱包筛选显示 `Hyperliquid EVM Testnet`。后续 Testnet Bridge 截图已确认应用实际读取到 chain ID `998`。
 - [x] 测试 HYPE 已到账（2026-10-27，用户截图）：ZalalenA 水龙头提交后，MetaMask 测试网络下显示 `0.000500 HYPE`。Quicknode 因主网 HYPE 余额门槛未能领取，Thirdweb 提示 Free plan 无法使用水龙头；实际通过社区水龙头获取。TBC 一侧继续使用 Turing Wallet 与 native test TBC 支付手续费。
-- [ ] 接入 MetaMask 后读取地址、chain ID 与原生 HYPE 余额；部署和交易前估算 gas 与实际费用，不仅凭已到账 `0.000500 HYPE` 推断余额足够。
+- [x] 已实现钱包准备页面（2026-10-27）：Bridge Lab 新增 **Testnet Bridge** 标签，复用 Turing Wallet 会话；MetaMask 按钮连接、读取地址／chain ID／原生 HYPE 余额，支持请求切换或添加 chain `998`。账户／网络切换会清除旧数据并重新读取；无轮询，支持手动刷新、错误提示和读取超时。此处记录代码实现，不代表真实浏览器验收或跨链完成。
+- [x] Testnet Bridge 正常连接场景已验收（2026-10-27，用户真实浏览器截图）：Turing Wallet 显示 `tbc / testnet`；MetaMask 显示 `HyperEVM Testnet / 998`，应用地址与扩展显示的地址首尾一致，页面与钱包均显示 `0.000500 HYPE`，汇总提示 **Both wallets are connected**。此证据只确认连接及读取成功，不代表部署或跨链交易完成。
+- [ ] Testnet Bridge 其余浏览器验收：检查拒绝连接、切错网络、切换账户、钱包断开及余额变化后手动刷新的表现。
+- [ ] 部署和交易前估算 gas 与实际费用，不仅凭已到账 `0.000500 HYPE` 推断余额足够。
 - [ ] 明确首版资产与机制：曾讨论以 native test TBC 为源资产，采用托管式 Lock and Mint；目前只是候选设计。若选该方案，需说明桥控制的保管地址、验证服务及 mint 权限；不能将普通转入托管地址称为无需信任的链上锁定。
 - [ ] 设计正向最小流程：创建订单 → 源链付款 → 后端核验网络、付款输出、金额、确认数及订单绑定 → 目标链结算 → 核对到账与订单完成。
 - [ ] 实现持久化订单、付款与目标地址绑定、唯一入金识别和防重复结算；源链 TXID 与目标链交易哈希均需关联到订单。付款截止时间与旧 HTLC 的退款时间是不同规则，需分别设计。
@@ -349,4 +352,4 @@ claim／refund TXID：
 https://airdrop.tbcdev.org/
 https://github.com/TuringBitChain/turing-wallet-provider
 
-**当前安排：第 6 节的目标链 MetaMask、测试网络与 `0.000500 HYPE` 余额已由用户截图确认。下一步确定自建学习桥的首版资产与结算机制，并接入钱包读取网络／余额；部署前估算费用。原有单链 HTLC 成果保留，剩余验收暂缓；双链 HTLC 和 BitBus Marketplace 为可选，STUDY2.md 始终只读。**
+**当前安排：第 6 节 Testnet Bridge 的真实浏览器正常连接场景已由用户截图验收：两侧测试钱包已连接，应用实际读取 chain `998`，HYPE 余额与 MetaMask 的 `0.000500 HYPE` 一致；异常及余额刷新场景仍待验收。下一步确定自建学习桥的首版资产与结算机制；部署前估算费用。原有单链 HTLC 成果保留，剩余验收暂缓；双链 HTLC 和 BitBus Marketplace 为可选，STUDY2.md 始终只读。**

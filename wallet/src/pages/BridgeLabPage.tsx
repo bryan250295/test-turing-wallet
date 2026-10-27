@@ -8,6 +8,7 @@ import HtlcTestnet from '../components/bridge/HtlcTestnet';
 import HtlcRequests from '../components/bridge/HtlcRequests';
 import type { HtlcRecoveryTarget } from '../types/htlc';
 import { formatDateTime } from '../utils/dateTime';
+import TestnetBridge from '../components/bridge/TestnetBridge';
 
 function getHealthDisplay(health: Health | null, loading: boolean) {
 	if (loading) return { tone: 'warning', label: 'Checking…' };
@@ -21,6 +22,7 @@ function getHealthDisplay(health: Health | null, loading: boolean) {
 
 const tabs = [
 	{ id: 'overview', label: 'Overview' },
+	{ id: 'testnet-bridge', label: 'Testnet Bridge' },
 	{ id: 'htlc', label: 'HTLC Testnet' },
 	{ id: 'requests', label: 'My HTLC Requests' },
 ] as const;
@@ -50,7 +52,7 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 		<section className="card history-card inquiry-page">
 			<p className="eyebrow">BRIDGE LAB</p>
 			<h1>Bridge Lab</h1>
-			<p className="intro">Explore BitBus data and manage TBC Testnet token locks.</p>
+			<p className="intro">Explore BitBus, prepare your testnet bridge wallets and manage TBC token locks.</p>
 			<div className="page-tabs bridge-lab-tabs" role="tablist" aria-label="Bridge Lab sections">
 				{tabs.map((tab) => (
 					<button
@@ -74,6 +76,9 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 			</div>
 			<div id="bridge-htlc-panel" role="tabpanel" aria-labelledby="bridge-htlc-tab" hidden={activeTab !== 'htlc'} tabIndex={0}>
 				<HtlcTestnet active={activeTab === 'htlc'} session={session} recoveryTarget={recoveryTarget} onViewRequests={() => setActiveTab('requests')} />
+			</div>
+			<div id="bridge-testnet-bridge-panel" role="tabpanel" aria-labelledby="bridge-testnet-bridge-tab" hidden={activeTab !== 'testnet-bridge'} tabIndex={0}>
+				<TestnetBridge session={session} active={activeTab === 'testnet-bridge'} />
 			</div>
 			<div id="bridge-requests-panel" role="tabpanel" aria-labelledby="bridge-requests-tab" hidden={activeTab !== 'requests'} tabIndex={0}>
 				<HtlcRequests session={session} active={activeTab === 'requests'} onRecover={(target) => {

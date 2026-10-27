@@ -94,13 +94,50 @@ Tabs use a display width of four.
 - `/transaction?txid=<transaction-id>` filters and expands a linked transaction.
   HTLC lock, claim and refund links use this view. Transactions absent from the
   loaded wallet history are queried directly by TXID on Testnet.
-- `/bridge-lab` opens Bridge Lab: Overview shows BitBus data, HTLC Testnet manages token locks, and My HTLC Requests lists locally saved token locks for the connected Testnet wallet.
+- `/bridge-lab` opens Bridge Lab: Overview shows BitBus data, Testnet Bridge connects both learning-bridge wallets, HTLC Testnet manages token locks, and My HTLC Requests lists locally saved token locks for the connected Testnet wallet.
 - `/inquiry` redirects to `/bridge-lab` for existing links.
 
 Navigation supports browser Back/Forward and direct page links. When deploying,
 configure the web server to serve `index.html` for these frontend routes so direct
 links and page reloads work. The wallet session is shared across routes; page-local
 forms and filters reset when leaving a page.
+
+## Testnet Bridge wallet setup
+
+Open **Bridge Lab → Testnet Bridge**. The source card reuses the shared Turing
+Wallet session on TBC Testnet. The destination card connects the MetaMask browser
+extension and displays its selected account, chain ID and native test HYPE balance.
+It is a wallet preparation screen; bridge orders, deposits, contracts and settlement
+are not implemented here.
+
+- **Connect MetaMask** requests account access only when clicked. Authorized
+  accounts are read silently when opening the tab; no signature is requested.
+- MetaMask discovery uses [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963)
+  (`io.metamask`) with a legacy injected-provider fallback. Other wallets are not
+  selected just because they occupy `window.ethereum`. Provider identifiers are
+  supplied by extensions and are not cryptographic identity verification.
+- **Switch to HyperEVM Testnet** requests chain `998` (`0x3e6`). If the wallet
+  reports an unknown chain, it offers to add the network, then requests switching
+  again. Wallet approval or rejection remains under the user's control.
+- Network configuration is isolated in `src/config/hyperevm.ts`: official RPC
+  `https://rpc.hyperliquid-testnet.xyz/evm`, HYPE, 18 decimals. See the
+  [HyperEVM network documentation](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm).
+- HYPE is read through the selected wallet provider only on chain `998`. Values
+  retain integer precision and display up to 18 fractional digits (at least six).
+  A wrong-network balance is never presented as test HYPE.
+- Account/network/connect events refresh the view. Disconnects clear it.
+  Overlapping reads are coalesced; outdated responses are discarded. Each read
+  has a 20-second deadline. There is no balance polling or automatic retry loop.
+  **Refresh wallet** updates the balance after a faucet claim or other transfer.
+- Leaving the tab removes listeners and invalidates pending reads. An unanswered
+  approval remains pending across tab changes to prevent duplicate prompts.
+
+The integration uses typed EIP-1193 calls in `services/evmWallet.ts`, lifecycle
+state in `hooks/useHyperEvmWallet.ts`, and presentation in
+`components/bridge/TestnetBridge.tsx`. No new dependency, backend endpoint, private
+key storage, token approval, signing or transaction submission is added.
+Real MetaMask/browser acceptance remains to be performed; a successful wallet
+connection or positive HYPE balance does not establish an affordable deployment.
 
 ## HTLC Testnet
 
