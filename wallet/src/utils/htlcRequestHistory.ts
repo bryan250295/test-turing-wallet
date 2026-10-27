@@ -1,5 +1,6 @@
 import type { TokenHtlcBroadcast, TokenHtlcLock, UnsignedTokenHtlc } from '../types/htlc';
 import { isObject } from '../services/apiValidation';
+import { formatDateTime } from './dateTime';
 
 export interface HtlcRequest {
 	lockTxid: string;
@@ -59,16 +60,19 @@ export function mergeHtlcRequest(previous: HtlcRequest | undefined, next: HtlcRe
 	return { ...next, tokenName: next.tokenName || previous?.tokenName, createdAt: previous?.createdAt ?? next.createdAt, submission: mergeStatus(previous?.submission, next.submission), recoveries: [...recoveries.values()].slice(-10) };
 }
 
-export function htlcRequestStatus(item: HtlcRequest, lock?: TokenHtlcLock) {
-	if (lock?.recovery) {
+export function htlcLockStatus(lock: TokenHtlcLock): string {
+	if (lock.recovery) {
 		const { action, confirmations } = lock.recovery;
-		return confirmations > 0 ? (action === 'claim' ? 'Claimed' : 'Refunded') : `${action === 'claim' ? 'Claim' : 'Refund'} awaiting confirmation`;
+		return confirmations > 0 ? (action === 'claim' ? 'Claimed' : 'Refunded') : `${action === 'claim' ? 'Claim' : 'Refund'} pending`;
 	}
-	if (lock) {
-		if (!lock.controlUnspent || !lock.tokenUnspent) return 'Spent / unavailable';
-		return lock.confirmations > 0 ? 'Locked' : 'Lock awaiting confirmation';
-	}
-	return savedHtlcStatus(item);
+	if (!lock.controlUnspent || !lock.tokenUnspent) return 'Spent / unavailable';
+	if (lock.confirmations < 1) return 'Lock pending';
+	return lock.refundEligible ? 'Refundable' : 'Locked';
+}
+
+export function htlcRequestStatus(item: HtlcRequest, lock?: TokenHtlcLock, error?: string): string {
+	if (error) return 'Status unavailable';
+	return lock ? htlcLockStatus(lock) : savedHtlcStatus(item);
 }
 
 export function canRecoverHtlc(lock?: TokenHtlcLock): boolean {
@@ -80,10 +84,7 @@ export function isCompletedHtlc(lock?: TokenHtlcLock, error?: string): boolean {
 }
 
 export function formatHtlcDate(value: string | number): string {
-	const date = new Date(typeof value === 'number' ? value * 1000 : value);
-	return Number.isFinite(date.getTime()) ? date.toLocaleString('en-GB', {
-		timeZone: 'Asia/Kuala_Lumpur', dateStyle: 'medium', timeStyle: 'medium',
-	}) : 'Unavailable';
+	return formatDateTime(value);
 }
 
 export function htlcActionReason(lock?: TokenHtlcLock, error?: string, action?: 'claim' | 'refund'): string {

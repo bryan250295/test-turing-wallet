@@ -5,8 +5,9 @@ import { formatRawAmount } from '../../utils/tokenAmounts';
 import useHtlcRequests from '../../hooks/useHtlcRequests';
 import useTokenHtlcRecovery from '../../hooks/useTokenHtlcRecovery';
 import HtlcSubmission from './HtlcSubmission';
-import { canRecoverHtlc, htlcRequestStatus } from '../../utils/htlcRequestHistory';
+import { canRecoverHtlc, htlcLockStatus, htlcRequestStatus } from '../../utils/htlcRequestHistory';
 import SavedClaimSecret from './SavedClaimSecret';
+import { formatDateTime } from '../../utils/dateTime';
 
 export default function TokenHtlcRecovery({ session, recoveryTarget, active }: WalletPageProps & { recoveryTarget?: HtlcRecoveryTarget; active: boolean }) {
 	const section = useRef<HTMLElement>(null);
@@ -53,7 +54,7 @@ export default function TokenHtlcRecovery({ session, recoveryTarget, active }: W
 		}}><option value="">Choose a token lock</option>{requests.map((item) => {
 			const observation = history.observations[item.lockTxid];
 			const disabled = !canRecoverHtlc(observation?.lock) || !!observation?.error;
-			const status = observation?.error ? 'Status unavailable' : observation?.lock ? htlcRequestStatus(item, observation.lock) : history.loading ? 'Loading…' : 'Check status first';
+			const status = observation?.error || observation?.lock ? htlcRequestStatus(item, observation.lock, observation.error) : history.loading ? 'Loading…' : 'Check status first';
 			return <option key={item.lockTxid} value={item.lockTxid} disabled={disabled}>{item.tokenName || 'Unknown token'} ({item.symbol}) · {formatRawAmount(item.amountRaw, item.decimals)} · Contract {item.contractId.slice(0, 8)}… · {status} · {item.lockTxid.slice(0, 10)}…</option>;
 		})}</select>
 		{history.loading && <p className="history-note" role="status">Loading requests and chain status…</p>}
@@ -75,12 +76,12 @@ export default function TokenHtlcRecovery({ session, recoveryTarget, active }: W
 			<dl className="history-detail-grid">
 				<div><dt>Token</dt><dd>{lock.name || selected?.tokenName || 'Unknown token'} ({lock.symbol})<small className="inquiry-chain">Contract: <code>{lock.contractId}</code></small></dd></div>
 				<div><dt>Locked tokens</dt><dd>{formatRawAmount(lock.amountRaw, lock.decimals)} {lock.symbol}</dd></div>
-				<div><dt>Status</dt><dd>{!lock.controlUnspent || !lock.tokenUnspent ? 'Spent / unavailable' : lock.confirmations > 0 ? 'Locked' : 'Awaiting confirmation'}</dd></div>
+				<div><dt>Status</dt><dd>{htlcLockStatus(lock)}{htlcLockStatus(lock) === 'Refundable' && <small className="inquiry-chain">A can request a refund. B may still claim until the lock is spent; refunds are not automatic.</small>}</dd></div>
 				<div><dt>Recipient</dt><dd><code>{lock.receiver}</code></dd></div>
 				<div><dt>Refund address</dt><dd><code>{lock.sender}</code></dd></div>
-				<div><dt>Refund eligible after</dt><dd>{new Date(lock.refundTimestamp * 1000).toLocaleString()}<br />{lock.refundEligible ? 'Refund time reached on Testnet' : 'Waiting for Testnet chain time'}</dd></div>
+				<div><dt>Refund eligible after · MYT</dt><dd>{formatDateTime(lock.refundTimestamp)}<br />{lock.refundEligible ? 'Refund time reached on Testnet' : 'Waiting for Testnet chain time'}</dd></div>
 			</dl>
-			<details className="htlc-raw-preview"><summary>More details</summary><p>Testnet median time: {new Date(lock.chainMedianTime * 1000).toLocaleString()}<br />Checked: {new Date(lock.checkedAt).toLocaleString()}<br />Confirmations: {lock.confirmations}</p><p>Hashlock: <code>{lock.hashHex}</code></p></details>
+			<details className="htlc-raw-preview"><summary>More details</summary><p>Testnet median time · MYT: {formatDateTime(lock.chainMedianTime)}<br />Checked · MYT: {formatDateTime(lock.checkedAt)}<br />Confirmations: {lock.confirmations}</p><p>Hashlock: <code>{lock.hashHex}</code></p></details>
 			<SavedClaimSecret session={session} owner={lock.sender} lockTxid={lock.lockTxid} />
 			{!available && <p className="history-feedback">The lock must be confirmed and unspent. Check its latest status before continuing.</p>}
 			{available && !unsigned && <>

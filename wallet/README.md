@@ -180,11 +180,31 @@ The filters appear as **All**, **Active**, **Completed**, with **All** selected 
 are not treated as completed. Filter counts use the loaded wallet records and
 switching filters makes no network request.
 
+The list, details dialog and Claim / Refund view share the same inspected status:
+
+| Status | Meaning at the last successful check |
+| --- | --- |
+| Locked | Confirmed, unspent lock; the refund is not yet eligible by chain time. |
+| Refundable | Confirmed, unspent lock; the backend reports that chain time permits A to request a refund. |
+| Lock pending | The lock transaction has no block confirmation yet. |
+| Claim pending / Refund pending | A matching recovery transaction has been found but has no block confirmation yet. |
+| Claimed / Refunded | A matching recovery transaction has at least one confirmation. |
+| Spent / unavailable | Lock outputs are unavailable, with no verified recovery to identify the outcome. |
+| Status unavailable | The status check failed; any retained result is explicitly marked as a previous result. |
+
+Saved records without an inspected result retain their submission/unverified
+labels; a local receipt alone does not prove a pending or completed chain transaction.
+Refundable remains in **Active**. Refunds require A's explicit action and are not
+automatic; B may still claim while the lock is unspent. The label uses the backend's
+`refundEligible` result, never the browser clock, and adds no API requests.
+
 The sender sees **Refund**, disabled until chain time makes it eligible; the
 recipient sees **Claim**. Completed rows offer **View details**. Every row has
 that details action, opening a dialog with token identity, amount, participants,
 deadline, confirmations, hashlock, related transactions and available fees.
-Dates use MYT. Fees reuse existing backend decode results without extra requests;
+Dates use MYT, with 12-hour times to the minute (for example, `26 Oct 2026, 3:40 p.m.`).
+The refund picker continues to use its displayed local timezone with the same time format.
+Fees reuse existing backend decode results without extra requests;
 missing fees are shown as Unavailable. The dialog header and Close button stay
 visible while its content scrolls. Close or Escape dismisses the dialog.
 

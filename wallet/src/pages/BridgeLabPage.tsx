@@ -7,6 +7,7 @@ import useInquiry from '../hooks/useInquiry';
 import HtlcTestnet from '../components/bridge/HtlcTestnet';
 import HtlcRequests from '../components/bridge/HtlcRequests';
 import type { HtlcRecoveryTarget } from '../types/htlc';
+import { formatDateTime } from '../utils/dateTime';
 
 function getHealthDisplay(health: Health | null, loading: boolean) {
 	if (loading) return { tone: 'warning', label: 'Checking…' };
@@ -100,7 +101,7 @@ function BridgeOverview() {
 			<div><span>Supported assets</span><strong>{state.loading ? '…' : state.assets?.length ?? '—'}</strong></div>
 			<div><span>Trading pairs</span><strong>{state.loading ? '…' : state.pairs?.length ?? '—'}</strong></div>
 		</div>
-		<p className="history-feedback" role="status">{state.loading ? 'Checking BitBus service and loading market data…' : `Last checked: ${state.updated?.toLocaleString('en-GB', { timeZone: 'Asia/Kuala_Lumpur' })} MYT${state.errors.length ? ' · Some requests failed' : ''}`}</p>
+		<p className="history-feedback" role="status">{state.loading ? 'Checking BitBus service and loading market data…' : `Last checked: ${state.updated ? formatDateTime(state.updated) : 'Unavailable'} MYT${state.errors.length ? ' · Some requests failed' : ''}`}</p>
 		{state.errors.map((error) => <p className="result error" role="alert" key={error}>{error}</p>)}
 		<section className="inquiry-section" aria-labelledby="inquiry-assets"><h2 id="inquiry-assets">Supported assets</h2><p>Assets reported by the service. Listing does not guarantee a currently executable route.</p>
 			{state.assets && <div className="history-scroll" role="region" aria-label="Supported BitBus assets" tabIndex={0}><table className="history-table"><thead><tr><th scope="col">Asset</th><th scope="col">Symbol</th><th scope="col">Blockchain</th><th scope="col">Asset ID</th></tr></thead><tbody>{state.assets.map((asset) => <tr key={asset.id}><td>{asset.name || '—'}</td><td>{asset.symbol || '—'}</td><td>{asset.chain || '—'}</td><td><code>{asset.id}</code></td></tr>)}{!state.assets.length && <tr><td colSpan={4}>No assets returned.</td></tr>}</tbody></table></div>}

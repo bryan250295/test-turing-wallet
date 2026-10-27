@@ -60,10 +60,16 @@ Estimate 100 USDC = 1 ETH
 - HTLC（Hash Time-Locked Contract｜哈希时间锁合约）- is a smart contract
 
 Vifi
+DeFi
+SocialFi
+GameFi
+编译器，UTXO compiler
+Contract
+Hyperliquid
 
 # Sepolia wallet and obtain test ETH.
 
-> 可选的跨链 Lock and Mint 路线，尚未实现。它与下面的双链 Atomic Swap 是不同方向，不要求两条路线都做；当前单链 HTLC 已有成功交易。
+> 历史备选计划，尚未实现。2026-10-26 已选择 TBC Testnet ↔ HyperEVM Testnet 作为下一条主线，见下方第 6 节；Sepolia 保留作参考。Lock and Mint 与双链 HTLC Atomic Swap 是不同方案，当前单链 HTLC 已有成功交易。
 ## Suggested learning sequence
 1. [ ] Prepare a Sepolia wallet and obtain test ETH.
 2. [ ] Deploy dwTBC with restricted minting.
@@ -77,7 +83,7 @@ Vifi
 
 # Bridge Lab 学习与实作 TODO
 
-更新时间：2026-10-26。
+更新时间：2026-10-27。
 
 ## 如何阅读这份清单
 
@@ -93,6 +99,8 @@ Vifi
 
 当前没有实现 wrapped token 的 Lock and Mint，也没有实现跨链 Atomic Swap。
 
+**下一条学习主线已确定（2026-10-26）：自建 TBC Testnet ↔ HyperEVM Testnet 学习桥，参考 Turing Bridge 的产品流程。** 当前只确定网络与学习目标，桥接机制、资产及合约尚待设计，未部署或完成跨链。STUDY2.md 为老师提供的原始资料，始终只读；个人分析与项目计划记录在本文件。
+
 | 操作 | 已有结果／依据 | 状态 |
 | --- | --- | --- |
 | A 创建 Lock | 后续 Claim／Refund 查询均能识别其原 lock 和合约条件 | 已走通 |
@@ -106,7 +114,7 @@ Vifi
 
 ## 接下来按这个顺序做
 
-> 当前安排（2026-10-26）：按用户决定暂缓额外 testing。第 1–3 节保留未完成的验收记录，不自动勾选；本轮先实现第 4 节的界面优化，不要求重新发交易。
+> 当前安排（2026-10-26）：单链 HTLC 基本流程和主要 UI 优化已有成果，第 1–4 节保留剩余验收记录，暂缓额外 testing，不自动勾选。后续优先执行第 6 节的 TBC／HyperEVM 自建学习桥准备，不要求先完成双链 HTLC 或 BitBus Marketplace。
 
 ### 1. 后端自动查询：正常流程完成，额外场景待验证
 
@@ -114,7 +122,8 @@ Vifi
 - [ ] 查看 Network：列表状态请求使用 `POST /__htlc/locks/status`，body 只传 `address`；超过 25 笔时另带后端返回的 cursor。正常列表载入不应为每一行额外调用 `/__htlc/token/inspect`。
 - [ ] 快速切换 HTLC Testnet／My HTLC Requests、切换 A／B，确认没有持续请求、卡住的 loading 或重复查询导致的 429。
 - [ ] 验证后端同钱包／同页的并发查询能复用：成功结果最多复用 15 秒、错误最多 5 秒。Refresh requests 在缓存期内可能显示相同的 checked time；过期后应得到新查询结果。
-- [ ] 确认单笔查询失败时，其他成功记录仍显示；错误不会直接改成 Claimed／Refunded，也不会触发自动广播或重试。
+- [x] 单笔错误的前端显示模拟通过（2026-10-26，用户 Console 操作与截图）：给已成功查询的 lock 注入 `Simulated status check failure` 后，该行显示 Status unavailable、Previous result: Locked、原 checked time 与错误原因，Refund 禁用并提示先刷新；其他成功记录仍正常显示。
+- [ ] 后端真实单笔查询失败的完整流程、无自动广播／重试，以及 Refresh requests 成功后的恢复尚待验证；前端状态注入不等同于这些场景已通过。
 - [ ] 在有足够记录时验证分页：每页最多 25 笔，cursor 继续前进，不能重复或遗漏同一轮中未变化的记录。
 - [ ] 验证取消／断线／超时后可以继续查询，不会长期占满处理名额。已有共享后台只读任务允许在离开页面后完成，前端不应把旧钱包结果显示到新钱包。
 
@@ -150,19 +159,46 @@ Vifi
 - [x] 已实现统一的 View details 弹窗：token／合约／精确金额、A／B 地址、退款条件、确认数、最近查询时间、公开 hashlock、关联交易及费用。费用来自后端既有 decode 结果；没有数据时显示 Unavailable，不额外查询节点。时间统一显示 MYT，支持 Close／Escape。
 - [x] Secret 取回入口移至 View details，继续仅由 A 通过钱包消息签名授权取回；不在表格逐行显示。弹窗打开、筛选、关闭不发交易。
 - [x] 用户已确认基本界面满足需求，截图展示筛选计数、A／B 角色操作与详情弹窗。
-- [x] 详情弹窗标题及 Close 按钮保持可见，下方内容独立滚动；此项与默认 All 为本次补充调整，尚未由用户在浏览器确认。
-- [ ] 补充 UI 浏览器验收暂缓：错误状态归类、弹窗键盘操作和小屏布局尚未实测。
-- [ ] 整理显示状态：当前已能显示 Locked、Claimed、Refunded、待确认、不可用与查询错误；是否增加统一 Draft／Refundable 等状态需要设计。
+- [x] 详情弹窗标题及 Close 按钮保持可见，下方内容独立滚动；独立 Chrome 使用真实组件和模拟资料，在 390×700 视口实测 body 滚动后标题位置不变、Close 可见、内容无横向溢出（2026-10-26）。All 默认选中亦在桌面截图确认；不等同于真实钱包流程全部验收。
+- [ ] 补充 UI 浏览器验收暂缓：筛选在错误状态下的归类、弹窗键盘操作及其他小屏场景尚未完整实测；本次已检查 390×700 下的详情滚动与日期选择器，单笔错误的列表显示模拟已通过，见第 1 节。
+- [x] 已统一列表、View details 与 Claim／Refund 页的链上状态：Locked、Refundable、Lock pending、Claim pending／Refund pending、Claimed／Refunded、Spent / unavailable；查询失败在列表与详情显示 Status unavailable，并将保留的成功结果标为 Previous result。
+- [x] 日期时间显示改为 12 小时制、精确到分钟，例如 `26 Oct 2026, 3:40 p.m.`：列表、详情、Lock review、Claim／Refund、Overview 与交易历史统一使用 MYT；退款日期选择器保留已标示的本地时区，时间选项统一为 `h:mm a.m.／p.m.`。仅调整显示，时间戳与到期判断不变。
+- [x] 日期时间浏览器显示检查通过（2026-10-26，独立 Chrome headless）：真实列表、详情、Lock review 与日期选择器组件使用模拟钱包／状态资料，确认分钟格式、无秒数及 a.m.／p.m. 后缀；浏览器内确认午夜 `12:00 a.m.`、中午 `12:00 p.m.`、`3:05 p.m.` 前导分钟零和交易历史日期 formatter。检查 1440×1000 桌面及 390×700 小屏，截图保存在 `/tmp/htlc-display-check/`；未连接真实钱包、签名或广播，未将其记为 Claim／Refund 和交易历史整页的完整实测。
+- [x] Refundable 仅在 lock 已确认、两项输出均未花费、没有 recovery 且后端 `refundEligible` 为真时显示，仍归 Active；不使用浏览器时钟，不增加 API 调用。退款须由 A 主动提交，输出未花费前 B 仍可能 Claim。没有链上查询结果的保存记录保留 submission／unverified 标签，不推断为链上 pending，也不新增 Draft。
+- [x] 新状态的列表部分已有用户截图（2026-10-26）：Lock pending、Claimed、Refunded，以及前端模拟的 Status unavailable／Previous result: Locked；证据范围见第 1 节。
+- [x] Refundable 的列表显示与角色按钮已有用户截图（2026-10-26）：退款期限为 3:00 p.m. 的 lock 显示 Refundable，A 的 Refund 启用；3:40 p.m. 的另一笔仍显示 Locked 且 Refund 禁用，提示等待链上时间。此截图不代表后一笔已退款。
+- [ ] 新状态的补充浏览器验收暂缓：Claim pending／Refund pending、Refundable 详情、错误状态详情弹窗及错误后刷新恢复尚未完整确认，不将部分截图记为全部通过。
 
-### 5. 选择下一条学习路线（可选，不必全部做）
+### 5. 后续路线（已选择主线，其余保留为可选）
 
 | 路线 | 目前情况 | 接下来要确认 |
 | --- | --- | --- |
+| 自建 TBC ↔ HyperEVM 学习桥 | 已选为下一条主线；尚未实现 | 两侧测试钱包与 gas、资产及桥接机制；详见第 6 节 |
 | 继续完善 TBC 单链 HTLC | 基本流程已走通 | 先完成上面的近期改动与错误场景验收 |
 | TBC 同链 Lock and Mint | 未实现；这是后来讨论的可选方向 | 先确认 FT 的受控增发／销毁、托管释放及防重复处理能力，再决定实现方案 |
 | TBC → Sepolia Lock and Mint | 未实现；原有计划保留在文档上方 | 第二条测试链、wrapped token、锁定证明验证、mint 权限与赎回机制 |
 | 双链 HTLC Atomic Swap | 未实现；详见阶段 7 | 第二条测试链、兼容脚本、共同 hash 和两侧退款期限 |
 | BitBus 风格 Marketplace | 未实现；详见阶段 8 | 订单、报价、身份验证，以及订单和链上状态协调 |
+
+### 6. 新主线：TBC Testnet ↔ HyperEVM Testnet 自建学习桥
+
+目标：自己实现一个可以理解和解释的跨链项目，参考 Turing Bridge 的网络选择、订单、付款、进度和双链交易记录流程。老师的 STUDY2.md 作为只读参考，不能改动。现有单链 HTLC 保留为独立学习成果。
+
+- [x] 已确定两侧网络：TBC Testnet 与 HyperEVM Testnet，使用测试资产学习。
+- [x] 已明确是自建学习桥，不是调用官方桥完成全部流程，也不宣称复制官方底层协议。官方教程展示 TBC 主网 → HyperEVM 的订单流程；仅凭该教程，尚不能确认其采用 Lock and Mint 或其他结算机制。
+- [x] 目标链钱包已准备（2026-10-27，用户截图）：创建 MetaMask 账户 `HyperEVM Learning`，已有公开 `0x...` 地址。
+- [x] 目标链测试网络已添加并切换（2026-10-27，用户截图）：按 chain ID `998`、RPC `https://rpc.hyperliquid-testnet.xyz/evm`、gas 币 HYPE 配置；钱包筛选显示 `Hyperliquid EVM Testnet`。应用接入时仍需读取 chain ID 核对实际连接网络。
+- [x] 测试 HYPE 已到账（2026-10-27，用户截图）：ZalalenA 水龙头提交后，MetaMask 测试网络下显示 `0.000500 HYPE`。Quicknode 因主网 HYPE 余额门槛未能领取，Thirdweb 提示 Free plan 无法使用水龙头；实际通过社区水龙头获取。TBC 一侧继续使用 Turing Wallet 与 native test TBC 支付手续费。
+- [ ] 接入 MetaMask 后读取地址、chain ID 与原生 HYPE 余额；部署和交易前估算 gas 与实际费用，不仅凭已到账 `0.000500 HYPE` 推断余额足够。
+- [ ] 明确首版资产与机制：曾讨论以 native test TBC 为源资产，采用托管式 Lock and Mint；目前只是候选设计。若选该方案，需说明桥控制的保管地址、验证服务及 mint 权限；不能将普通转入托管地址称为无需信任的链上锁定。
+- [ ] 设计正向最小流程：创建订单 → 源链付款 → 后端核验网络、付款输出、金额、确认数及订单绑定 → 目标链结算 → 核对到账与订单完成。
+- [ ] 实现持久化订单、付款与目标地址绑定、唯一入金识别和防重复结算；源链 TXID 与目标链交易哈希均需关联到订单。付款截止时间与旧 HTLC 的退款时间是不同规则，需分别设计。
+- [ ] 若选择 Lock and Mint，部署独立的实验 wrapped token 与受控 mint 功能，确定单位、精度及资产对应关系。先走通一个方向，再实现 burn → 验证 → 源链释放的赎回流程。
+- [ ] 记录双链结果、费用、确认与异常处理，区分模拟展示、真实测试网交易和已验收场景。HyperEVM 测试网存在，不代表官方 Turing Bridge 已提供对应测试网服务。
+
+学习顺序：先完成两侧钱包与 gas 准备，再确定首版机制和资产，接着实现单向订单／结算，最后补齐反向赎回。
+
+参考：[Turing Bridge 官方产品教程](https://docs.turingbitchain.io/en/guides/TBC-to-HyperCore)、[HyperEVM 官方网络参数](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm)、[HyperEVM 官方工具目录与测试水龙头入口](https://hyperliquid.gitbook.io/hyperliquid-docs/builder-tools/hyperevm-tools)。
 
 ---
 
@@ -310,5 +346,7 @@ claim／refund TXID：
 - [Turing Wallet 文档](https://docs.turingwallet.xyz/)：钱包连接与签名。
 - [TBC Contract SDK](https://github.com/TuringBitChain/tbc-contract)：合约实现和 SDK。
 - [TBC HTLC sample](https://sample.tbcdev.org/htlc)：交互参考，不假定其默认网络是 Testnet。
+https://airdrop.tbcdev.org/
+https://github.com/TuringBitChain/turing-wallet-provider
 
-**当前安排：额外 testing 暂缓。Active／Completed／All、角色操作和统一详情面板已实现；可继续完善产品体验，或选择第 5 节的学习路线。原有未完成验收保留待以后恢复，基本 Lock／Claim／Refund 不需要重做。**
+**当前安排：第 6 节的目标链 MetaMask、测试网络与 `0.000500 HYPE` 余额已由用户截图确认。下一步确定自建学习桥的首版资产与结算机制，并接入钱包读取网络／余额；部署前估算费用。原有单链 HTLC 成果保留，剩余验收暂缓；双链 HTLC 和 BitBus Marketplace 为可选，STUDY2.md 始终只读。**

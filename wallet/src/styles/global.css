@@ -247,6 +247,7 @@ button:focus-visible, summary:focus-visible, .top-menu a:focus-visible { outline
 .htlc-row-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 150px; max-width: 210px; }
 .htlc-row-actions small { font-size: .7rem; line-height: 1.5; }
 .status-unavailable { color: #fca5a5; background: #45212c; }
+.status-refundable { color: #9edfff; background: #193d55; }
 .htlc-details-dialog { width: min(800px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid #405174; border-radius: 18px; color: #e8edf7; background: #101b2e; box-shadow: 0 24px 90px #0009; overflow: hidden; }
 .htlc-details-dialog[open] { display: flex; flex-direction: column; }
 .htlc-details-dialog::backdrop { background: #040a16b3; }

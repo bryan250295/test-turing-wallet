@@ -36,7 +36,7 @@ export default function HtlcRequestDetails({ item, lock, error, session, onClose
 			<dl className="history-detail-grid">
 				<div><dt>Token</dt><dd>{lock?.name || item.tokenName || 'Unknown token'} ({lock?.symbol ?? item.symbol})</dd></div>
 				<div><dt>Locked amount</dt><dd>{formatRawAmount(lock?.amountRaw ?? item.amountRaw, lock?.decimals ?? item.decimals)} {lock?.symbol ?? item.symbol}</dd></div>
-				<div><dt>Status{error ? ' · previous result' : ''}</dt><dd>{htlcRequestStatus(item, lock)}</dd></div>
+				<div><dt>Status</dt><dd>{htlcRequestStatus(item, lock, error)}{error && lock && <small className="inquiry-chain">Previous result: {htlcRequestStatus(item, lock)}</small>}{!error && lock && htlcRequestStatus(item, lock) === 'Refundable' && <small className="inquiry-chain">A can request a refund. B may still claim until the lock is spent; refunds are not automatic.</small>}</dd></div>
 				<div><dt>Your role</dt><dd>{role}</dd></div>
 				<div><dt>Token contract ID</dt><dd><code>{item.contractId}</code></dd></div>
 				<div><dt>Decimals</dt><dd>{lock?.decimals ?? item.decimals}</dd></div>

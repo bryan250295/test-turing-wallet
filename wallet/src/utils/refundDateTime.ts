@@ -1,3 +1,5 @@
+import { formatDateTime } from './dateTime';
+
 export function localDate(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -7,7 +9,7 @@ export const refundTimeOptions = Array.from({ length: 24 * 12 }, (_, index) => {
 	const minute = index % 12 * 5;
 	return {
 		value: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-		label: `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`,
+		label: `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'a.m.' : 'p.m.'}`,
 	};
 });
 
@@ -29,5 +31,5 @@ export function nextRefundTime(minutes: number, now: number): string {
 }
 
 export function formatRefundDate(value: string): string {
-	return new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+	return formatDateTime(value, Intl.DateTimeFormat().resolvedOptions().timeZone);
 }

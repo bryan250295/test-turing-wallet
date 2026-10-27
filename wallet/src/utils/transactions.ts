@@ -1,5 +1,6 @@
 import type { Amount, TransactionEntry } from '../types/api';
 import type { TransactionRow, ConfirmationTracking } from '../types/transaction';
+import { formatDateTime } from './dateTime';
 
 export function statusOf(row: TransactionRow) {
 	if (row.records.some(({ data }) => data.confirmations === 0 || data.height === -1)) {
@@ -27,7 +28,7 @@ export function detectConfirmations(rows: TransactionRow[], tracking: Confirmati
 
 export const shortId = (value: string) => `${value.slice(0, 10)}…${value.slice(-8)}`;
 export const timeOf = (row: TransactionRow) => Math.max(0, ...row.records.map(({ data }) => Number(data.time) || 0));
-export const dateOf = (time: number) => time ? new Date(time * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', dateStyle: 'medium', timeStyle: 'medium' }) : 'Awaiting confirmation';
+export const dateOf = (time: number) => time ? formatDateTime(time) : 'Awaiting confirmation';
 
 export function formatHistoryAmount(raw: bigint, decimals: number) {
 	const negative = raw < 0n;
