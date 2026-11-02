@@ -21,6 +21,11 @@ inspiration from the Turing Bridge product flow. It does not represent the offic
 bridge protocol or its assets. The existing single-chain FT HTLC remains separate.
 `STUDY2.md` contains the teacher's original material and must always remain read-only.
 
+The proof-oriented successor is currently a design only. Its frozen Phase 0
+scope, trust boundary, encoding rules and launch gates are recorded in
+[`docs/tbc-hyperevm-bridge-v2-phase-0.md`](../../docs/tbc-hyperevm-bridge-v2-phase-0.md).
+It does not change this Learning Bridge's contracts or runtime behavior.
+
 Implemented: wallet connections on both sides, the route specification, the
 destination token contract source, a local compilation command, and backend genesis
 verification / PostgreSQL registration for the first approved source FT, plus
