@@ -33,10 +33,10 @@ export default function HtlcRequests({ session, active, onRecover }: WalletPageP
 	const selected = active && state.ready && selection?.address === session.address ? state.requests.find((item) => item.lockTxid === selection.txid) : undefined;
 
 	return <section aria-labelledby="htlc-requests-title" aria-busy={state.loading}>
-		<div className="history-titlebar"><div><h2 id="htlc-requests-title">My HTLC Requests</h2><p>Token locks involving your connected Testnet wallet.</p></div><div className="htlc-actions"><button type="button" disabled={disabled} onClick={() => void state.refresh()}>{state.loading ? 'Loading requests…' : 'Refresh requests'}</button></div></div>
+		<div className="history-titlebar"><div><h2 id="htlc-requests-title">My locks</h2><p>Token locks involving your connected Testnet wallet.</p></div><div className="htlc-actions"><button type="button" disabled={disabled} onClick={() => void state.refresh()}>{state.loading ? 'Loading requests…' : 'Refresh requests'}</button></div></div>
 		<WalletConnection session={session} />
-		<p className="history-note">Requests are saved automatically on this local app server and loaded for your selected wallet. Existing browser history is migrated automatically. Add an older lock once if it has never been saved here. This list does not discover every HTLC on the network. The server checks saved locks when this list loads and returns their latest available status. Use Refresh requests to reload; recent checks may be reused briefly.</p>
-		{!state.ready && <p className="history-feedback">Connect your wallet on TBC Testnet to view its requests.</p>}
+		<p className="history-note">Select a lock to view its status. Use Refresh requests to check again, or add a missing lock below.</p>
+		{!state.ready && <p className="history-feedback">Connect your wallet on TBC Testnet and confirm the login signature to view its requests.</p>}
 		{state.storageError && <p className="result error" role="alert">{state.storageError}</p>}
 		{state.error && <p className="result error" role="alert">{state.error}</p>}
 		<details className="htlc-section"><summary>Add an existing request</summary>

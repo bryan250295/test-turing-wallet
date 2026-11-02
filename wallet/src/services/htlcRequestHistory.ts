@@ -3,11 +3,11 @@ import type { HtlcRequest } from '../utils/htlcRequestHistory';
 import { mergeHtlcRequest, parseHtlcRequest, requestFromLock, requestFromTransaction } from '../utils/htlcRequestHistory';
 import { API_URLS } from '../config/constants';
 import { postHtlcData } from './unsignedTokenHtlc';
+import { getBackendSession } from './backendClient';
 export type { HtlcRequest } from '../utils/htlcRequestHistory';
 
 const legacyStorageKey = 'tbc-testnet-htlc-requests-v1';
 const listeners = new Set<() => void>();
-const loads = new Map<string, Promise<void>>();
 let snapshot: { requests: HtlcRequest[]; error: string } = { requests: [], error: '' };
 let writes: Promise<unknown> = Promise.resolve();
 let migration: Promise<void> | undefined;
@@ -33,7 +33,7 @@ async function persist(request: HtlcRequest) {
 
 function saveRequest(request: HtlcRequest): Promise<void> {
 	const operation = writes.then(() => persist(request)).catch(() => {
-		publish(undefined, 'Could not save this request to wallet/storage. Keep your receipt, check the local server and folder permissions, then reload saved history.');
+		publish(undefined, 'Could not save this request to the database. Keep your receipt, check the backend connection, then refresh requests.');
 	});
 	writes = operation;
 	return operation;
@@ -48,47 +48,23 @@ async function migrateBrowserHistory() {
 		if (!raw) return;
 		const values: unknown = JSON.parse(raw);
 		if (!Array.isArray(values) || values.length > 200) throw new Error('Invalid legacy history.');
-		for (const value of values) await persist(parseHtlcRequest(value));
-		try { localStorage.removeItem(legacyStorageKey); } catch { /* Reimporting is idempotent. */ }
+		const address = getBackendSession()?.identity.address;
+		if (!address) throw new Error('Sign in before migrating browser history.');
+		const remaining: unknown[] = [];
+		for (const value of values) {
+			const record = parseHtlcRequest(value);
+			if (record.sender === address || record.receiver === address) await persist(record);
+			else remaining.push(value);
+		}
+		try { if (remaining.length) localStorage.setItem(legacyStorageKey, JSON.stringify(remaining)); else localStorage.removeItem(legacyStorageKey); } catch { /* Reimporting is idempotent. */ }
 	})();
 	try { await migration; }
-	catch (cause) { migration = undefined; throw cause; }
+	finally { migration = undefined; }
 }
 
 export async function migrateSavedHtlcHistory() {
 	try { await migrateBrowserHistory(); }
 	catch { publish(undefined, 'Old browser history could not be migrated. It is still retained; saved server requests remain available.'); }
-}
-
-export function loadHtlcHistory(address: string): Promise<void> {
-	const pending = loads.get(address);
-	if (pending) return pending;
-	const operation = (async () => {
-		try {
-			await writes;
-			let migrationError = '';
-			try { await migrateBrowserHistory(); }
-			catch { migrationError = 'Old browser history could not be migrated. It is still retained in your browser; server history is available below.'; }
-			const response = await fetch(`${API_URLS.htlcHistory}?address=${encodeURIComponent(address)}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
-			if (!response.ok || !(response.headers.get('Content-Type') ?? '').includes('application/json')) throw new Error('History server unavailable.');
-			const body: unknown = await response.json();
-			if (!body || typeof body !== 'object' || !('data' in body) || !Array.isArray(body.data)) throw new Error('Invalid history response.');
-			const requests = body.data.map(parseHtlcRequest);
-			if (requests.some((item) => item.sender !== address && item.receiver !== address)) throw new Error('History wallet mismatch.');
-			// Merge after pending writes, retaining entries learned while GET was running.
-			const merged = new Map(snapshot.requests.map((item) => [item.lockTxid, item]));
-			for (const item of requests) {
-				const existing = merged.get(item.lockTxid);
-				merged.set(item.lockTxid, existing && existing.updatedAt > item.updatedAt ? existing : item);
-			}
-			snapshot = { requests: [...merged.values()], error: migrationError };
-			listeners.forEach((notify) => notify());
-		} catch {
-			publish(undefined, 'Saved HTLC history could not be loaded from wallet/storage. Restart the local server and retry. Any old browser history is retained until migration succeeds.');
-		} finally { loads.delete(address); }
-	})();
-	loads.set(address, operation);
-	return operation;
 }
 
 export function rememberInspectedLock(lock: TokenHtlcLock, candidates: HtlcRequest['recoveries'] = []) {

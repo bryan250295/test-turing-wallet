@@ -1,0 +1,16 @@
+root = true
+
+[*]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+# npm manages the lockfile format.
+[package-lock.json]
+indent_style = space
+indent_size = 2
+
+# Applied migrations are immutable; preserve their original formatting.
+[prisma/migrations/**]
+indent_style = space
+indent_size = 2

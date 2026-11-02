@@ -97,9 +97,9 @@ Hyperliquid
 
 **TBC Testnet 单链 FT Token HTLC 的 Lock、B Claim、A Refund 基本流程已经走通。**
 
-当前没有实现 wrapped token 的 Lock and Mint，也没有实现跨链 Atomic Swap。
+首笔托管式学习桥往返交易已由用户截图确认：1,000,000 MT → lwFT → 永久锁定 lwFT → MT 返回 6/6 确认（2026-10-29 22:03 MYT）。用户随后明确确认 Turing Wallet 已收到返回的 1,000,000 MT；没有实现跨链 Atomic Swap。
 
-**下一条学习主线已确定（2026-10-26）：自建 TBC Testnet ↔ HyperEVM Testnet 学习桥，参考 Turing Bridge 的产品流程。** 当前只确定网络与学习目标，桥接机制、资产及合约尚待设计，未部署或完成跨链。STUDY2.md 为老师提供的原始资料，始终只读；个人分析与项目计划记录在本文件。
+**下一条学习主线已确定（2026-10-26）：自建 TBC Testnet ↔ HyperEVM Testnet 学习桥，参考 Turing Bridge 的产品流程。** 首版为普通 legacy FT → `lwFT` 的托管式 Lock and Mint；2026-10-28 已选 MT、完成真实部署并由用户截图确认准备订单成功。首笔正向 mint 与永久锁定赎回的正常交易流程已走通；往返证据和已确认的返回余额见学习桥说明第 16 节，异常场景仍单独保留。STUDY2.md 为老师原始资料，始终只读；个人分析与计划记录在本文件。
 
 | 操作 | 已有结果／依据 | 状态 |
 | --- | --- | --- |
@@ -149,7 +149,8 @@ Hyperliquid
 - [ ] 为已有成功交易补充完整 lock／claim／refund TXID、合约 ID、网络、实际手续费和确认截图；可附 B 收到 MT 的余额／输出记录。
 - [ ] 重启 server、刷新浏览器、切换钱包，确认已保存记录无需重复上传；无关钱包不显示这些记录。
 - [ ] 如仍有只下载过、未导入的旧 JSON，验证一次导入；如果有旧 browser history，再验证迁移。没有这些旧数据时可注明“不适用”。
-- [ ] 备份 `wallet/storage/htlc/testnet/` 与整个 `wallet/storage/htlc/secrets/`，包括隐藏的 `.encryption-key`；在副本中确认可恢复，不删除正在使用的原文件。
+- [x] 2026-10-27 已通过 setup 创建原 storage 和解密 key 的独立迁移前备份；保留原文件。
+- [ ] 在独立副本中完成 PostgreSQL 与 secret key 的恢复演练；备份存在不代表恢复已验收。
 - [ ] 说明 server 重启后签名 session 会失效，但公开记录和已保存的 secret 保留；签过名不等于已广播，查不到交易也不能直接认定被拒绝。
 
 ### 4. 完善使用体验（基本界面已由用户确认，补充验收暂缓）
@@ -173,7 +174,7 @@ Hyperliquid
 
 | 路线 | 目前情况 | 接下来要确认 |
 | --- | --- | --- |
-| 自建 TBC ↔ HyperEVM 学习桥 | 已选为下一条主线；尚未实现 | 两侧测试钱包与 gas、资产及桥接机制；详见第 6 节 |
+| 自建 TBC ↔ HyperEVM 学习桥 | 首笔正向 mint 与永久锁定赎回已走通，MT 返回 6/6 确认 | 在 Turing Wallet 核对返回的 1,000,000 MT，再整理往返资产与费用；详见第 6 节 |
 | 继续完善 TBC 单链 HTLC | 基本流程已走通 | 先完成上面的近期改动与错误场景验收 |
 | TBC 同链 Lock and Mint | 未实现；这是后来讨论的可选方向 | 先确认 FT 的受控增发／销毁、托管释放及防重复处理能力，再决定实现方案 |
 | TBC → Sepolia Lock and Mint | 未实现；原有计划保留在文档上方 | 第二条测试链、wrapped token、锁定证明验证、mint 权限与赎回机制 |
@@ -192,18 +193,65 @@ Hyperliquid
 - [x] 已实现钱包准备页面（2026-10-27）：Bridge Lab 新增 **Testnet Bridge** 标签，复用 Turing Wallet 会话；MetaMask 按钮连接、读取地址／chain ID／原生 HYPE 余额，支持请求切换或添加 chain `998`。账户／网络切换会清除旧数据并重新读取；无轮询，支持手动刷新、错误提示和读取超时。此处记录代码实现，不代表真实浏览器验收或跨链完成。
 - [x] Testnet Bridge 正常连接场景已验收（2026-10-27，用户真实浏览器截图）：Turing Wallet 显示 `tbc / testnet`；MetaMask 显示 `HyperEVM Testnet / 998`，应用地址与扩展显示的地址首尾一致，页面与钱包均显示 `0.000500 HYPE`，汇总提示 **Both wallets are connected**。此证据只确认连接及读取成功，不代表部署或跨链交易完成。
 - [ ] Testnet Bridge 其余浏览器验收：检查拒绝连接、切错网络、切换账户、钱包断开及余额变化后手动刷新的表现。
-- [ ] 部署和交易前估算 gas 与实际费用，不仅凭已到账 `0.000500 HYPE` 推断余额足够。
-- [ ] 明确首版资产与机制：曾讨论以 native test TBC 为源资产，采用托管式 Lock and Mint；目前只是候选设计。若选该方案，需说明桥控制的保管地址、验证服务及 mint 权限；不能将普通转入托管地址称为无需信任的链上锁定。
-- [ ] 设计正向最小流程：创建订单 → 源链付款 → 后端核验网络、付款输出、金额、确认数及订单绑定 → 目标链结算 → 核对到账与订单完成。
-- [ ] 实现持久化订单、付款与目标地址绑定、唯一入金识别和防重复结算；源链 TXID 与目标链交易哈希均需关联到订单。付款截止时间与旧 HTLC 的退款时间是不同规则，需分别设计。
-- [ ] 若选择 Lock and Mint，部署独立的实验 wrapped token 与受控 mint 功能，确定单位、精度及资产对应关系。先走通一个方向，再实现 burn → 验证 → 源链释放的赎回流程。
-- [ ] 记录双链结果、费用、确认与异常处理，区分模拟展示、真实测试网交易和已验收场景。HyperEVM 测试网存在，不代表官方 Turing Bridge 已提供对应测试网服务。
+- [x] 已完成首笔部署的 gas 估算和实际费用核对；后续每笔交易仍须独立估算，不能仅凭已到账 HYPE 推断余额足够。
+- [x] 2026-10-28 已实现部署预览：选择当前 MetaMask 为 deployer／Admin／Minter，或填入独立角色公开地址；NestJS 使用固定 chain 998／RPC、10 分钟内的 MT 核验记录和服务端编译产物，估算部署 gas、gas price、20% gas units 预算及 HYPE 余额差额。报价 60 秒失效，角色／钱包／网络／标签切换时清除；此步骤不请求签名、不部署、不持久化角色授权。
+- [x] 2026-10-28 应用户重试请求，通过 Docker 对公开测试账户 `0x8221fae04189f1f2f50268495ed95d1a9b220432` 读取真实 HyperEVM RPC，chain 998、block 68094130：相同 MT／Admin／Minter 构造数据估算 1,110,492 gas，gas price 100,000,000 wei，费用 0.0001110492 HYPE；20% gas units 余量后的预算为 0.0001332591 HYPE。当次余额 0.001 HYPE。此记录只是一笔只读报价，不是签名、部署或实际支出。前后端构建通过，运行中的 API schema 已包含受登录保护的部署预览接口。
+- [x] 部署预览正常场景已验收（2026-10-28 4:21 p.m. MYT，用户真实浏览器截图）：Admin／Minter 显示当前 MetaMask 地址；block 68094519，gas 1,110,492、加余量后 gas limit 1,332,591，gas price 100,000,000 wei，费用 0.0001110492 HYPE、预算 0.0001332591 HYPE，余额 0.001 HYPE，页面提示余额覆盖当次预算。报价显示 60 秒有效期；截图不证明到期清除逻辑已经验收，也不代表已部署。
+- [ ] 部署预览其余浏览器验收：余额不足、错误地址、网络／账户／标签切换及报价过期。合约行为测试未进行；真实部署结果见下。
+- [x] 2026-10-28 已实现钱包部署流程代码：Prepare deployment 重新估算并持久化角色／构造数据／构建快照／nonce → 用户勾选检查参数 → Deploy with MetaMask 前再次核对 → 单次钱包发送 → 保存哈希 → 有界状态跟踪／手动恢复。新增独立 `bridge_deployments` migration；原 TBC 登录身份隔离记录，活跃路由／nonce 防重复，未知发送结果不自动重发。
+- [x] 已实现部署核验代码：固定 chain 998 RPC、完整交易内容／CREATE 地址／规范区块／6 次确认、runtime 与 immutable 源 FT／精度、部署区块 owner／minter／paused／totalSupply／名称等；只在匹配后登记 verified／合约地址和实际手续费。它记录初始部署状态，不激活全局结算路由、不开放 mint／unpause。
+- [x] 2026-10-28 已在迁移前备份 PostgreSQL，并通过 Docker 应用 `202610280002_bridge_deployments`；前两次 migration 校验和未变。迁移后保留 6 笔 HTLC requests、5 份加密 secrets、1 条桥资产，部署表当前 0 条；旧 JSON 导入没有重复写入。前后端构建通过，三个常驻服务运行，API schema 已加载部署生命周期端点。
+- [x] 首笔真实部署正常流程已验收（2026-10-28 4:53 p.m. MYT 用户截图及数据库记录）：Deployment verified，6/6 确认；HyperEVM Testnet 合约 `0xd464680f3d1e9a5365787ae37489c5b3b4a6bf0d`，交易 `0x405cfeab3a44f352bc77d25257c5148bdd5a6ca93747c7e0425213c6a4e969ee`，实际费用 **0.000110059 HYPE**。初始 owner／minter、MT、精度 1、paused=true 和零供应通过核验；不需要重复部署。
+- [ ] 部署拒绝、未知结果／哈希恢复、重组等异常浏览器流程尚待验收；未执行自动化测试，部署成功不代表已入金或 mint。
+- [x] 已确定首版机制并按用户选择改用 FT（2026-10-27）：TBC 普通 legacy FT → 自建实验代币 **Learning Wrapped Test FT (`lwFT`)**，采用托管式 Lock and Mint，1:1，目标 decimals 与所选 FT 相同。每个目标合约实例固定绑定一个 source Contract ID／精度。桥保管方控制入金地址，验证服务核验后由指定 minter 铸币，管理员可暂停 mint／轮换 minter；native test TBC 和 HYPE 只用于各自网络手续费。角色已通过真实部署登记；保管、显式付款详情与钱包确认结算已接通，实际资金流程待验收。
+- [x] 已实现 FT 选择预览：Testnet Bridge 手动加载钱包 FT 列表，选择后按 Contract ID 获取元数据；不按名称识别资产，不默认 6 位精度，读取失败或钱包／网络／标签切换时清除选择。此项记录代码实现，具体 FT 及真实浏览器验收仍待确认。
+- [x] 2026-10-28 用户在 Testnet Bridge 选择首个实际 FT 并截图：Mega Token (MT)，Contract ID `ac54e83d476839a11bbb7d0a2495e50c9d0d23c9283f94e11222bad589259e6c`，decimal 1。公开 API／raw 资料读取确认其为 legacy FT v3，初始 raw supply 为 10,000,000；不能仅凭元数据预览就开放入金。
+- [x] 已实现 NestJS `BridgeModule`（Controller／DTO／Service／Verifier／Repository）、固定源资产与 genesis checkpoint、Code／Tape／mint source／精度／数量一致性核验，新增 `bridge_assets` 表与独立 migration。页面增加 Verify selected FT；只提交 Contract ID，登录与 CSRF 保护，不部署、不入金、不 mint。
+- [x] 2026-10-28 已备份数据库并通过 Docker 实际执行新增 `202610280001_bridge_assets` migration；原 initial migration 校验和未变。运营者入口运行同一验证逻辑成功，MT 已登记为唯一一条 `bridge_assets` 记录，精度 1、legacy FT v3、raw supply 10,000,000，核验时 genesis 有 851 次确认。迁移后保留 6 笔 HTLC requests、5 份加密 secrets、9 条旧资料导入记录；旧资料未重新导入。
+- [ ] 真实页面 Verify selected FT 按钮的单独验收仍待补充。资产身份验证信任固定 tbcdev API，不是独立 SPV 或入金余额证明；目标合约已部署，真实桥转账、mint 尚待验收。
+- [x] 已记录正向流程、订单状态与 FT 验证规则：创建并冻结订单及 source Contract ID／精度 → 每订单独立保管地址 → 核验 FT genesis、code／Tape、证明、接收地址和精确 raw amount → 默认源链 6 次确认后再次核验 → 目标链 mint → 核验事件与默认 6 次确认。入金去重使用 FT code 输出的 `txid:vout`，不能用输出上的 native TBC 数量代替 FT 金额。设计见 [中英文学习桥说明](wallet/docs/learning-bridge.md)；当前已接付款、入金校验与钱包确认 mint，真实资金流程待用户验收。
+- [x] 已将目标链实验合约改为 `wallet/contracts/LearningWrappedFT.sol`：固定 chain `998`，构造函数绑定非零 source Contract ID／真实 decimals，mint 拒绝不匹配资产，指定 minter、订单／入金双重去重、初始暂停且无预铸。`npm run contracts:compile` 生成 FT 专用 ABI、字节码及编译输入；不代表行为测试或部署完成。
+- [x] 已实现持久化订单、付款与目标地址绑定、全局唯一源链 `txid:vout` 及防重复结算、源链与目标交易关联。无付款过期或自动退款；这与旧 HTLC 条件独立。实现不代表已完成真实入金／mint 验收。
+- [x] 具体 FT、精度、admin／minter、gas 估算、钱包确认部署与绑定登记已完成，见首笔部署验收记录。当前合约仍暂停且零供应，尚未跨链。
+- [x] 2026-10-28 按用户选择先实现准备订单与独立加密保管：Controller／DTO／Service／Repository，冻结 MT／raw amount／发送身份／接收地址／目标合约／6+6 确认和策略；创建前核对新鲜资产登记和实时目标链状态，幂等请求、身份级事务锁、每钱包最多 3 个未关闭准备、原子写入订单和独立地址密文。表单／暂时结果随标签、账户或网络清空，数据库历史保留。
+- [x] 保管主密钥独立于 HTLC key，setup 保留现有密钥并备份；每订单 HKDF-SHA256 + AES-256-GCM，AAD 绑定网络／身份／订单／条款／地址，写入前在内存认证解密核对。密钥只挂入 backend，API 不返回私钥／WIF；最初准备阶段隐藏付款地址，结算阶段需另行明确开放。未开放地址的准备可关闭，密文不删除、地址不复用；应用角色不能修改冻结条款。
+- [x] 2026-10-28 已备份数据库并应用 `202610280003_bridge_orders`，前三次 migration 校验和未变；旧 6 笔 HTLC requests、5 份加密 secrets、1 条桥资产及 1 条 verified 部署保留，准备订单／保管表初始均为 0。旧 JSON 重复导入新增 0。运行 API schema 已加载订单端点，未登录返回 401，独立 custody key 在 backend 可读；前后端编译通过。
+- [x] 准备订单保存正常场景已验收（2026-10-28 5:59 p.m. MYT 用户截图，数据库读取一致）：1,000,000 MT，raw 10,000,000，订单 `0a5f889d-c673-4856-814e-a091f1d4fa3e`；显示 Prepared、独立保管／密钥加密、payment disabled，源 FT 尚未转出。旧接收地址／目标合约不变，后续直接延续此订单。
+- [ ] 准备订单其余浏览器验收：刷新恢复／切标签清空／关闭／重复请求／错误接收地址等。未运行自动化测试。
+- [x] 已接显式付款详情：确认托管、精确金额和无自动退款，认证原保管密文可恢复并检查源 checkpoint／目标后，才开放地址。开放后禁止关闭为 unused，不自动过期或重新分配地址。原 prepared 条款保持不变，资金进度独立关联。
+- [x] 已接普通 MT 入金验证：固定 tbcdev／genesis、raw TXID、完整 Code／Tape、六槽金额和找零、冻结发送者输入、本地全部解锁脚本／祖先读取、指定 MT indexer 的保管地址未花费输出、规范区块与较小确认数。保存实际 TBC fee；源 6 次确认、全库 outpoint 唯一。不足／超额／多组／不同资产不自动接受；不是独立 SPV。
+- [x] 已接 MetaMask 逐笔 unpause／mint：源入金重新验证、目标代码／角色／绑定／重放标记、60 秒报价、gas units 20% 预算、pending nonce 和余额复查、持久化一次性发送槽位、完整 ABI 前端核对。后台不保存 EVM 私钥、不自动发送；未知结果通过 Activity hash 恢复。丢弃未发送请求不能取消链上交易。
+- [x] 已接目标结果核验：完整交易／规范收据、匹配 DepositMinted 事件与 processed 标记、目标 6 确认、再核验源入金后才 completed；保存实际 HYPE fee，完成后显式 Add lwFT to MetaMask。源重组或已发送后的证据异常需对账，不自动重试。当前用手动 Check 查询。
+- [x] 2026-10-28 已迁移前备份，并应用 `202610280004_bridge_settlement`：此前四个 migration 校验和未变，保留 6 笔 HTLC、5 份加密 secrets、1 条部署、1 条订单和 1 条 custody；资金进度／入金／钱包调用表初始为 0。旧 JSON 导入新增 0，API health 200、结算端点未登录返回 401；固定源链 canonical-block checkpoint 匹配（height 838018、当次 877 确认）。应用角色不能修改调用 data 或入金 TXID。前后端编译通过，未运行自动化测试。
+- [x] 首笔正向正常交易流程已验收（2026-10-29）：真实付款详情、Turing MT 转账、源 6 确认、admin unpause、minter mint、Completed 与 MetaMask 的 1,000,000 lwFT 余额；见学习桥说明第 9 节。
+- [ ] 异常流程仍待单独验收；未运行自动化测试。
+- [x] 首笔完整赎回正常交易流程已由截图确认（2026-10-29 22:03 MYT）：沿用原 lwFT、独立 escrow、native fee、unpause、精确 approve、永久 lock、授权保存签名、显式广播固定 MT release，源链达到 6/6 确认。采用永久锁定，totalSupply 不减少；见学习桥说明第 16 节。
+- [x] 最后余额核对已验收：用户明确回复 “yes is returned”，确认 Turing Wallet 已收到返回的 1,000,000 MT。依据为用户确认，不记为新增余额截图或独立链上查询。
+- [ ] 自动退款、后台 worker 与恢复演练仍为后续工作。
+- [x] 已记录首笔双链结果、费用、确认及遇到的签名异常，见学习桥说明第 9、15、16 节；完整异常验收另行记录。HyperEVM 测试网存在，不代表官方 Turing Bridge 已提供对应测试网服务。
 
 学习顺序：先完成两侧钱包与 gas 准备，再确定首版机制和资产，接着实现单向订单／结算，最后补齐反向赎回。
 
 参考：[Turing Bridge 官方产品教程](https://docs.turingbitchain.io/en/guides/TBC-to-HyperCore)、[HyperEVM 官方网络参数](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm)、[HyperEVM 官方工具目录与测试水龙头入口](https://hyperliquid.gitbook.io/hyperliquid-docs/builder-tools/hyperevm-tools)。
 
 ---
+
+### 7. 工程架构迁移：Docker / React / NestJS / PostgreSQL
+
+用户于 2026-10-27 确认采用这套架构，先迁移现有单链功能，再继续 FT 学习桥。
+
+- [x] 已实现独立 `backend/` NestJS TypeScript：Module、Controller、DTO、Service、Repository 与 Prisma Model；移除旧 Vite 后端 middleware，React 继续使用原页面与同源 API 路径。
+- [x] 已实现 `shared/` 共用类型／验证／只读链 API 与纯函数，后端不再引用前端源文件。
+- [x] 已实现 Docker Compose：PostgreSQL 健康后执行 schema migration 和旧资料导入，再启动 NestJS 与 React；提供独立正式构建配置。
+- [x] 已实现钱包 challenge 登录、数据库 session、HttpOnly Cookie、CSRF 与 Origin 校验；HTLC 按登录钱包检查读写权限，secret 读取保留额外单次签名。EVM EOA 登录 API 可用作后续基础，尚未实现双钱包账户绑定。
+- [x] 钱包连接与登录合并：刷新只恢复有效 Session；没有 Session 时，只有主动点击 Connect／Reconnect 才请求登录签名。账户／网络变化不自动弹出登录签名，取消后通过 Reconnect 重试，不再提供独立 Backend sign in 区块。2026-10-28 修正刷新自动签名触发，实际钱包流程待验收。
+- [x] 已实现请求／关联交易、加密 secret、查询结果、session／challenge 和摘要审计表；旧 JSON 事务导入、文件 hash 去重、保留原解密 key 与独立备份。
+- [x] 本地配置和迁移前备份已生成；原 storage 不删除，STUDY2.md 不变。
+- [x] 已完成 Docker 干净构建与服务启动：PostgreSQL／NestJS healthy，React 运行于 localhost:5173。数据库核对为 5 笔 HTLC 请求、4 份加密 secret、9 个导入登记；重复导入跳过，不产生重复资料。此项不是钱包行为验收。
+- [ ] 用户验收新登录、账户切换、HTLC 列表和 secret 取回；原有链上成功记录保留，迁移后流程尚未重新验收。
+- [ ] 数据库备份恢复演练、正式部署与未来 bridge worker，分别记录，当前不自动完成。
+
+操作说明：[后端架构与迁移](docs/backend-architecture.md)。
 
 ## 原有阶段：按最新进度更新
 
@@ -272,9 +320,9 @@ Hyperliquid
 
 ### 阶段 6：可靠性与维护
 
-- [x] 已迁移到 TypeScript，并按 pages／components／hooks／services／utils／types／config 与 server 分工。
+- [x] 已迁移到 TypeScript，并按 React 前端、NestJS 后端与 shared 共用类型／工具分工。
 - [x] 已实现 My HTLC Requests、钱包角色显示、token 名称／精确金额、关联交易和最近查询时间。
-- [x] 已实现 public history 自动写入 `wallet/storage/htlc/testnet/`；secret 独立加密保存到 `wallet/storage/htlc/secrets/`。列表不是全网 HTLC 索引。
+- [x] 历史阶段已实现 JSON history 与 secret 加密保存；2026-10-27 改为 PostgreSQL，请求记录与密文入库，解密 key 独立保存，原 JSON 只用于迁移和回退。列表仍不是全网 HTLC 索引。
 - [x] 已实现 Claim／Refund 操作与下拉选项的资格判断：已完成、已花费、未确认、查询失败时禁用。
 - [x] 已实现请求取消、提交防重复、错误显示、unknown 提交后的只读查询；不自动重播交易。
 - [x] 已实现钱包资源 API：`GET /__htlc/locks?address=...`、`GET /__htlc/locks/:lockTxid`、`POST /__htlc/locks/status`；批量刷新只提交钱包地址和可选 cursor。
@@ -351,5 +399,24 @@ claim／refund TXID：
 - [TBC HTLC sample](https://sample.tbcdev.org/htlc)：交互参考，不假定其默认网络是 Testnet。
 https://airdrop.tbcdev.org/
 https://github.com/TuringBitChain/turing-wallet-provider
+https://faucet.zalalena.com/hyperliquid
 
-**当前安排：第 6 节 Testnet Bridge 的真实浏览器正常连接场景已由用户截图验收：两侧测试钱包已连接，应用实际读取 chain `998`，HYPE 余额与 MetaMask 的 `0.000500 HYPE` 一致；异常及余额刷新场景仍待验收。下一步确定自建学习桥的首版资产与结算机制；部署前估算费用。原有单链 HTLC 成果保留，剩余验收暂缓；双链 HTLC 和 BitBus Marketplace 为可选，STUDY2.md 始终只读。**
+**当前安排（2026-10-29 22:03 MYT）：首笔 MT → lwFT → MT 往返交易已走通；页面显示 MT return confirmed、源 6/6 确认。用户随后明确确认 Turing Wallet 已收到返回的 1,000,000 MT，首笔往返及返回余额验收完成。下一开发步骤为桥对账页面，汇总存入／返回 MT、mint／永久锁定 lwFT、交易确认及实际费用：赎回 lwFT 永久留在 escrow，totalSupply 不减少；0.001 TBC native change 留在保管地址且不自动退回。异常和恢复验收仍单独记录。未运行自动化测试，未代用户签名／广播。详见 wallet/docs/learning-bridge.md 第 16 节；STUDY2.md 只读。**
+
+**当前安排（2026-10-30）：首笔 1,000,000 MT 往返及 Turing Wallet 返回余额已由用户确认。已实现 Bridge Lab → Reconciliation：本钱包按 lwFT 合约查看正反向记录、确认金额、公开 TXID 与已保存实际费用；独立手动读取登记保管地址 MT 储备和 HyperEVM totalSupply／永久 escrow locks，显示观察范围、时间与差额，失败不按零处理。无 migration、不签名或广播，不改变原结算状态。前后端构建通过，Docker API schema 已加载对账路径；未运行自动化测试。新页面浏览器验收仍待用户查看；异常和恢复演练未自动完成。说明见 wallet/docs/learning-bridge.md 第 17 节；STUDY2.md 保持只读。**
+
+**当前安排（2026-10-30，流程简化）：按用户要求先简化桥页面，再继续备份恢复。Testnet Bridge 按发送／返回分方向；当前步骤突出，设置和历史折叠。已保存待确认交易可每约 30 秒自动检查，错误或页面隐藏时暂停，不自动付款／报价／签名／广播。Prepare next wallet step 合并查下一步与准备费率，仍明确检查后逐笔在钱包确认；返回数量预填完整原始数量，完成后显示收据和对账入口。原往返验收保留；前后端构建通过，Docker ready 且已加载 next 报价选项，未运行自动化测试，新 UI 验收待用户查看。详见 wallet/docs/learning-bridge.md 第 18 节；未自动执行备份恢复或改动 STUDY2.md。**
+
+**当前安排（2026-10-30，操作界面）：按用户要求移除用户界面的学习／开发解释，资料继续保留在文档。导航为 Bridge，默认 Transfer；操作页保留逐步指引、数量／地址、费用、确认状态及必要的不可逆／重复付款提示。移除 genesis、fingerprint、nonce、冻结 hash、raw bridge amount、数据库迁移等显示以及独立估算面板，实际报价和签名前核验保持。前端构建通过，未执行真实交易或 migration；新浏览器验收待用户查看。详见 wallet/docs/learning-bridge.md 第 19 节；STUDY2.md 不改。**
+
+**当前安排（2026-10-30，对账请求列表）：按用户反馈改为 Requests 优先：正向／反向请求分行，真实创建时间、搜索、方向／状态／合约过滤、排序、10／25／50 行分页及单笔 View 详情。合约总额、设置交易和当前余额检查移到 Bridge balances；过滤不改变总额。同钱包刷新保留列表上下文。后端每类 200 条限制不变，分页仅作用于完整已加载报告。前后端构建通过，未运行自动化测试，未执行真实签名／广播，新浏览器验收待用户查看。详见 wallet/docs/learning-bridge.md 第 20 节；STUDY2.md 不改。**
+
+**当前安排（2026-10-30，自选源代币与包装元数据）：选择并验证 TBC Testnet token → 选择 HyperEVM Testnet → 复用当前 TBC 身份的包装合约或设置新 name／symbol → 明确钱包确认并继续付款／mint。新增独立 BridgeWrappedFT artifact，旧 MT／lwFT 部署兼容保留；精度、源合约、订单、入金／返回和对账按各记录绑定，MetaMask 导入采用实际 symbol／decimals。仅支持通过原始 genesis 和 SDK 普通 legacy FT v1–v4 布局验证的代币；不代表所有 FT 变种或 Sepolia 已接通。包装部署复用按当前 TBC 身份，跨身份共享和共享 escrow／重复返回仍未实现。Solidity 和前后端构建通过，Docker backend ready 且 API schema 已加载新字段；未运行自动化测试、migration 或真实链上交易。新 token 浏览器及完整往返验收待用户操作。详见 wallet/docs/learning-bridge.md 第 21 节；STUDY2.md 只读。**
+
+**当前安排（2026-10-30，钱包付款自动填入）：正向付款改为 Pay [amount] [symbol] with Turing Wallet，自动使用冻结的 token／数量字符串／保管地址，捕获 SDK 返回 TXID 后自动进入原入金与确认检查。服务端现有 append-only audit journal 保留付款请求，订单锁阻止重复 begin；未知钱包结果保留恢复状态，不自动重复付款。旧手动付款／无 TXID 等情况折叠到 Already paid or need recovery。六确认和钱包逐笔批准保留。前后端构建通过，backend ready 且新 payment routes 已加载；未运行自动化测试、migration 或真实签名／付款，钱包实际验收待用户操作。详见 wallet/docs/learning-bridge.md 第 22 节；STUDY2.md 只读。**
+
+**当前安排（2026-10-30，完成记录折叠）：正向 Transfer 的 completed／cancelled 订单默认放入 Completed and closed transfers，不再整页展开旧收据及 Add token。展开仍可查看详情和导入，折叠不挂载历史结算组件；Reconciliation 搜索与返回方向保留。前端构建通过，未运行自动化测试或真实交易，无数据删除／状态变更。详见 wallet/docs/learning-bridge.md 第 23 节；新显示待浏览器验收。**
+
+**当前安排（2026-10-30，未使用代码清理）：移除旧独立 preview hook／请求 helper、固定旧 route 转接配置及无引用的旧 Prisma 生成目录（17 文件约 600 KB）。角色表单简化为 useBridgeDeploymentRoles；CSS 清理 24 个未使用 selector 和 17 个已被覆盖的属性，保留动态 class。维护源码入口引用复查、前后端构建及 diff whitespace 检查通过，未运行自动化测试或真实交易；浏览器样式验收待查看。当前 Prisma client／历史合约 artifacts／migration／recovery／HTML 入口仍需保留。详见 wallet/docs/learning-bridge.md 第 24 节；STUDY2.md 只读。**
+
+**当前安排（2026-10-30，按钮不可用提示）：Prepare next wallet step 现在显示会话／忙碌状态／MetaMask 读取、账户或网络的具体阻止原因，读失败时就地提供刷新／重连／切网；不因入金达到 6 确认而跳过钱包检查。前端构建通过，未运行自动化测试或真实交易，实际钱包恢复待用户查看。详见 wallet/docs/learning-bridge.md 第 25 节。**

@@ -210,9 +210,9 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 				<p className="eyebrow">TBC TEST NETWORK ONLY</p>
 				<h1>{page === 'mint' ? 'Devnet Token Minter' : page === 'receive' ? 'Receive TBC Devnet' : 'Transfer Devnet token'}</h1>
 				<p className="intro">{page === 'mint'
-					? 'Create a test FT through Turing Wallet. This page never receives your seed phrase or private key.'
+					? 'Enter token details, review the amount and confirm in Turing Wallet.'
 					: page === 'receive'
-						? 'Share your address to receive TBC Devnet. This page never receives your seed phrase or private key.'
+						? 'Copy your address or share the QR code to receive test TBC.'
 						: 'Send an existing FT to another TBC Devnet address. Verify the recipient and token contract before approving.'}</p>
 
 				<nav className="page-tabs" aria-label="Wallet actions">
@@ -244,9 +244,7 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 						</label>
 					</div>
 
-					<aside>
-						With <b>{parsedDecimal || 0}</b> decimals, <b>{amount || 0}</b> raw units display as approximately <b>{preview}</b> {symbol.trim().toUpperCase() || 'tokens'}.
-					</aside>
+					<aside>Token amount: <b>{preview}</b> {symbol.trim().toUpperCase() || 'tokens'}.</aside>
 
 					<button className="mint" type="submit" disabled={busy || !networkIsDevnet}>
 						{busy ? 'Waiting for wallet…' : 'Mint Devnet token'}
@@ -256,16 +254,7 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 				<p className="status" role="status">{status}</p>
 				{result?.type === 'success' && <p className="result success">Broadcast TXID: <code>{result.txid}</code></p>}
 				{result?.type === 'error' && <p className="result error">{result.message}</p>}
-
-				<details>
-					<summary>Before you mint</summary>
-					<ul>
-						<li>Keep Turing Wallet set to <b>TBC Devnet</b>; this app blocks mainnet requests.</li>
-						<li>You need a small Devnet TBC balance for the transaction fee.</li>
-						<li>“Raw units” are the smallest units. For example, 100000 raw units with 2 decimals displays as 1000 tokens.</li>
-						<li>Only approve a wallet prompt whose details you have reviewed. Never enter a seed phrase here.</li>
-					</ul>
-				</details>
+				<p className="history-note">Connect Turing Wallet on TBC Testnet and keep enough test TBC to pay the fee.</p>
 				</>}
 
 				{page === 'receive' && <section className="receive-panel" aria-labelledby="receive-heading">
@@ -309,7 +298,7 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 									</button>) : <p>No FT tokens found for this wallet.</p>}
 							</div>
 						</details>
-						{selectedToken && <p className="selected-contract">Contract: <code>{tokenContract}</code><br />Balance: {formatTokenBalance(selectedToken)} {selectedToken.symbol} ({String(selectedToken.balance)} raw units). Decimals: {selectedToken.decimal}.</p>}
+						{selectedToken && <p className="selected-contract">Contract: <code>{tokenContract}</code><br />Balance: {formatTokenBalance(selectedToken)} {selectedToken.symbol}.</p>}
 						<label>
 							<span className="amount-label"><span>Amount{selectedToken ? ` (${selectedToken.symbol})` : ''}</span>{selectedToken && <span className="amount-available" aria-live="polite">Available {transferPreview.remaining} {selectedToken.symbol}</span>}</span>
 							<input value={transferAmount} inputMode="decimal" onChange={(event) => setTransferAmount(event.target.value)} placeholder="For example, 1.5" aria-invalid={Boolean(transferPreview.error)} aria-describedby={transferPreview.error ? 'transfer-amount-error' : undefined} required />

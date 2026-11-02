@@ -2,13 +2,14 @@ import type { HtlcTokenLockTerms, SignedTokenHtlc, TokenHtlcBroadcast, UnsignedT
 import { ApiError } from './apiClient';
 import type { SignTransaction } from 'turing-wallet-provider';
 import { API_URLS } from '../config/constants';
+import { backendFetch } from './backendClient';
 
 export async function postHtlcData(url: string, payload: unknown, signal: AbortSignal) {
-	const response = await fetch(url, {
+	const response = await backendFetch(url, {
 		method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 		body: JSON.stringify(payload), signal: AbortSignal.any([signal, AbortSignal.timeout(95000)]), cache: 'no-store',
 	});
-	if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('The local HTLC builder is unavailable. Restart npm run dev in wallet/.');
+	if (!(response.headers.get('Content-Type') || '').includes('application/json')) throw new Error('The HTLC backend is unavailable. Start the Docker Compose services.');
 	const body = await response.json();
 	if (!response.ok) throw new ApiError(typeof body.message === 'string' ? body.message : 'The local HTLC request failed.', { status: response.status });
 	return body.data;

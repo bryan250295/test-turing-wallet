@@ -7,65 +7,109 @@ through Turing Wallet, viewing UTXOs and transaction history, and querying BitBu
 
 - The app requires the wallet to report `network: "tbc"` and `type: "testnet"` before enabling minting.
 - It sends the mint request to `api.tbcdev.org`.
-- It never requests, stores, or transmits a seed phrase, private key, or wallet password.
+- It never requests or stores your Turing/MetaMask seed phrase, private key or wallet password. Separately generated bridge custody keys are encrypted on the backend.
 - Minting needs a small TBC Devnet balance to pay the transaction fee.
 
 ## Run locally
 
+The application now uses React + NestJS + PostgreSQL in Docker Compose.
+From the repository root:
+
 ```bash
-cd wallet
-npm install
-npm run typecheck
-npm run dev
+node scripts/setup-local.mjs
+docker compose up --build -d
 ```
 
-These commands assume your terminal starts in `LearningMaterials`. If it is
-already inside `wallet`, omit `cd wallet`. From `LearningMaterials`, you can also
-use `npm --prefix wallet run dev` or `npm --prefix wallet run typecheck`.
+For subsequent starts, use `docker compose up`. Open `http://localhost:5173`.
+Connect Turing Wallet on Testnet. Refreshing the page restores an existing login
+session without requesting a new signature. Only an explicit **Connect wallet**
+or **Reconnect** action can request a login signature when needed, then load HTLC
+requests. Account/network changes do not request signatures by themselves. If
+you cancel the signature or the session expires, click **Reconnect** to retry.
+This is an ownership message signature, not a funds transaction.
 
-Vite prints a LAN URL such as `http://192.168.1.10:5173`. With the phone and computer on the same Wi-Fi network, open that URL from Turing Wallet's built-in DApp browser. The wallet must inject `window.Turing`; opening the page in Safari or Chrome will show the “wallet not detected” message.
+HTLC forms reset when you leave their tab, including when switching between
+Create lock and Claim / Refund. Inputs, secrets, reviews and submission messages
+are discarded; saved request history stays in the database. Selecting Claim or
+Refund from My HTLC Requests opens a fresh form with that request selected.
+
+See [backend architecture and migration / 后端与迁移说明](../docs/backend-architecture.md)
+for DBeaver connection details, volumes, secrets, backups and production builds.
+`npm run dev` in `wallet/` starts only the frontend; the backend must also be running.
+
+## Bridge order preparation
+
+After **Deployment verified**, load Mega Token (MT) again and use **Verify selected
+FT** for a fresh source check. In **Testnet Bridge → Bridge orders**:
+
+1. Refresh saved orders and choose your verified lwFT contract.
+2. Enter an MT amount (up to 1 decimal) and review the HyperEVM receiving address.
+   It defaults to the connected MetaMask account; a different receiving address
+   may be entered explicitly.
+3. Click **Review order**, check the frozen terms, then **Save prepared order**.
+4. View its prepared status and encrypted custody allocation in Saved orders.
+   A preparation can be closed before its payment details have been opened.
+5. Acknowledge custody and click **Open payment details**. In Turing Wallet send
+   the exact MT amount to this order's custody address, paying its native TBC fee.
+6. Paste the transfer TXID and click **Verify source deposit**. Use **Recheck source
+   deposit** until at least 6 confirmations are verified. Do not pay again if a read fails.
+7. Select the saved admin in MetaMask, estimate and confirm unpause if needed.
+   Check its transaction status until verified. Then select the minter, estimate
+   mint, review the amount/recipient/fee, and confirm mint in MetaMask.
+8. Check the mint transaction status until **Completed**, then **Add lwFT to
+   MetaMask** and view the receiving account on HyperEVM Testnet (998).
+
+Preparation alone sends no transaction and has no gas fee. Opening payment details
+is explicit and retains the address permanently; there is no automatic refund or
+payment expiry. Only one ordinary legacy MT transfer group with the exact amount
+is accepted. Source verification trusts the fixed tbcdev node/indexer and also
+checks raw scripts, amounts and custody; it is not an independent SPV verifier.
+
+After a timeout, refresh saved progress and check wallet Activity before retrying.
+Public hashes returned by MetaMask are retained for recovery if an API save fails.
+Discard an awaiting-wallet request only after checking that it was never sent;
+discarding cannot cancel a pending transaction. The backend never signs with your
+MetaMask key. Leaving the tab clears inputs; orders and receipts remain in PostgreSQL.
+The first funded transfer and 1,000,000 lwFT MetaMask balance were accepted on
+2026-10-29. Comprehensive error scenarios and reverse redemption remain unverified.
+
+### Reverse bridge preparation
+
+The chosen design keeps existing lwFT and permanently escrows redeemed tokens;
+its totalSupply does not decrease. In a completed order, use **Reverse bridge ·
+permanent lwFT escrow → Preview escrow deployment** with the original MetaMask admin.
+The read-only preview checks this order's MT reserves and estimates a new, initially
+paused escrow's deployment fee. Use **Prepare escrow deployment**, review the saved
+quote, then **Deploy escrow with MetaMask**. Keep the wallet panel open for its request.
+**Check escrow deployment status** verifies at least 6 confirmations and the saved
+constructor/runtime and initially paused, zero-locked state. Refresh restores saved
+records without sending again; Activity hashes support uncertain-send recovery.
+Token approval, token locking and MT release remain disabled until the release path
+is connected. See bridge guide section 11 for the full deployment/recovery flow.
+
+Compile the independent escrow artifact from `wallet/`:
+
+```bash
+node scripts/compileBridgeContract.mjs --redemption
+```
+
+Token import acknowledges the existing wallet display only. Its button disables
+after approval in the current page/account context; cancellation preserves the
+completed mint. Reloading may offer import again; the app cannot reliably detect
+whether an externally managed wallet still displays the token.
 
 ## TypeScript and project structure
 
-The app and local logging server use TypeScript with strict checking. Use `.tsx`
-for JSX components and `.ts` for hooks, services, helpers, and configuration.
-
 ```text
-wallet/
-├── server/
-│   └── walletLogger.ts       # Daily log endpoint for Vite dev/preview
-├── src/
-│   ├── components/
-│   │   └── WalletConnection.tsx
-│   ├── config/
-│   │   └── constants.ts
-│   ├── hooks/
-│   │   ├── useInquiry.ts
-│   │   ├── useTransactionHistory.ts
-│   │   ├── useUtxos.ts
-│   │   └── useWalletSession.ts
-│   ├── pages/
-│   │   ├── BridgeLabPage.tsx
-│   │   ├── TransactionPage.tsx
-│   │   ├── UtxoPage.tsx
-│   │   └── WalletPage.tsx
-│   ├── services/
-│   │   ├── actionLog.ts
-│   │   ├── apiClient.ts
-│   │   ├── apiValidation.ts
-│   │   ├── bitbusApi.ts
-│   │   ├── tbcApi.ts
-│   │   ├── transactionHistory.ts
-│   │   └── utxos.ts
-│   ├── styles/
-│   │   └── global.css
-│   ├── types/               # api.ts, wallet.ts, transaction.ts, utxo.ts
-│   ├── utils/               # errors.ts, tokenAmounts.ts, transactions.ts
-│   ├── App.tsx              # Routes and shared wallet session
-│   └── main.tsx             # Browser entry point
-├── tsconfig.json
-└── vite.config.ts
+wallet/src/             React pages, components, hooks and browser wallet services
+backend/src/            NestJS controllers, services, repositories and TBC SDK engine
+backend/prisma/         Database model and committed SQL migrations
+shared/src/             Shared types, validation, read-only chain clients and pure helpers
+wallet/contracts/       Experimental HyperEVM Solidity contract
 ```
+
+The old Vite middleware in `wallet/server/` has moved to NestJS. Vite now proxies
+API requests to the backend; it no longer owns persistence or transaction construction.
 
 Page UI uses custom React hooks for loading, errors, refresh, and cancellation.
 Services own HTTP calls, response validation, and history aggregation. Pure
@@ -104,11 +148,48 @@ forms and filters reset when leaving a page.
 
 ## Testnet Bridge wallet setup
 
-Open **Bridge Lab → Testnet Bridge**. The source card reuses the shared Turing
+Open **Bridge → Testnet Bridge**. The source card reuses the shared Turing
 Wallet session on TBC Testnet. The destination card connects the MetaMask browser
 extension and displays its selected account, chain ID and native test HYPE balance.
-It is a wallet preparation screen; bridge orders, deposits, contracts and settlement
-are not implemented here.
+The experiment is TBC FT → Learning Wrapped Test FT (`lwFT`), custodial Lock and
+Mint, 1:1 with matching decimals. The page also provides saved orders, explicit
+payment details, source verification and wallet-confirmed settlement, as described
+in the order workflow above.
+
+Use **Load / refresh FT tokens** after connecting Turing Wallet, then select a
+token by Contract ID. The app reads metadata for that exact ID and displays its
+name, symbol and decimals. It does not infer asset identity from a token name or
+default to native TBC's six decimals. Selection is cleared on wallet/network/tab
+changes and before a new metadata read; cancelled or stale reads cannot restore it.
+These are metadata previews. Click **Verify selected FT** after completing wallet
+login to have NestJS verify the approved MT genesis and save its configuration in
+`bridge_assets`. The approved asset is Contract ID
+`ac54e83d476839a11bbb7d0a2495e50c9d0d23c9283f94e11222bad589259e6c`,
+Mega Token (MT), 1 decimal, legacy FT v3. Verification sends no transaction and
+charges no network fee. It does not prove a deposit or deploy / mint lwFT.
+TBC20 and stablecoin adapters are not implemented. Native TBC and HYPE still pay
+network fees for future transfers and deployment.
+
+After verifying MT, use **Deployment preview → Estimate deployment fee**.
+The connected MetaMask account is the deployer and, by default, Admin and Minter;
+uncheck the option to enter separate public role addresses. NestJS encodes the
+server's compiled contract for chain 998 and estimates gas, the current gas price,
+a budget with 20% extra gas units, and the balance shortfall. Quotes expire after
+60 seconds; source verification must be less than 10 minutes old. Changing roles,
+wallets, networks or tabs clears the preview. This step requests no signature,
+does not deploy or mint, and does not grant the backend wallet signing access.
+
+For deployment, click **Prepare deployment**, review the saved roles and fee
+budget, check the acknowledgement, then **Deploy with MetaMask**. This is an
+explicit creation transaction spending test HYPE; it does not unpause minting.
+The backend verifies the exact transaction, six confirmations, runtime code and
+the creation-block initial state before marking its address verified. Saved
+deployments survive reloads and tab changes without resending. If the sending
+outcome is unknown, inspect MetaMask Activity and recover its hash before trying
+again. **Discard unused preparation** cannot cancel a blockchain transaction.
+The user confirmed the first deployment and receipt verification on 2026-10-28.
+Funded settlement and deployment error cases still need browser acceptance;
+compilation alone does not establish their success.
 
 - **Connect MetaMask** requests account access only when clicked. Authorized
   accounts are read silently when opening the tab; no signature is requested.
@@ -134,14 +215,44 @@ are not implemented here.
 
 The integration uses typed EIP-1193 calls in `services/evmWallet.ts`, lifecycle
 state in `hooks/useHyperEvmWallet.ts`, and presentation in
-`components/bridge/TestnetBridge.tsx`. No new dependency, backend endpoint, private
-key storage, token approval, signing or transaction submission is added.
-Real MetaMask/browser acceptance remains to be performed; a successful wallet
-connection or positive HYPE balance does not establish an affordable deployment.
+`components/bridge/TestnetBridge.tsx`. Connection reads are quiet. Deployment,
+unpause and mint each require an explicit reviewed action and MetaMask confirmation;
+the backend has no EVM signing key. Separate source custody keys are encrypted.
+The user confirmed normal connection, chain 998 and matching HYPE balance in a
+real browser screenshot on 2026-10-27. Error/account/network-change acceptance
+remains pending. A positive HYPE balance does not establish an affordable deployment.
+
+### Experimental wrapped token contract
+
+See [the bilingual bridge design (中文 / English)](docs/learning-bridge.md) for custody responsibilities,
+asset units, proposed order states, payment verification and settlement recovery.
+Route constants live in `src/config/learningBridge.ts`.
+
+`contracts/LearningWrappedFT.sol` reuses OpenZeppelin ERC20, Ownable2Step and
+Pausable. Each instance pins one nonzero source FT Contract ID and its decimals
+as immutable constructor arguments. It restricts minting to a designated minter,
+rejects mismatched source IDs, consumes both order IDs
+and source payment outputs to prevent replays, starts paused with zero supply,
+and restricts deployment to chain 998. It does not validate TBC proofs or provide
+burn/redemption. Pausing affects new mints; token transfers remain available.
+
+```sh
+npm run contracts:compile
+```
+
+The build pins `solc` 0.8.30 and OpenZeppelin Contracts 5.4.0, targets Cancun with
+optimizer runs 200, and writes an ignored `artifacts/LearningWrappedFT.json`
+containing ABI, bytecode, compiler metadata and full build input. The compiler's
+`tmp` dependency is overridden to 0.2.7 to address its reported path vulnerabilities.
+Contract tooling is development-only and is not imported into the browser bundle.
+Compilation does not execute behavior tests, deploy a contract or submit a mint.
+Deployment still needs a backend-verified FT identity and decimals, explicit
+admin/minter addresses and a live gas estimate. The old native TBC wrapper has
+been replaced; a new source FT requires its own wrapper instance and route binding.
 
 ## HTLC Testnet
 
-Open **Bridge Lab → HTLC Testnet** and connect Turing Wallet on TBC Testnet.
+Open **Bridge → HTLC Testnet** and connect Turing Wallet on TBC Testnet.
 The page provides **Create lock** and **Claim / Refund**. Native TBC is used for
 transaction fees and protocol outputs; the locked asset is an FT token.
 
@@ -278,12 +389,14 @@ Public lock resources:
 | --- | --- |
 | `GET /__htlc/locks?address=...` | List saved public records for that wallet; no chain refresh |
 | `GET /__htlc/locks/:lockTxid` | Read one saved public record; 404 if absent |
-| `POST /__htlc/locks` | Save validated public request metadata; does not lock or broadcast funds |
+| `POST /__htlc/locks` | Use receipt IDs as hints, verify on-chain terms, then save; does not broadcast funds |
 | `POST /__htlc/locks/status` | Inspect the wallet's saved locks on Testnet; body contains address and optional cursor |
 
 These resources cover records stored by this app, not network-wide HTLC discovery.
-Wallet addresses are public query filters, not authentication. Secret retrieval
-remains a separate wallet-signature flow and is excluded from all lock responses.
+All these resources require a TBC Testnet backend session. Address filters must
+match the authenticated wallet, and individual records require sender/receiver
+ownership. Secret retrieval additionally requires a separate wallet signature
+and is excluded from all lock responses.
 
 
 The local HTLC API admits two operations at a time and queues up to eight more
@@ -292,25 +405,20 @@ returns 429. Each HTTP request has a 90-second deadline covering body reading,
 queueing, module loading and execution. Timeout returns 504; cancellation and
 completion release the slot exactly once. This deadline does not reverse a
 transaction already submitted to Testnet. Broadcasts are never automatically
-retried. Restart the dev server to replace an older middleware instance.
+retried. Restart the backend service to load server changes.
 Requests can also be added once using a prior receipt or their public IDs.
 
-- Public metadata is saved as `wallet/storage/htlc/testnet/<lock-txid>.json`.
-  Signing and broadcast attempts are recorded automatically. The server saves a
-  pending record before contacting the node and updates it after the response,
-  including when the browser disconnects.
-- Files contain public metadata and up to ten recovery attempts per lock. Secret,
-  signed/raw transaction data and signing-session IDs are excluded. Back up this
-  folder and keep claim secrets privately, separately from request history.
-- Old localStorage records migrate on first use. Switching browsers or clearing
-  browser storage does not delete the server's files. Older JSON files that were
-  never saved here need one import. The list covers this app's saved history;
-  wallet-wide HTLC discovery would require an indexer.
-- Claimed/Refunded require a matching recovery transaction and confirmations.
-  Missing outputs show **Spent / unavailable**; errors preserve the last result
-  with its check time. No background polling is enabled.
-- Files are ignored by Git and blocked from static serving. Dev/preview servers
-  provide the history API; static hosting alone does not provide persistence.
+- Public metadata is saved in PostgreSQL `htlc_requests` and `htlc_recoveries`.
+  The backend saves a pending record before contacting the node, then updates the
+  receipt even if the browser disconnects. Display observations are stored separately.
+- Legacy JSON is imported transactionally by the Compose migration job. Original
+  files remain for rollback; new writes use the database. See the migration guide.
+- Browser localStorage history imports only records involving the authenticated
+  wallet, retaining records for other accounts. Browser metadata is rechecked on chain.
+- Claimed/Refunded still require matching transaction evidence and confirmations.
+  Database persistence alone does not prove a chain outcome.
+- Restarting the backend expires temporary signing sessions, not saved receipts.
+  The UI's display cache is separate from fresh signing and broadcast validation.
 
 ### Saved claim secrets
 
@@ -324,17 +432,14 @@ copy the secret. This signature sends no transaction and costs no network fee.
 Retrieval requires a short-lived, single-use challenge. The recipient still
 needs the sender to share the secret deliberately; connecting B does not reveal it.
 
-Encrypted records use AES-256-GCM and are saved under
-`wallet/storage/htlc/secrets/<lock-txid>.json`. Back up the entire private folder,
-including its hidden `.encryption-key` file. Losing that key prevents retrieval.
-The key and encrypted records are on the same server: this trusts the app server
-and its operator, and does not protect against server compromise. Neither secret
-records nor the encryption key are served as static files or included in Git.
+Encrypted records use AES-256-GCM and are stored in PostgreSQL `claim_secrets`.
+The matching key stays in `.secrets/htlc.key`, mounted only into backend/migration
+containers. Back up both the database and the key separately. This trusts the app
+server and operator; encryption does not protect against full backend compromise.
 
-Older locks whose secrets were never saved cannot be recovered by this feature.
-Keep their original secrets. Restart `npm run dev` after installing this change
-to enable the retrieval endpoints. Wallet message signing and funded flows still
-require hands-on verification with the wallet.
+Older locks whose secrets were never saved still require their original secrets.
+The migration cannot recreate missing secret material. New login, retrieval and
+funded flows require user wallet acceptance in the migrated application.
 
 ### Implementation
 
@@ -350,7 +455,7 @@ or server-issued build IDs, never arbitrary raw transactions for broadcasting.
 
 This is a single-chain TBC Testnet HTLC. Cross-chain swaps are not implemented.
 The UI cleanup does not establish successful on-chain claim/refund acceptance;
-B's claim remains unverified because that account lacks native test TBC for fees.
+previous single-chain acceptance does not establish acceptance of the new backend integration.
 
 ## Amounts
 
@@ -360,24 +465,13 @@ B's claim remains unverified because that account lacks native test TBC for fees
   its precision and balance; the wallet receives this amount in token units.
 - UTXO amounts retain the API's raw units. Transaction fees display in TBC.
 
-## Daily action logs
+## Action audit summaries
 
-While running `npm run dev` or `npm run preview`, each call to
-`connect()`, `mint()`, or `transfer()` appends one entry to `wallet/logs/YYYY-MM-DD`
-(for example, `wallet/logs/2026-10-19`, with no file extension). Dates use
-`Asia/Kuala_Lumpur` time. The directory is created automatically and ignored by Git.
-
-```text
-2026-10-19 13:10:00 Connect: {"response":{},"addresses":{},"network":{},"info":{}}
-2026-10-19 13:10:05 Mint: {"txid":"example"}
-2026-10-19 13:10:10 Transfer: {"error":{"name":"Error","message":"Request rejected"}}
-```
-
-Wallet responses are stored as JSON; connection entries also include address,
-network, and wallet information. Calls stopped by validation store a status message.
-Logging failures appear in the browser console and do not change the wallet result.
-The `/__wallet-log` endpoint runs in Vite's development and preview servers; a
-statically hosted build needs a backend implementing that endpoint to save files.
+Authenticated browser actions send only allowlisted action/outcome summaries to
+`/__wallet-log`; NestJS stores them in PostgreSQL `audit_events`. Arbitrary wallet
+responses, signatures, request bodies and secrets are excluded. Client summaries
+are not proof of on-chain success. Historical `wallet/logs` files are retained as
+old debugging logs, not imported as authoritative audit records.
 
 ## Verify before using
 
@@ -388,3 +482,23 @@ npm run build
 ```
 
 Test tokens only: this page deliberately refuses to mint when the wallet reports a mainnet network.
+
+### Prepare a reverse redemption
+
+With the completed forward order and verified escrow loaded, open **Prepare redemption · lwFT → MT**, select the original MetaMask receiving account on Testnet 998, enter an amount and TBC P2PKH recipient, then **Review redemption → Save redemption preparation**. Saving does not move tokens or charge gas. Refresh saved redemptions after an interrupted save; repeat saves for identical terms use the same request key. An unused preparation can be closed. MT release and escrow locking remain pending; do not transfer lwFT directly to escrow. See learning-bridge.md section 12.
+
+### Fund the MT return fee
+
+Under the saved full-amount redemption, open **MT return · fee funding → Open TBC fee funding details**. Send the displayed native test TBC amount once from Turing Wallet to the displayed custody address, retain its TXID, wait for 6 confirmations, then **Verify fee funding and save MT release plan**. Do not pay MT again. Native change stays in custody without automatic refund. After funded, continue with the MetaMask activation, exact approval and permanent-locking controls (section 14). See learning-bridge.md section 13.
+
+### Activate, approve and permanently lock
+
+On a funded redemption, use **MetaMask · activate, approve and lock → Check next wallet step**. Estimate and review the suggested action, acknowledge it, then confirm in MetaMask. Verify each transaction to 6 confirmations before the next step. Existing different allowances are reset before exact approval. Permanent locking has no undo. A verified lock unlocks the explicit custody-signing and saved-MT-broadcast controls. Refresh never resends; recover uncertain transaction hashes through Activity. See learning-bridge.md section 14.
+
+### Bridge reconciliation
+
+Open **Bridge → Reconciliation** with your original TBC Testnet wallet signed in. **Refresh saved history** shows both directions, confirmed amounts and recorded actual fees per lwFT contract. **Check current balances** reads indexed MT reserves and registered permanent locks against lwFT totalSupply; it shows its time and coverage separately from saved records. Neither action sends a transaction. See [learning-bridge.md, section 17](docs/learning-bridge.md#17-桥对账页面--17-bridge-reconciliation-2026-10-30) for scope and limitations.
+
+### Guided bridge flow
+
+In **Testnet Bridge**, choose **Send MT → Receive lwFT** or **Return lwFT → Receive MT**. Follow the highlighted step and use **Prepare next wallet step** for the required action and fee review. Existing pending transactions are checked about every 30 seconds while the page is visible; you can pause checks or use **Check now**. Wallet approvals, permanent locking, custody signing and broadcasting remain explicit actions. Setup and old attempts are available under expandable history. See learning-bridge.md section 18.

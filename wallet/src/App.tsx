@@ -16,7 +16,7 @@ export default function App() {
 					<NavLink to="/wallet">Wallet</NavLink>
 					<NavLink to="/utxo">UTXO List</NavLink>
 					<NavLink to="/transaction">Transaction History</NavLink>
-					<NavLink to="/bridge-lab">Bridge Lab</NavLink>
+					<NavLink to="/bridge-lab">Bridge</NavLink>
 				</nav>
 			</header>
 			<Routes>
@@ -24,7 +24,7 @@ export default function App() {
 				<Route path="/wallet" element={<WalletPage session={session} />} />
 				<Route path="/transaction" element={<TransactionPage session={session} />} />
 				<Route path="/bridge-lab" element={<BridgeLabPage session={session} />} />
-				<Route path="/inquiry" element={<Navigate to="/bridge-lab" replace />} />
+				<Route path="/inquiry" element={<Navigate to="/bridge-lab?tab=overview" replace />} />
 				<Route path="/utxo" element={<UtxoPage session={session} />} />
 				<Route path="*" element={<section className="card"><h1>Page not found</h1><p>Choose a page from the menu above.</p></section>} />
 			</Routes>

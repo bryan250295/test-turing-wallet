@@ -47,7 +47,11 @@ export function inspectWalletHtlcs(address: string, signal: AbortSignal, cursor?
 		const results = response.results.map((entry: unknown): HtlcInspectionResult => {
 			if (!isObject(entry) || typeof entry.lockTxid !== 'string' || typeof entry.contractId !== 'string' || expected.get(entry.lockTxid) !== entry.contractId) throw new Error('Status result does not match the saved locks.');
 			expected.delete(entry.lockTxid);
-			if (typeof entry.error === 'string' && entry.lock === undefined) return { lockTxid: entry.lockTxid, contractId: entry.contractId, error: entry.error };
+			if (typeof entry.error === 'string' && entry.lock === undefined) {
+				const previousLock = entry.previousLock === undefined ? undefined : parseInspectedLock(entry.previousLock, entry.lockTxid, entry.contractId);
+				if (previousLock && previousLock.sender !== address && previousLock.receiver !== address) throw new Error('Previous result wallet mismatch.');
+				return { lockTxid: entry.lockTxid, contractId: entry.contractId, error: entry.error, previousLock };
+			}
 			if (entry.error !== undefined) throw new Error('Invalid wallet status result.');
 			const lock = parseInspectedLock(entry.lock, entry.lockTxid, entry.contractId);
 			if (lock.sender !== address && lock.receiver !== address) throw new Error('Inspected lock wallet mismatch.');

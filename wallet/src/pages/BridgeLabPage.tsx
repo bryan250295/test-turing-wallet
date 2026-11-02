@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Health } from '../types/api';
 import type { WalletPageProps } from '../types/wallet';
-import { BITBUS_API_BASE } from '../config/constants';
 import useInquiry from '../hooks/useInquiry';
 import HtlcTestnet from '../components/bridge/HtlcTestnet';
 import HtlcRequests from '../components/bridge/HtlcRequests';
 import type { HtlcRecoveryTarget } from '../types/htlc';
 import { formatDateTime } from '../utils/dateTime';
 import TestnetBridge from '../components/bridge/TestnetBridge';
+import BridgeReconciliation from '../components/bridge/BridgeReconciliation';
 
 function getHealthDisplay(health: Health | null, loading: boolean) {
 	if (loading) return { tone: 'warning', label: 'Checking…' };
@@ -21,17 +22,28 @@ function getHealthDisplay(health: Health | null, loading: boolean) {
 }
 
 const tabs = [
-	{ id: 'overview', label: 'Overview' },
-	{ id: 'testnet-bridge', label: 'Testnet Bridge' },
-	{ id: 'htlc', label: 'HTLC Testnet' },
-	{ id: 'requests', label: 'My HTLC Requests' },
+	{ id: 'testnet-bridge', label: 'Transfer' },
+	{ id: 'reconciliation', label: 'Reconciliation' },
+	{ id: 'htlc', label: 'Token locks' },
+	{ id: 'requests', label: 'My locks' },
+	{ id: 'overview', label: 'Markets' },
 ] as const;
 
 type BridgeTab = typeof tabs[number]['id'];
 
 export default function BridgeLabPage({ session }: WalletPageProps) {
-	const [activeTab, setActiveTab] = useState<BridgeTab>('overview');
+	const [searchParams, setSearchParams] = useSearchParams();
+	const activeTab: BridgeTab = tabs.find((tab) => tab.id === searchParams.get('tab'))?.id ?? 'testnet-bridge';
+	function setActiveTab(tab: BridgeTab) {
+		setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set('tab', tab); return next; });
+	}
 	const [recoveryTarget, setRecoveryTarget] = useState<HtlcRecoveryTarget>();
+
+	function selectTab(tab: BridgeTab) {
+		if (tab === activeTab) return;
+		setRecoveryTarget(undefined);
+		setActiveTab(tab);
+	}
 
 	function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 		const current = tabs.findIndex((tab) => tab.id === activeTab);
@@ -44,16 +56,16 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 			default: return;
 		}
 		event.preventDefault();
-		setActiveTab(tabs[next].id);
+		selectTab(tabs[next].id);
 		event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`#bridge-${tabs[next].id}-tab`)?.focus();
 	}
 
 	return (
 		<section className="card history-card inquiry-page">
-			<p className="eyebrow">BRIDGE LAB</p>
-			<h1>Bridge Lab</h1>
-			<p className="intro">Explore BitBus, prepare your testnet bridge wallets and manage TBC token locks.</p>
-			<div className="page-tabs bridge-lab-tabs" role="tablist" aria-label="Bridge Lab sections">
+			<p className="eyebrow">TESTNET</p>
+			<h1>Bridge</h1>
+			<p className="intro">Choose a direction and follow the steps to transfer your tokens.</p>
+			<div className="page-tabs bridge-lab-tabs" role="tablist" aria-label="Bridge sections">
 				{tabs.map((tab) => (
 					<button
 						key={tab.id}
@@ -64,7 +76,7 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 						aria-selected={activeTab === tab.id}
 						aria-controls={`bridge-${tab.id}-panel`}
 						tabIndex={activeTab === tab.id ? 0 : -1}
-						onClick={() => setActiveTab(tab.id)}
+						onClick={() => selectTab(tab.id)}
 						onKeyDown={handleTabKeyDown}
 					>
 						{tab.label}
@@ -72,19 +84,22 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 				))}
 			</div>
 			<div id="bridge-overview-panel" role="tabpanel" aria-labelledby="bridge-overview-tab" hidden={activeTab !== 'overview'} tabIndex={0}>
-				<BridgeOverview />
+				{activeTab === 'overview' && <BridgeOverview />}
 			</div>
 			<div id="bridge-htlc-panel" role="tabpanel" aria-labelledby="bridge-htlc-tab" hidden={activeTab !== 'htlc'} tabIndex={0}>
-				<HtlcTestnet active={activeTab === 'htlc'} session={session} recoveryTarget={recoveryTarget} onViewRequests={() => setActiveTab('requests')} />
+				{activeTab === 'htlc' && <HtlcTestnet active session={session} recoveryTarget={recoveryTarget} onClearRecoveryTarget={() => setRecoveryTarget(undefined)} onViewRequests={() => selectTab('requests')} />}
 			</div>
 			<div id="bridge-testnet-bridge-panel" role="tabpanel" aria-labelledby="bridge-testnet-bridge-tab" hidden={activeTab !== 'testnet-bridge'} tabIndex={0}>
 				<TestnetBridge session={session} active={activeTab === 'testnet-bridge'} />
 			</div>
+			<div id="bridge-reconciliation-panel" role="tabpanel" aria-labelledby="bridge-reconciliation-tab" hidden={activeTab !== 'reconciliation'} tabIndex={0}>
+				{activeTab === 'reconciliation' && <BridgeReconciliation session={session} active />}
+			</div>
 			<div id="bridge-requests-panel" role="tabpanel" aria-labelledby="bridge-requests-tab" hidden={activeTab !== 'requests'} tabIndex={0}>
-				<HtlcRequests session={session} active={activeTab === 'requests'} onRecover={(target) => {
+				{activeTab === 'requests' && <HtlcRequests session={session} active onRecover={(target) => {
 					setRecoveryTarget(target);
 					setActiveTab('htlc');
-				}} />
+				}} />}
 			</div>
 		</section>
 	);
@@ -97,10 +112,10 @@ function BridgeOverview() {
 
 	return <section aria-label="BitBus overview" aria-busy={state.loading}>
 		<div className="history-titlebar">
-			<div><h2>BitBus overview</h2><p className="intro">Explore BitBus assets and available trading pairs.</p></div>
+			<div><h2>BitBus overview</h2><p className="intro">View available assets and trading pairs.</p></div>
 			<button type="button" disabled={state.loading} onClick={state.refresh}>{state.loading ? 'Loading…' : '↻ Refresh'}</button>
 		</div>
-		<aside className="inquiry-environment"><strong>Public BitBus service · Query only</strong><p>This page reads <code>{BITBUS_API_BASE}</code>. A Devnet endpoint has not been verified. These results are independent of your wallet’s selected network.</p><p>No wallet connection is needed. No orders, signatures or transfers are submitted.</p></aside>
+		<aside className="inquiry-environment"><p>Market data is read only and may use a different network from your connected wallet.</p></aside>
 		<div className="history-stats">
 			<div><span>Service health</span><strong className={`service-health service-health-${healthDisplay.tone}`} role="status" title={state.health ? `API status: ${state.health.status}` : undefined}>{healthDisplay.label}</strong></div>
 			<div><span>Supported assets</span><strong>{state.loading ? '…' : state.assets?.length ?? '—'}</strong></div>

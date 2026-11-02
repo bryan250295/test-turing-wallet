@@ -3,6 +3,34 @@
 
 Learning Materials for TBC Developers
 
+## Run the learning application
+
+```bash
+node scripts/setup-local.mjs
+docker compose up --build -d
+```
+
+Open `http://localhost:5173`. Subsequent starts use `docker compose up`.
+React TypeScript lives in `wallet/`, NestJS in `backend/`, shared types/helpers
+in `shared/`, and PostgreSQL runs in Docker with a persistent volume.
+
+Setup preserves the existing HTLC key and prepares a separate bridge custody
+encryption key. Keep backups of the database and both `.secrets/htlc.key` and
+`.secrets/bridge-custody.key`; keys are excluded from Git and Docker images.
+The learning bridge supports verified deployments, prepared orders, explicit
+payment details, FT deposit verification and wallet-confirmed unpause/mint calls.
+Funding and minting require the user's wallet actions; they never start on refresh.
+The first 1,000,000 MT → 1,000,000 lwFT transfer was accepted on 2026-10-29,
+including Completed status and the MetaMask balance. Public transaction evidence,
+remaining acceptance limits and reverse-redemption options are recorded in
+[the bridge guide](wallet/docs/learning-bridge.md#9-首笔正向完成记录--9-first-completed-forward-transfer).
+
+See [setup, authentication, migration and backups / 启动与迁移](docs/backend-architecture.md),
+[backend modules](backend/README.md), and [wallet usage](wallet/README.md).
+
+`STUDY2.md` is teacher-provided, read-only source material.
+
+
 ## Tools & SDK
 
 - [ JaveScript Lib for TBC ](https://github.com/TuringBitChain/tbc-lib-js)

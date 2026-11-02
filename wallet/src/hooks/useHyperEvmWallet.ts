@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { HYPEREVM_TESTNET } from '../config/hyperevm';
-import { evmWalletError, isEvmProvider, legacyMetaMask, readEvmWallet, switchToHyperEvmTestnet, withWalletReadTimeout } from '../services/evmWallet';
+import { evmWalletError, isEvmProvider, legacyMetaMask, parseWalletNonce, readEvmWallet, switchToHyperEvmTestnet, withWalletReadTimeout } from '../services/evmWallet';
 import type { EvmProvider, EvmWalletSnapshot } from '../types/evm';
+import type { BridgeDeploymentTransaction, BridgeCallTransaction } from '../types/learningBridge';
 
 export default function useHyperEvmWallet(active: boolean) {
 	const [provider, setProvider] = useState<EvmProvider | null>(null);
 	const [snapshot, setSnapshot] = useState<EvmWalletSnapshot | null>(null);
 	const [loading, setLoading] = useState(false);
-	const [pending, setPending] = useState<'connect' | 'switch' | null>(null);
+	const [pending, setPending] = useState<'connect' | 'switch' | 'deploy' | 'bridge' | null>(null);
 	const [error, setError] = useState('');
 	const reader = useRef<{ refresh: () => void } | null>(null);
 	const command = useRef(false);
@@ -121,12 +122,65 @@ export default function useHyperEvmWallet(active: boolean) {
 		}
 	}
 
+	async function sendDeployment(transaction: BridgeDeploymentTransaction): Promise<string> {
+		if (!active || !provider || command.current) throw new Error('Finish the current MetaMask request before deploying.');
+		const epoch = lifecycle.current;
+		command.current = true;
+		setPending('deploy');
+		try {
+			const current = await withWalletReadTimeout(readEvmWallet(provider));
+			if (lifecycle.current !== epoch || current.chainId !== 998 || current.address.toLowerCase() !== transaction.from.toLowerCase()) throw new Error('MetaMask account, network or page changed before the deployment request.');
+			if (current.balanceWei === null || BigInt(current.balanceWei) < BigInt(transaction.gas) * BigInt(transaction.gasPrice)) throw new Error('The current MetaMask balance does not cover the reviewed deployment budget.');
+			// Whitelist creation fields: deliberately omit "to", approvals and value.
+			// No timeout: a wallet approval remains pending until the user answers.
+			const hash = await provider.request({ method: 'eth_sendTransaction', params: [{ from: transaction.from, chainId: '0x3e6', data: transaction.data, value: '0x0', gas: transaction.gas, gasPrice: transaction.gasPrice, nonce: transaction.nonce }] });
+			if (typeof hash !== 'string' || !/^0x[0-9a-f]{64}$/i.test(hash)) throw new Error('MetaMask did not return a transaction hash. Check its activity before trying another deployment.');
+			return hash.toLowerCase();
+		} finally {
+			command.current = false;
+			if (mounted.current) setPending(null);
+		}
+	}
+
+	async function sendBridgeCall(transaction: BridgeCallTransaction): Promise<string> {
+		if (!active || !provider || command.current) throw new Error('Finish the current MetaMask request first.');
+		if (transaction.chainId !== '0x3e6' || transaction.value !== '0x0' || !/^0x[0-9a-f]{40}$/.test(transaction.to) || !['0x3f4ba83a', '0xbf31ca75', '0x095ea7b3', '0x2b145d57'].includes(transaction.data.slice(0, 10))) throw new Error('Unsupported bridge wallet call.');
+		const epoch = lifecycle.current; command.current = true; setPending('bridge');
+		try {
+			const current = await withWalletReadTimeout(readEvmWallet(provider));
+			const nonceResponse = await withWalletReadTimeout(provider.request({ method: 'eth_getTransactionCount', params: [transaction.from, 'pending'] }));
+			if (lifecycle.current !== epoch) throw new Error('The page or wallet provider changed before sending. No transaction request was opened. Refresh saved progress before preparing a new quote.');
+			if (current.chainId !== 998) throw new Error(`MetaMask is on chain ${current.chainId}; this call requires HyperEVM Testnet (998). No transaction request was opened.`);
+			if (current.address.toLowerCase() !== transaction.from.toLowerCase()) throw new Error(`MetaMask selected ${current.address || 'no account'}; this call requires ${transaction.from}. No transaction request was opened.`);
+			const nonce = parseWalletNonce(nonceResponse);
+			if (nonce !== BigInt(transaction.nonce)) throw new Error(`MetaMask reports pending nonce ${nonce}, but the reviewed quote requires ${BigInt(transaction.nonce)}. No transaction request was opened. Check Activity and refresh the wallet connection before preparing a new quote.`);
+			if (current.balanceWei === null || BigInt(current.balanceWei) < BigInt(transaction.gas) * BigInt(transaction.gasPrice)) throw new Error('The current HYPE balance does not cover this call budget.');
+			const hash = await provider.request({ method: 'eth_sendTransaction', params: [{ from: transaction.from, to: transaction.to, chainId: '0x3e6', data: transaction.data, value: '0x0', gas: transaction.gas, gasPrice: transaction.gasPrice, nonce: transaction.nonce }] });
+			if (typeof hash !== 'string' || !/^0x[0-9a-f]{64}$/i.test(hash)) throw new Error('No transaction hash was returned. Check MetaMask Activity before doing anything again.');
+			return hash.toLowerCase();
+		} finally { command.current = false; if (mounted.current) setPending(null); }
+	}
+	async function watchWrappedToken(address: string, symbol: string, decimals: number) {
+		if (!active || !provider || command.current || !/^0x[0-9a-f]{40}$/.test(address) || !/^[A-Za-z][A-Za-z0-9]{0,10}$/.test(symbol) || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Connect MetaMask before importing the wrapped token.');
+		command.current = true; setPending('bridge');
+		try {
+			if ((await withWalletReadTimeout(readEvmWallet(provider))).chainId !== 998) throw new Error('Select HyperEVM Testnet before importing the wrapped token.');
+			return await provider.request({ method: 'wallet_watchAsset', params: { type: 'ERC20', options: { address, symbol, decimals } } });
+		} finally { command.current = false; if (mounted.current) setPending(null); }
+	}
 	return {
 		...snapshot,
 		detected: provider !== null,
 		loading,
 		pending,
 		error,
+		sendDeployment,
+		sendBridgeCall,
+		watchWrappedToken,
+		readCurrent: async () => {
+			if (!active || !provider) throw new Error('Connect MetaMask on HyperEVM Testnet first.');
+			return withWalletReadTimeout(readEvmWallet(provider));
+		},
 		networkIsTestnet: snapshot?.chainId === HYPEREVM_TESTNET.chainId,
 		connect: () => run('connect'),
 		switchNetwork: () => run('switch'),

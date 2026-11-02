@@ -28,6 +28,17 @@ function hexQuantity(value: unknown): bigint {
 	return BigInt(value);
 }
 
+export function parseWalletNonce(value: unknown): bigint {
+	// Some injected providers return a JSON number rather than a hex quantity.
+	// Convert only exact nonnegative integers; never round or coerce invalid data.
+	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+	if (typeof value === 'string' && /^0x[0-9a-f]{1,16}$/i.test(value)) {
+		const nonce = BigInt(value);
+		if (nonce <= BigInt(Number.MAX_SAFE_INTEGER)) return nonce;
+	}
+	throw new Error('MetaMask returned an invalid pending nonce. No transaction request was opened. Refresh its network connection before preparing a new quote.');
+}
+
 function accountOf(value: unknown): string {
 	if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && /^0x[0-9a-f]{40}$/i.test(item))) {
 		throw new Error('The wallet returned an invalid account response.');

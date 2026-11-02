@@ -25,7 +25,7 @@ export default function HtlcRequestDetails({ item, lock, error, session, onClose
 	}, []);
 	const transactions = new Map(item.recoveries.map((entry) => [entry.txid, entry]));
 	if (lock?.recovery && !transactions.has(lock.recovery.txid)) transactions.set(lock.recovery.txid, { ...lock.recovery, submission: 'submitted' });
-	const role = item.sender === session.address && item.receiver === session.address ? 'Sender A / Recipient B' : item.sender === session.address ? 'Sender A' : 'Recipient B';
+	const role = item.sender === session.address && item.receiver === session.address ? 'Sender / Recipient' : item.sender === session.address ? 'Sender' : 'Recipient';
 	const fee = (value?: string) => value === undefined ? 'Unavailable' : formatFeeTbc(value);
 	const completed = isCompletedHtlc(lock, error);
 
@@ -36,17 +36,16 @@ export default function HtlcRequestDetails({ item, lock, error, session, onClose
 			<dl className="history-detail-grid">
 				<div><dt>Token</dt><dd>{lock?.name || item.tokenName || 'Unknown token'} ({lock?.symbol ?? item.symbol})</dd></div>
 				<div><dt>Locked amount</dt><dd>{formatRawAmount(lock?.amountRaw ?? item.amountRaw, lock?.decimals ?? item.decimals)} {lock?.symbol ?? item.symbol}</dd></div>
-				<div><dt>Status</dt><dd>{htlcRequestStatus(item, lock, error)}{error && lock && <small className="inquiry-chain">Previous result: {htlcRequestStatus(item, lock)}</small>}{!error && lock && htlcRequestStatus(item, lock) === 'Refundable' && <small className="inquiry-chain">A can request a refund. B may still claim until the lock is spent; refunds are not automatic.</small>}</dd></div>
+				<div><dt>Status</dt><dd>{htlcRequestStatus(item, lock, error)}{error && lock && <small className="inquiry-chain">Previous result: {htlcRequestStatus(item, lock)}</small>}{!error && lock && htlcRequestStatus(item, lock) === 'Refundable' && <small className="inquiry-chain">The sender can request a refund. The recipient may still claim until the lock is spent. Refunds are not automatic.</small>}</dd></div>
 				<div><dt>Your role</dt><dd>{role}</dd></div>
 				<div><dt>Token contract ID</dt><dd><code>{item.contractId}</code></dd></div>
 				<div><dt>Decimals</dt><dd>{lock?.decimals ?? item.decimals}</dd></div>
-				<div><dt>Sender / refund address (A)</dt><dd><code>{item.sender}</code></dd></div>
-				<div><dt>Claim recipient (B)</dt><dd><code>{item.receiver}</code></dd></div>
+				<div><dt>Sender / refund address</dt><dd><code>{item.sender}</code></dd></div>
+				<div><dt>Claim recipient</dt><dd><code>{item.receiver}</code></dd></div>
 				<div><dt>Refund eligible after · MYT</dt><dd>{formatHtlcDate(item.refundTimestamp)}<small className="inquiry-chain">{completed ? 'Completed' : error || !lock ? 'Eligibility not verified' : !lock.controlUnspent || !lock.tokenUnspent || lock.recovery ? 'Lock no longer available' : lock.refundEligible ? 'Eligible by chain time; not an automatic refund' : 'Waiting for Testnet chain time'}</small></dd></div>
 				<div><dt>Last checked · MYT</dt><dd>{lock ? formatHtlcDate(lock.checkedAt) : 'Not checked'}</dd></div>
 				<div><dt>Lock confirmations</dt><dd>{lock?.confirmations ?? 'Not checked'}</dd></div>
 				<div><dt>Testnet median time · MYT</dt><dd>{lock ? formatHtlcDate(lock.chainMedianTime) : 'Not checked'}</dd></div>
-				<div><dt>Public hashlock</dt><dd><code>{lock?.hashHex ?? 'Unavailable'}</code></dd></div>
 				<div><dt>Lock transaction fee</dt><dd>{fee(lock?.feeRaw)}</dd></div>
 			</dl>
 			<h4>Related transactions</h4>
@@ -58,7 +57,7 @@ export default function HtlcRequestDetails({ item, lock, error, session, onClose
 				})}
 			</ul>
 			{lock?.recoveryWarning && <p className="history-feedback">{lock.recoveryWarning}</p>}
-			<p className="history-note">Times use Asia/Kuala_Lumpur (MYT). Status and fees reflect the last check. Opening details does not send a transaction or start another status check.</p>
+			<p className="history-note">Times are shown in MYT. Status and fees reflect the last check.</p>
 			<SavedClaimSecret session={session} owner={item.sender} lockTxid={item.lockTxid} />
 		</div>
 	</dialog>;

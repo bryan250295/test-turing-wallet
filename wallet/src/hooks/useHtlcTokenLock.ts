@@ -25,12 +25,12 @@ export default function useHtlcTokenLock(session: WalletSession) {
 	const request = useRef<AbortController | null>(null);
 	const signing = useRef(false);
 	const submitting = useRef(false);
-	const ready = wallet.isReady && !!address && networkIsDevnet;
+	const ready = wallet.isReady && !!address && networkIsDevnet && session.backendAuth.ready;
 
 	useEffect(() => {
 		setState(initialState);
 		return () => request.current?.abort();
-	}, [address, networkIsDevnet, wallet.isReady]);
+	}, [address, networkIsDevnet, wallet.isReady, session.backendAuth.ready]);
 
 	function reset() {
 		request.current?.abort();

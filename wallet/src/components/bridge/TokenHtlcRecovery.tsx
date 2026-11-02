@@ -70,7 +70,7 @@ export default function TokenHtlcRecovery({ session, recoveryTarget, active }: W
 			</form>
 		</details>
 		{lockTxid && contractId && <button type="submit" form="htlc-request-lookup" disabled={!canAct}>{state.loading ? 'Loading…' : lock ? 'Refresh request' : 'Load request'}</button>}
-		{!state.ready && <p className="history-feedback">Connect your wallet on TBC Testnet to continue.</p>}
+		{!state.ready && <p className="history-feedback">{session.address && session.networkIsDevnet ? 'Complete your wallet login using Reconnect to continue.' : 'Connect your wallet on TBC Testnet to continue.'}</p>}
 		{state.error && <p className="result error" role="alert">{state.error}</p>}
 		{lock && <>
 			<dl className="history-detail-grid">

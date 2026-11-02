@@ -55,13 +55,13 @@ export default function HtlcTokenLock({ session, onViewRequests }: WalletPagePro
 			<button type="submit" disabled={!canEdit || !token || !preview.valid || !receiver.trim() || !refundTime}>{loading ? 'Preparing lock…' : 'Review lock'}</button>
 		</form>}
 		{loading && !state.unsigned && <p role="status">Checking funds and calculating the transaction fee…</p>}
-		{!state.ready && <p className="history-feedback">Connect your wallet on TBC Testnet to create a lock.</p>}
+		{!state.ready && <p className="history-feedback">{session.address && session.networkIsDevnet ? 'Complete your wallet login using Reconnect to create a lock.' : 'Connect your wallet on TBC Testnet to create a lock.'}</p>}
 		{(state.error || secret.error) && <p className="result error" role="alert">{state.error || secret.error}</p>}
 		{state.unsigned && secret.pair && <>
 			{!state.broadcast && <button type="button" className="history-secondary" disabled={!canEdit} onClick={edit}>Edit details</button>}
 			<section className="htlc-secret-backup" aria-labelledby="htlc-backup-title">
 				<h4 id="htlc-backup-title">Claim secret</h4>
-				<p>{state.signed?.secretStored ? 'Saved encrypted on this app server. You can retrieve it later from My HTLC Requests using the sender wallet.' : 'This secret will be saved on this app server when you sign the lock. The recipient needs it to claim.'}</p>
+				<p>{state.signed?.secretStored ? 'Saved. Use the sender wallet in My locks to retrieve it later.' : 'Sign to save the claim secret. Share it privately with the recipient when they should claim.'}</p>
 				<label htmlFor="htlc-secret">Claim secret</label>
 				<div className="htlc-secret-field"><input id="htlc-secret" type={showSecret ? 'text' : 'password'} value={secret.pair.secretHex} readOnly autoComplete="off" spellCheck={false} /><button type="button" aria-pressed={showSecret} onClick={() => setShowSecret((value) => !value)}>{showSecret ? 'Hide' : 'Show'}</button><button type="button" onClick={async () => {
 					try { await navigator.clipboard.writeText(secret.pair!.secretHex); setCopyStatus('Secret copied. Store it privately.'); }

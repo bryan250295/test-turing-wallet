@@ -13,7 +13,7 @@ export default function useHtlcRequests(session: WalletSession, active: boolean)
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
 	const request = useRef<AbortController | null>(null);
-	const ready = session.wallet.isReady && !!session.address && session.networkIsDevnet;
+	const ready = session.wallet.isReady && !!session.address && session.networkIsDevnet && session.backendAuth.ready;
 	const requests = ready ? history.requests.filter((item) => item.sender === session.address || item.receiver === session.address).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : [];
 
 	useEffect(() => {
@@ -22,7 +22,7 @@ export default function useHtlcRequests(session: WalletSession, active: boolean)
 		setLoading(false);
 		setError('');
 		return () => request.current?.abort();
-	}, [session.address, session.networkIsDevnet, session.wallet.isReady, active]);
+	}, [session.address, session.networkIsDevnet, session.wallet.isReady, session.backendAuth.ready, active]);
 
 	useEffect(() => {
 		if (active && ready) void refresh();
@@ -67,7 +67,7 @@ export default function useHtlcRequests(session: WalletSession, active: boolean)
 							await rememberInspectedLock(result.lock);
 							signal.throwIfAborted();
 							rememberHtlcInspection(result.lockTxid, result.lock);
-						} else rememberHtlcInspection(result.lockTxid, undefined, result.error);
+					} else rememberHtlcInspection(result.lockTxid, result.previousLock, result.error);
 					}
 					if (page.results.some((result) => result.error)) {
 						setError('Some locks could not be checked. Successful results are shown. Use Refresh requests to retry later.');

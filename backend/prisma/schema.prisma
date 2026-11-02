@@ -1,0 +1,463 @@
+generator client {
+	provider = "prisma-client"
+	output = "../generated/prisma"
+	moduleFormat = "cjs"
+}
+
+datasource db {
+	provider = "postgresql"
+}
+
+model WalletIdentity {
+	id        String   @id @default(uuid()) @db.Uuid
+	chain     String   @db.VarChar(16)
+	network   String   @db.VarChar(32)
+	address   String   @db.VarChar(100)
+	role      String   @default("user") @db.VarChar(16)
+	createdAt DateTime @default(now()) @db.Timestamptz(3)
+	sessions  AuthSession[]
+	deployments BridgeDeployment[]
+	bridgeOrders BridgeOrder[]
+	escrowDeployments RedemptionEscrowDeployment[]
+	redemptionOrders RedemptionOrder[]
+	@@unique([chain, network, address])
+	@@map("wallet_identities")
+}
+
+model AuthChallenge {
+	id         String   @id @default(uuid()) @db.Uuid
+	chain      String   @db.VarChar(16)
+	network    String   @db.VarChar(32)
+	address    String   @db.VarChar(100)
+	purpose    String   @db.VarChar(16)
+	lockTxid   String?  @db.Char(64)
+	origin     String
+	message    String
+	bindingHash String  @db.Char(64)
+	expiresAt  DateTime @db.Timestamptz(3)
+	consumedAt DateTime? @db.Timestamptz(3)
+	createdAt  DateTime @default(now()) @db.Timestamptz(3)
+	@@index([expiresAt])
+	@@map("auth_challenges")
+}
+
+model AuthSession {
+	tokenHash  String   @id @db.Char(64)
+	identityId String   @db.Uuid
+	identity   WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+	csrfToken  String   @db.Char(64)
+	expiresAt  DateTime @db.Timestamptz(3)
+	createdAt  DateTime @default(now()) @db.Timestamptz(3)
+	@@index([identityId])
+	@@index([expiresAt])
+	@@map("auth_sessions")
+}
+
+model HtlcRequest {
+	network         String   @db.VarChar(32)
+	lockTxid        String   @db.Char(64)
+	contractId      String   @db.Char(64)
+	sender          String   @db.VarChar(100)
+	receiver        String   @db.VarChar(100)
+	amountRaw       Decimal  @db.Decimal(100, 0)
+	decimals        Int      @db.SmallInt
+	symbol          String   @db.VarChar(100)
+	tokenName       String?  @db.VarChar(1000)
+	refundTimestamp BigInt
+	submission      String?  @db.VarChar(16)
+	source          String   @db.VarChar(32)
+	createdAt       DateTime @db.Timestamptz(3)
+	updatedAt       DateTime @db.Timestamptz(3)
+	recoveries      HtlcRecovery[]
+	observation     HtlcObservation?
+	@@id([network, lockTxid])
+	@@index([network, sender, createdAt])
+	@@index([network, receiver, createdAt])
+	@@map("htlc_requests")
+}
+
+model HtlcRecovery {
+	network    String @db.VarChar(32)
+	lockTxid   String @db.Char(64)
+	txid       String @db.Char(64)
+	action     String @db.VarChar(8)
+	submission String? @db.VarChar(16)
+	request    HtlcRequest @relation(fields: [network, lockTxid], references: [network, lockTxid], onDelete: Cascade)
+	createdAt  DateTime @default(now()) @db.Timestamptz(3)
+	@@id([network, lockTxid, txid])
+	@@map("htlc_recoveries")
+}
+
+model HtlcObservation {
+	network       String @db.VarChar(32)
+	lockTxid      String @db.Char(64)
+	request       HtlcRequest @relation(fields: [network, lockTxid], references: [network, lockTxid], onDelete: Cascade)
+	lastResult    Json?
+	checkedAt     DateTime? @db.Timestamptz(3)
+	lastError     String?
+	attemptedAt   DateTime @db.Timestamptz(3)
+	@@id([network, lockTxid])
+	@@map("htlc_observations")
+}
+
+model ClaimSecret {
+	network       String @db.VarChar(32)
+	lockTxid      String @db.Char(64)
+	owner         String @db.VarChar(100)
+	version       Int
+	hashHex       String @db.Char(64)
+	ivHex         String @db.Char(24)
+	tagHex        String @db.Char(32)
+	ciphertextHex String @db.Char(64)
+	keyId         String @db.Char(64)
+	createdAt     DateTime @default(now()) @db.Timestamptz(3)
+	@@id([network, lockTxid])
+	@@index([network, owner])
+	@@map("claim_secrets")
+}
+
+model StorageImport {
+	path       String @id
+	sha256     String @db.Char(64)
+	importedAt DateTime @default(now()) @db.Timestamptz(3)
+	@@map("storage_imports")
+}
+
+model AuditEvent {
+	id        String @id @default(uuid()) @db.Uuid
+	identityId String? @db.Uuid
+	action    String @db.VarChar(64)
+	data      Json
+	createdAt DateTime @default(now()) @db.Timestamptz(3)
+	@@index([identityId, createdAt])
+	@@map("audit_events")
+}
+
+model BridgeAsset {
+	routeId            String   @id @db.VarChar(100)
+	sourceNetwork      String   @db.VarChar(32)
+	contractId         String   @db.Char(64)
+	protocol           String   @db.VarChar(32)
+	name               String   @db.VarChar(1000)
+	symbol             String   @db.VarChar(100)
+	decimals           Int      @db.SmallInt
+	legacyVersion      Int      @db.SmallInt
+	totalSupplyRaw     Decimal  @db.Decimal(78, 0)
+	genesisCodeHash    String   @db.Char(64)
+	genesisTapeHash    String   @db.Char(64)
+	mintSourceTxid     String   @db.Char(64)
+	mintSourceVout     Int
+	genesisBlockHash   String   @db.Char(64)
+	genesisBlockHeight Int
+	confirmations      Int
+	destinationChainId Int
+	verificationMethod String   @db.VarChar(100)
+	verifiedAt         DateTime @db.Timestamptz(3)
+	createdAt          DateTime @default(now()) @db.Timestamptz(3)
+	deployments        BridgeDeployment[]
+	@@unique([sourceNetwork, contractId, destinationChainId])
+	@@map("bridge_assets")
+}
+
+model BridgeDeployment {
+	id                   String @id @default(uuid()) @db.Uuid
+	identityId           String @db.Uuid
+	identity             WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+	routeId              String @db.VarChar(100)
+	asset                BridgeAsset @relation(fields: [routeId], references: [routeId], onDelete: Restrict)
+	chainId              Int @default(998)
+	deployer             String @db.VarChar(42)
+	admin                String @db.VarChar(42)
+	minter               String @db.VarChar(42)
+	contractId           String @db.Char(64)
+	decimals             Int @db.SmallInt
+	nonce                BigInt
+	buildInputSha256     String @db.Char(64)
+	initCodeHash         String @db.VarChar(66)
+	transactionData      String
+	runtimeBytecode      String
+	immutableReferences  Json
+	quote                Json
+	status               String @default("prepared") @db.VarChar(24)
+	txHash               String? @db.VarChar(66)
+	contractAddress      String? @db.VarChar(42)
+	confirmations        Int @default(0)
+	receiptBlockHash     String? @db.VarChar(66)
+	receiptBlockNumber   BigInt?
+	gasUsed              Decimal? @db.Decimal(78, 0)
+	effectiveGasPriceWei Decimal? @db.Decimal(78, 0)
+	actualFeeWei         Decimal? @db.Decimal(78, 0)
+	runtimeCodeHash      String? @db.VarChar(66)
+	verifiedAt           DateTime? @db.Timestamptz(3)
+	checkedAt            DateTime? @db.Timestamptz(3)
+	lastError            String?
+	expiresAt            DateTime @db.Timestamptz(3)
+	createdAt            DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+	orders               BridgeOrder[]
+	escrowDeployments    RedemptionEscrowDeployment[]
+	@@unique([chainId, txHash])
+	@@unique([chainId, contractAddress])
+	@@index([identityId, createdAt])
+	@@map("bridge_deployments")
+}
+
+model BridgeOrder {
+	id                               String @id @db.Uuid
+	identityId                       String @db.Uuid
+	identity                         WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict, map: "bridge_orders_identity_fkey")
+	idempotencyKey                   String @db.Uuid
+	deploymentId                     String @db.Uuid
+	deployment                       BridgeDeployment @relation(fields: [deploymentId], references: [id], onDelete: Restrict, map: "bridge_orders_deployment_fkey")
+	status                           String @default("prepared") @db.VarChar(24)
+	sourceNetwork                    String @db.VarChar(32)
+	contractId                       String @db.Char(64)
+	decimals                         Int @db.SmallInt
+	symbol                           String @db.VarChar(100)
+	amountRaw                        Decimal @db.Decimal(78, 0)
+	sender                           String @db.VarChar(100)
+	recipient                        String @db.VarChar(42)
+	destinationChainId               Int
+	destinationContract              String @db.VarChar(42)
+	sourceConfirmationsRequired      Int
+	destinationConfirmationsRequired Int
+	termsHash                        String @db.Char(64)
+	policyVersion                    String @db.VarChar(100)
+	targetCheckedBlockNumber         BigInt
+	targetCheckedBlockHash           String @db.VarChar(66)
+	createdAt                        DateTime @default(now()) @db.Timestamptz(3)
+	cancelledAt                      DateTime? @db.Timestamptz(3)
+	custody                          BridgeCustody?
+	settlement                      BridgeSettlement?
+	escrowDeployments               RedemptionEscrowDeployment[]
+	redemptionOrders                RedemptionOrder[]
+	@@unique([identityId, idempotencyKey])
+	@@index([identityId, createdAt])
+	@@map("bridge_orders")
+}
+
+model BridgeCustody {
+	orderId       String @id @db.Uuid
+	order         BridgeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, map: "bridge_custody_order_fkey")
+	network       String @db.VarChar(32)
+	address       String @unique @db.VarChar(100)
+	publicKeyHex  String @db.VarChar(66)
+	addressFormat String @db.VarChar(64)
+	version       Int @db.SmallInt
+	keyId         String @db.Char(64)
+	ivHex         String @db.Char(24)
+	tagHex        String @db.Char(32)
+	ciphertextHex String @db.Char(64)
+	createdAt     DateTime @default(now()) @db.Timestamptz(3)
+	@@map("bridge_custody")
+}
+
+model BridgeSettlement {
+	orderId         String @id @db.Uuid
+	order           BridgeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+	status          String @default("awaiting_payment") @db.VarChar(32)
+	paymentOpenedAt DateTime @default(now()) @db.Timestamptz(3)
+	checkedAt       DateTime? @db.Timestamptz(3)
+	lastError       String?
+	updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+	deposit         BridgeDeposit?
+	attempts        BridgeCallAttempt[]
+	@@map("bridge_settlements")
+}
+
+model BridgeDeposit {
+	orderId       String @id @db.Uuid
+	settlement    BridgeSettlement @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
+	sourceNetwork String @db.VarChar(32)
+	txid          String @db.Char(64)
+	vout          Int
+	amountRaw     Decimal @db.Decimal(78, 0)
+	feeRaw        Decimal @db.Decimal(78, 0)
+	confirmations Int
+	blockHash     String? @db.Char(64)
+	blockHeight   Int?
+	checkedAt     DateTime @db.Timestamptz(3)
+	@@unique([sourceNetwork, txid, vout])
+	@@map("bridge_deposits")
+}
+
+model BridgeCallAttempt {
+	id                String @id @default(uuid()) @db.Uuid
+	orderId           String @db.Uuid
+	settlement        BridgeSettlement @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
+	kind              String @db.VarChar(16)
+	status            String @default("quoted") @db.VarChar(24)
+	chainId           Int @default(998)
+	fromAddress       String @db.VarChar(42)
+	toAddress         String @db.VarChar(42)
+	data              String
+	nonce             BigInt
+	gasLimit          BigInt
+	gasPriceWei       Decimal @db.Decimal(78, 0)
+	estimatedFeeWei   Decimal @db.Decimal(78, 0)
+	budgetWei         Decimal @db.Decimal(78, 0)
+	txHash            String? @unique @db.VarChar(66)
+	confirmations     Int @default(0)
+	receiptBlockHash  String? @db.VarChar(66)
+	receiptBlockNumber BigInt?
+	actualFeeWei      Decimal? @db.Decimal(78, 0)
+	lastError         String?
+	expiresAt         DateTime @db.Timestamptz(3)
+	createdAt         DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+	@@index([orderId, createdAt])
+	@@map("bridge_call_attempts")
+}
+
+model RedemptionEscrowDeployment {
+	id                  String @id @default(uuid()) @db.Uuid
+	orderId             String @db.Uuid
+	order               BridgeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+	deploymentId        String @db.Uuid
+	deployment          BridgeDeployment @relation(fields: [deploymentId], references: [id], onDelete: Restrict)
+	identityId          String @db.Uuid
+	identity            WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+	deployer            String @db.VarChar(42)
+	wrappedToken        String @db.VarChar(42)
+	sourceContractId    String @db.Char(64)
+	decimals            Int @db.SmallInt
+	nonce               BigInt
+	quote               Json
+	buildInputSha256    String @db.Char(64)
+	transactionData     String
+	runtimeBytecode     String
+	immutableReferences Json
+	status              String @default("prepared") @db.VarChar(24)
+	txHash              String? @unique @db.VarChar(66)
+	contractAddress     String? @unique @db.VarChar(42)
+	confirmations       Int @default(0)
+	receiptBlockHash    String? @db.VarChar(66)
+	receiptBlockNumber  BigInt?
+	actualFeeWei        Decimal? @db.Decimal(78, 0)
+	runtimeCodeHash     String? @db.VarChar(66)
+	verifiedAt          DateTime? @db.Timestamptz(3)
+	checkedAt           DateTime? @db.Timestamptz(3)
+	lastError           String?
+	expiresAt           DateTime @db.Timestamptz(3)
+	createdAt           DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+	redemptionOrders    RedemptionOrder[]
+	@@index([identityId, deploymentId, createdAt], map: "redemption_escrow_owner_token_created_idx")
+	@@map("redemption_escrow_deployments")
+}
+
+model RedemptionOrder {
+	id             String @id @db.Uuid
+	orderId        String @db.Uuid
+	order          BridgeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+	identityId     String @db.Uuid
+	identity       WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+	escrowId       String @db.Uuid
+	escrow         RedemptionEscrowDeployment @relation(fields: [escrowId], references: [id], onDelete: Restrict)
+	escrowAddress  String @db.VarChar(42)
+	idempotencyKey String @db.Uuid
+	redemptionId   String @unique @db.VarChar(66)
+	holder         String @db.VarChar(42)
+	tbcRecipient   String @db.VarChar(35)
+	amountRaw      Decimal @db.Decimal(78, 0)
+	termsHash      String @db.Char(64)
+	policyVersion  String @db.VarChar(64)
+	evidence       Json
+	status         String @default("prepared") @db.VarChar(24)
+	createdAt      DateTime @default(now()) @db.Timestamptz(3)
+	cancelledAt    DateTime? @db.Timestamptz(3)
+	release        RedemptionRelease?
+	@@unique([identityId, idempotencyKey])
+	@@index([identityId, orderId, createdAt])
+	@@map("redemption_orders")
+}
+
+model RedemptionRelease {
+	redemptionId String @id @db.Uuid
+	redemption RedemptionOrder @relation(fields: [redemptionId], references: [id], onDelete: Restrict)
+	fundingAddress String @db.VarChar(100)
+	fundingRequiredRaw BigInt
+	feeQuote Json
+	status String @default("awaiting_fee") @db.VarChar(24)
+	lastError String?
+	checkedAt DateTime? @db.Timestamptz(3)
+	createdAt DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt DateTime @updatedAt @db.Timestamptz(3)
+	plan RedemptionReleasePlan?
+	lock RedemptionLock?
+	signed RedemptionSignedRelease?
+	walletCalls RedemptionWalletCall[]
+	@@map("redemption_releases")
+}
+model RedemptionReleasePlan {
+	redemptionId String @id @db.Uuid
+	release RedemptionRelease @relation(fields: [redemptionId], references: [redemptionId], onDelete: Restrict)
+	unsignedRaw String
+	planHash String @db.Char(64)
+	feeRaw BigInt
+	inputs Json
+	proof String
+	fundingTxid String @db.Char(64)
+	fundingVout Int
+	fundingValueRaw BigInt
+	reserveTxid String @db.Char(64)
+	reserveVout Int
+	reserveRaw String
+	fundingRaw String
+	createdAt DateTime @default(now()) @db.Timestamptz(3)
+	@@unique([reserveTxid, reserveVout])
+	@@unique([fundingTxid, fundingVout])
+	@@map("redemption_release_plans")
+}
+model RedemptionLock {
+	redemptionId String @id @db.Uuid
+	release RedemptionRelease @relation(fields: [redemptionId], references: [redemptionId], onDelete: Restrict)
+	chainId Int @default(998)
+	txHash String @db.VarChar(66)
+	logIndex Int
+	blockHash String @db.VarChar(66)
+	blockNumber BigInt
+	confirmations Int
+	checkedAt DateTime @db.Timestamptz(3)
+	@@unique([chainId, txHash, logIndex])
+	@@map("redemption_locks")
+}
+model RedemptionSignedRelease {
+	redemptionId String @id @db.Uuid
+	release RedemptionRelease @relation(fields: [redemptionId], references: [redemptionId], onDelete: Restrict)
+	txid String @unique @db.Char(64)
+	raw String
+	feeRaw BigInt
+	confirmations Int @default(0)
+	blockHash String? @db.Char(64)
+	blockHeight Int?
+	createdAt DateTime @default(now()) @db.Timestamptz(3)
+	@@map("redemption_signed_releases")
+}
+
+model RedemptionWalletCall {
+	id String @id @default(uuid()) @db.Uuid
+	redemptionId String @db.Uuid
+	release RedemptionRelease @relation(fields: [redemptionId], references: [redemptionId], onDelete: Restrict)
+	kind String @db.VarChar(16)
+	status String @default("quoted") @db.VarChar(24)
+	fromAddress String @db.VarChar(42)
+	toAddress String @db.VarChar(42)
+	data String
+	nonce BigInt
+	gasLimit BigInt
+	gasPriceWei Decimal @db.Decimal(78, 0)
+	estimatedFeeWei Decimal @db.Decimal(78, 0)
+	budgetWei Decimal @db.Decimal(78, 0)
+	expiresAt DateTime @db.Timestamptz(3)
+	txHash String? @unique @db.VarChar(66)
+	confirmations Int @default(0)
+	receiptBlockHash String? @db.VarChar(66)
+	receiptBlockNumber BigInt?
+	actualFeeWei Decimal? @db.Decimal(78, 0)
+	lastError String?
+	createdAt DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt DateTime @updatedAt @db.Timestamptz(3)
+	@@index([redemptionId, createdAt])
+	@@map("redemption_wallet_calls")
+}

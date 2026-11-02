@@ -1,10 +1,15 @@
 import { defineConfig } from 'vite';
-import walletLogger from './server/walletLogger.ts';
-import htlcBuilder from './server/htlcBuilder.ts';
-import htlcHistory from './server/htlcHistory.ts';
-import htlcSecrets from './server/htlcSecrets.ts';
+import { fileURLToPath } from 'node:url';
 
+const target = process.env.BACKEND_URL ?? 'http://127.0.0.1:3001';
+const proxy = Object.fromEntries(['/api', '/__htlc', '/__wallet-log'].map((path) => [path, { target, changeOrigin: false, timeout: 100000, proxyTimeout: 100000 }]));
 export default defineConfig({
-	plugins: [walletLogger(), htlcHistory(), htlcSecrets(), htlcBuilder()],
-	server: { fs: { deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/storage/**'] } },
+  server: {
+    proxy,
+    fs: {
+      allow: [fileURLToPath(new URL('.', import.meta.url)), fileURLToPath(new URL('../shared', import.meta.url))],
+      deny: ['**/.env', '**/.env.*', '**/*.{crt,pem}', '**/.git/**', '**/storage/**', '**/.secrets/**', '**/.backups/**', '**/backend/**'],
+    },
+  },
+  preview: { proxy },
 });

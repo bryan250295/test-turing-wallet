@@ -4,25 +4,31 @@
 	"version": "0.1.0",
 	"type": "module",
 	"scripts": {
+		"contracts:compile": "node scripts/compileBridgeContract.mjs",
 		"dev": "vite --host 0.0.0.0",
 		"build": "npm run typecheck && vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
 		"typecheck:watch": "tsc --noEmit --watch"
 	},
+	"overrides": {
+		"solc": {
+			"tmp": "0.2.7"
+		}
+	},
 	"dependencies": {
 		"qrcode.react": "^4.2.0",
 		"react": "^19.3.0",
 		"react-dom": "^19.3.0",
 		"react-router-dom": "^7.18.4",
-		"tbc-contract": "1.7.3",
-		"tbc-lib-js": "1.0.31",
-		"turing-wallet-provider": "^1.5.8"
+		"turing-wallet-provider": "file:vendor/turing-wallet-provider-1.5.8.tgz"
 	},
 	"devDependencies": {
+		"@openzeppelin/contracts": "5.4.0",
 		"@types/node": "^26.6.5",
 		"@types/react": "^19.3.0",
 		"@types/react-dom": "^19.3.0",
+		"solc": "0.8.30",
 		"typescript": "^7.0.2",
 		"vite": "^8.3.0"
 	}

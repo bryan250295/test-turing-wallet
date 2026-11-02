@@ -1,0 +1,83 @@
+# Separate configuration: use `docker compose -f compose.production.yaml up --build -d`.
+# Configure APP_ORIGIN=https://your-host and put an HTTPS reverse proxy in front of frontend.
+version: '3.8'
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-learning_bridge}
+      POSTGRES_DB: ${POSTGRES_DB:-learning_bridge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    # The one-shot importer reads legacy host files that were created with mode 0600.
+    # Runtime API and frontend containers remain non-root.
+    user: '0:0'
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    environment: &backend_environment
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-learning_bridge}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-learning_bridge}?schema=public
+      APP_ORIGIN: ${APP_ORIGIN}
+      PORT: '3001'
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      SESSION_HOURS: ${SESSION_HOURS:-12}
+      SECRET_KEY_FILE: /run/secrets/htlc_key
+      LEGACY_STORAGE_DIR: /legacy/htlc
+    secrets: [htlc_key]
+    volumes: ['./wallet/storage/htlc:/legacy/htlc:ro']
+    command: ['sh', '-c', 'npm run db:migrate && node dist/backend/scripts/grant-app-access.js && node dist/backend/scripts/import-storage.js']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    environment:
+      <<: *backend_environment
+      DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-learning_bridge}?schema=public
+      BRIDGE_CUSTODY_KEY_FILE: /run/secrets/bridge_custody_key
+    secrets: [htlc_key, bridge_custody_key]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3001/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+  frontend:
+    build:
+      context: .
+      dockerfile: wallet/Dockerfile
+      target: production
+    ports: ['127.0.0.1:${FRONTEND_PORT:-5173}:8080']
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres_data:
+secrets:
+  htlc_key:
+    file: ./.secrets/htlc.key
+  bridge_custody_key:
+    file: ./.secrets/bridge-custody.key

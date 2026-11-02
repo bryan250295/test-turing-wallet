@@ -21,7 +21,7 @@ export default function useTokenHtlcRecovery(session: WalletSession) {
 	const [state, setState] = useState(initialState);
 	const request = useRef<AbortController | null>(null);
 	const busy = useRef(false);
-	const ready = session.wallet.isReady && !!session.address && session.networkIsDevnet;
+	const ready = session.wallet.isReady && !!session.address && session.networkIsDevnet && session.backendAuth.ready;
 
 	function reset() {
 		request.current?.abort();
@@ -32,7 +32,7 @@ export default function useTokenHtlcRecovery(session: WalletSession) {
 		request.current?.abort();
 		setState((previous) => ({ ...initialState, lock: previous.lock }));
 		return () => request.current?.abort();
-	}, [session.address, session.networkIsDevnet, session.wallet.isReady]);
+	}, [session.address, session.networkIsDevnet, session.wallet.isReady, session.backendAuth.ready]);
 
 	async function run(operation: (signal: AbortSignal) => Promise<Partial<RecoveryState>>, walletOperation = false) {
 		if (busy.current || (walletOperation && session.busy)) return;

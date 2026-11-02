@@ -3,6 +3,8 @@ import type { WalletAddresses, WalletInfo, WalletNetwork, WalletResult } from '.
 import { useEffect, useState } from 'react';
 import { useTuringWallet } from 'turing-wallet-provider';
 import { logAction } from '../services/actionLog';
+import useBackendSession from './useBackendSession';
+import type { WalletLoginAttempt } from './useBackendSession';
 
 export default function useWalletSession() {
 	const wallet = useTuringWallet();
@@ -12,7 +14,10 @@ export default function useWalletSession() {
 	const [status, setStatus] = useState('Connect Turing Wallet to get started.');
 	const [result, setResult] = useState<WalletResult | null>(null);
 	const [busy, setBusy] = useState(false);
+	const [connecting, setConnecting] = useState(false);
+	const [connectionAttempt, setConnectionAttempt] = useState<WalletLoginAttempt | null>(null);
 	const networkIsDevnet = network?.network === 'tbc' && network?.type === 'testnet';
+	const backendAuth = useBackendSession(wallet, address, networkIsDevnet, connecting, connectionAttempt);
 
 	useEffect(() => {
 		let active = true;
@@ -24,7 +29,6 @@ export default function useWalletSession() {
 					wallet.getNetwork(),
 					wallet.getInfo(),
 				]);
-				console.log("Wallet: ", wallet);
 				if (!active) return false;
 				setAddress(walletAddresses?.tbcAddress ?? (walletAddresses as WalletAddresses | undefined)?.addresses?.tbcAddress ?? '');
 				setNetwork(networkOverride ?? currentNetwork ?? null);
@@ -71,6 +75,7 @@ export default function useWalletSession() {
 			if (logData === undefined) logData = { status: message };
 		};
 		try {
+			setConnecting(true);
 			setResult(null);
 			setAddress('');
 			setNetwork(null);
@@ -102,6 +107,9 @@ export default function useWalletSession() {
 				}
 				setAddress(connectedAddress);
 				setNetwork(currentNetwork ?? null);
+				if (currentNetwork?.network === 'tbc' && currentNetwork.type === 'testnet') {
+					setConnectionAttempt((attempt) => ({ id: (attempt?.id ?? 0) + 1, address: connectedAddress }));
+				}
 				recordStatus(currentNetwork?.network === 'tbc' && currentNetwork?.type === 'testnet'
 					? 'Devnet connected. Review your token details, then mint.'
 					: 'Connected, but switch the wallet to TBC Devnet before minting.');
@@ -113,9 +121,10 @@ export default function useWalletSession() {
 			}
 		
 		} finally {
+			setConnecting(false);
 			await logAction('Connect', logData ?? { status: 'No wallet response' });
 		}
 	}
 
-	return { wallet, address, network, walletInfo, status, setStatus, result, setResult, busy, setBusy, networkIsDevnet, connect };
+	return { wallet, address, network, walletInfo, status, setStatus, result, setResult, busy: busy || connecting || backendAuth.pending, setBusy, networkIsDevnet, connect, backendAuth };
 }
