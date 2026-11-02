@@ -1,7 +1,9 @@
 # TBC ↔ HyperEVM Bridge v2 — Phase 0 Protocol Baseline
 
-Status: **Phase 0 draft; no runtime behavior has changed**  
-Baseline date: **2026-11-02 (Asia/Kuala_Lumpur)**  
+Status: **Phase 0 complete; no runtime behavior has changed**
+
+Baseline date: **2026-11-02 (Asia/Kuala_Lumpur)**
+
 TBCNODE review baseline: [`6ddea88c57e9bc9390c1730657ac766b56c4a670`](https://github.com/TuringBitChain/TBCNODE/tree/6ddea88c57e9bc9390c1730657ac766b56c4a670)
 
 This document freezes the intended v2 scope before implementation. It is not a
@@ -284,9 +286,10 @@ zero.
 - [x] Canonical identifier, byte-order, amount and domain-separation rules are recorded.
 - [x] Six confirmations remain the initial test policy and are not described as finality.
 
-### Open gate before Phase 0 can be marked complete
+### Phase 0 acceptance
 
-- [ ] User review accepts this baseline and any requested corrections are recorded.
+- [x] User accepted this baseline on 2026-11-02 (Asia/Kuala_Lumpur); the
+  official-node version policy was recorded before acceptance.
 
 ### External and later-phase gates
 
@@ -304,7 +307,7 @@ protocol version and an explicit update to this decision register.
 
 ## 9. Next authorized implementation step
 
-After review of this document, Phase 1 may begin with read-only infrastructure:
+Phase 0 is complete. Phase 1 may begin with read-only infrastructure:
 
 1. deploy two isolated official TBCNODE instances with `txindex`;
 2. record binary/source version, network parameters and startup configuration;

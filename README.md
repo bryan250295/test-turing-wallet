@@ -28,8 +28,8 @@ remaining acceptance limits and reverse-redemption options are recorded in
 See [setup, authentication, migration and backups / 启动与迁移](docs/backend-architecture.md),
 [backend modules](backend/README.md), and [wallet usage](wallet/README.md).
 
-The proposed proof-oriented v2 bridge is still design-only. Its Phase 0 protocol
-baseline is documented in
+The proposed proof-oriented v2 bridge is still design-only. Its accepted Phase 0
+protocol baseline is documented in
 [TBC ↔ HyperEVM Bridge v2 Phase 0](docs/tbc-hyperevm-bridge-v2-phase-0.md).
 It does not modify the running custodial Learning Bridge.
 
