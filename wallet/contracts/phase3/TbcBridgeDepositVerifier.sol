@@ -20,11 +20,12 @@ interface ITbcHeaderRelayV2 {
     function isFinalized(bytes32 blockHash) external view returns (bool);
 }
 
-/// @notice Phase 3D verifier for a finalized TBC transaction and its frozen v3
-///         Bridge Covenant output envelope.
+/// @notice Phase 3D verifier for a finalized TBC transaction, its frozen v3
+///         Bridge Covenant envelope and bounded parent/outpoint conservation.
 /// @dev This proves canonical transaction bytes, TXID, Merkle inclusion, Covenant
-///      intent and the pinned v3 Code/Tape output encoding. It intentionally does
-///      NOT claim to execute the legacy FT input scripts or prove UTXO unspentness.
+///      intent, pinned v3 Code/Tape encoding, referenced parent bytes and balance
+///      conservation. It intentionally does NOT claim to execute the legacy FT
+///      input scripts, authenticate every ancestor or prove UTXO unspentness.
 library TbcBridgeDepositVerifier {
     uint256 internal constant TARGET_CHAIN_ID = 998;
     uint32 internal constant SOURCE_VOUT = 1;
@@ -45,6 +46,8 @@ library TbcBridgeDepositVerifier {
         0x587af8d9c41a35a8dcb830f461f56045a3938897cdc4d1cfb5f0fa26e6ab4336;
     bytes32 internal constant FT_V3_CONTRACT_SUFFIX_HASH =
         0x6d7328472a8bce3b6a53519087fd2f83f703e8b450240d9ce9c10cb4cfcbc33a;
+    bytes32 internal constant FT_V3_ADDRESS_SUFFIX_HASH =
+        0x1996d1d2f449942cebe17805cd8a7526992f6510674f6c162c97339be3bd5a7b;
     bytes32 internal constant FT_V3_TAPE_METADATA_HASH =
         0x6bce1d21c42a5aa9546f367748dc9f0727e1b2d912fb106443e71ee034ff1ca8;
 
@@ -65,6 +68,19 @@ library TbcBridgeDepositVerifier {
         DepositIntent intent;
     }
 
+    struct VerifiedTransition {
+        VerifiedDeposit deposit;
+        uint256 ftInputTotal;
+        uint256 feeRaw;
+    }
+
+    struct TransitionState {
+        uint256 nativeInputTotal;
+        uint256 ftInputTotal;
+        bytes20 inputController;
+        uint64[6] balances;
+    }
+
     error InvalidCovenantValue(uint64 supplied);
     error InvalidCovenantScript();
     error InvalidCovenantDomain();
@@ -81,6 +97,19 @@ library TbcBridgeDepositVerifier {
     error BlockNotFinalized(bytes32 blockHash);
     error UnknownRelayHeader(bytes32 blockHash);
     error MerkleRootMismatch(bytes32 supplied, bytes32 committed);
+    error ParentCountMismatch(uint256 supplied, uint256 expected);
+    error ParentTxidMismatch(uint256 vin, bytes32 supplied, bytes32 expected);
+    error ParentOutputMissing(uint256 vin, uint32 vout);
+    error DuplicateInputOutpoint(uint256 vin);
+    error InvalidNativeFeeInput();
+    error InvalidFtInput(uint256 vin);
+    error MixedFtInputControllers(uint256 vin);
+    error InsufficientFtInput(uint256 supplied, uint256 required);
+    error InvalidFtChange();
+    error InvalidOutputShape(uint256 supplied, uint256 expectedBase);
+    error InvalidNativeChange();
+    error InvalidNativeFee(uint256 inputs, uint256 outputs);
+    error InvalidTapeAllocation(uint256 slot, uint64 supplied, uint64 expected);
 
     function verifyEnvelope(
         bytes calldata rawTransaction,
@@ -89,6 +118,17 @@ library TbcBridgeDepositVerifier {
     ) internal pure returns (VerifiedDeposit memory verified) {
         TbcBoundedTransaction.TransactionView memory transaction =
             TbcBoundedTransaction.inspect(rawTransaction);
+        return _verifyEnvelope(
+            rawTransaction, transaction, expectedGateway, expectedReserveController
+        );
+    }
+
+    function _verifyEnvelope(
+        bytes calldata rawTransaction,
+        TbcBoundedTransaction.TransactionView memory transaction,
+        address expectedGateway,
+        bytes20 expectedReserveController
+    ) private pure returns (VerifiedDeposit memory verified) {
         TbcBoundedTransaction.OutputView memory covenantOutput = transaction.outputs[0];
         if (covenantOutput.satoshis != COVENANT_SATOSHIS) {
             revert InvalidCovenantValue(covenantOutput.satoshis);
@@ -115,7 +155,8 @@ library TbcBridgeDepositVerifier {
         bytes20 covenantController = _covenantController(
             rawTransaction, covenantOutput.scriptOffset, covenantOutput.scriptLength
         );
-        _verifyFtCode(rawTransaction, transaction.outputs[1], covenantController);
+        bytes20 outputController = _ftController(rawTransaction, transaction.outputs[1], true);
+        if (outputController != covenantController) revert InvalidFtCodeScript();
         _verifyFtTape(rawTransaction, transaction.outputs[2], intent.amountRaw);
 
         bytes32 depositId = keccak256(abi.encode(
@@ -136,6 +177,85 @@ library TbcBridgeDepositVerifier {
             covenantController: covenantController,
             intent: intent
         });
+    }
+
+    /// @notice Verify the bounded parent/outpoint and FT/native conservation layer.
+    /// @dev Parent raw bytes are authenticated by the version-10 TXIDs committed by
+    ///      each deposit input. Full ancestor traversal and script execution remain
+    ///      a separate gate.
+    function verifyTransition(
+        bytes calldata rawTransaction,
+        bytes[] calldata parentTransactions,
+        address expectedGateway,
+        bytes20 expectedReserveController
+    ) internal pure returns (VerifiedTransition memory result) {
+        TbcBoundedTransaction.TransactionView memory depositTransaction =
+            TbcBoundedTransaction.inspect(rawTransaction);
+        result.deposit = _verifyEnvelope(
+            rawTransaction, depositTransaction, expectedGateway, expectedReserveController
+        );
+        TransitionState memory state = _verifyInputs(depositTransaction, parentTransactions);
+        if (state.ftInputTotal < result.deposit.intent.amountRaw) {
+            revert InsufficientFtInput(state.ftInputTotal, result.deposit.intent.amountRaw);
+        }
+        _verifyTapeAllocation(
+            rawTransaction,
+            depositTransaction.outputs[2],
+            state.balances,
+            depositTransaction.inputCount - 1,
+            result.deposit.intent.amountRaw,
+            false
+        );
+
+        uint256 nextOutput = 3;
+        if (state.ftInputTotal > result.deposit.intent.amountRaw) {
+            if (depositTransaction.outputCount < 5) revert InvalidFtChange();
+            bytes20 changeController = _ftController(
+                rawTransaction, depositTransaction.outputs[3], false
+            );
+            if (changeController != state.inputController) revert InvalidFtChange();
+            uint256 change = state.ftInputTotal - result.deposit.intent.amountRaw;
+            _verifyFtTape(rawTransaction, depositTransaction.outputs[4], change);
+            _verifyTapeAllocation(
+                rawTransaction,
+                depositTransaction.outputs[4],
+                state.balances,
+                depositTransaction.inputCount - 1,
+                result.deposit.intent.amountRaw,
+                true
+            );
+            nextOutput = 5;
+        }
+        if (
+            depositTransaction.outputCount != nextOutput
+                && depositTransaction.outputCount != nextOutput + 1
+        ) revert InvalidOutputShape(depositTransaction.outputCount, nextOutput);
+        if (depositTransaction.outputCount == nextOutput + 1) {
+            TbcBoundedTransaction.TransactionView memory nativeParent =
+                TbcBoundedTransaction.inspectParent(
+                    parentTransactions[depositTransaction.inputCount - 1]
+                );
+            uint32 nativeVout =
+                depositTransaction.inputs[depositTransaction.inputCount - 1].outputIndex;
+            if (
+                !_sameScript(
+                    rawTransaction,
+                    depositTransaction.outputs[nextOutput],
+                    parentTransactions[depositTransaction.inputCount - 1],
+                    nativeParent.outputs[nativeVout]
+                )
+            ) revert InvalidNativeChange();
+        }
+
+        uint256 outputTotal;
+        for (uint256 index; index < depositTransaction.outputCount; ++index) {
+            outputTotal += depositTransaction.outputs[index].satoshis;
+        }
+        if (state.nativeInputTotal <= outputTotal) {
+            revert InvalidNativeFee(state.nativeInputTotal, outputTotal);
+        }
+        result.ftInputTotal = state.ftInputTotal;
+        result.feeRaw = state.nativeInputTotal - outputTotal;
     }
 
     function verifyFinalizedInclusion(
@@ -210,21 +330,66 @@ library TbcBridgeDepositVerifier {
         ) revert InvalidCovenantScript();
     }
 
-    function _verifyFtCode(
+    function _verifyInputs(
+        TbcBoundedTransaction.TransactionView memory deposit,
+        bytes[] calldata parents
+    ) private pure returns (TransitionState memory state) {
+        if (parents.length != deposit.inputCount) {
+            revert ParentCountMismatch(parents.length, deposit.inputCount);
+        }
+        uint256 ftInputCount = deposit.inputCount - 1;
+        for (uint256 vin; vin < deposit.inputCount; ++vin) {
+            TbcBoundedTransaction.InputView memory input = deposit.inputs[vin];
+            for (uint256 previous; previous < vin; ++previous) {
+                TbcBoundedTransaction.InputView memory seen = deposit.inputs[previous];
+                if (
+                    seen.previousTxid == input.previousTxid
+                        && seen.outputIndex == input.outputIndex
+                ) revert DuplicateInputOutpoint(vin);
+            }
+            TbcBoundedTransaction.TransactionView memory parent =
+                TbcBoundedTransaction.inspectParent(parents[vin]);
+            if (parent.txid != input.previousTxid) {
+                revert ParentTxidMismatch(vin, parent.txid, input.previousTxid);
+            }
+            if (input.outputIndex >= parent.outputCount) {
+                revert ParentOutputMissing(vin, input.outputIndex);
+            }
+            TbcBoundedTransaction.OutputView memory source = parent.outputs[input.outputIndex];
+            state.nativeInputTotal += source.satoshis;
+            if (vin == ftInputCount) {
+                if (!_isP2pkh(parents[vin], source)) revert InvalidNativeFeeInput();
+                continue;
+            }
+            if (input.outputIndex + 1 >= parent.outputCount) revert InvalidFtInput(vin);
+            bytes20 controller = _ftController(parents[vin], source, false);
+            if (vin == 0) state.inputController = controller;
+            else if (controller != state.inputController) revert MixedFtInputControllers(vin);
+            uint256 balance = _tapeAmount(parents[vin], parent.outputs[input.outputIndex + 1]);
+            if (balance == 0 || balance > type(uint64).max) revert InvalidFtInput(vin);
+            state.balances[vin] = uint64(balance);
+            state.ftInputTotal += balance;
+        }
+    }
+
+    function _ftController(
         bytes calldata raw,
         TbcBoundedTransaction.OutputView memory output,
-        bytes20 covenantController
-    ) private pure {
+        bool contractControlled
+    ) private pure returns (bytes20 controller) {
         if (output.satoshis != FT_CODE_SATOSHIS) revert InvalidFtCodeValue(output.satoshis);
         uint256 offset = output.scriptOffset;
+        bytes32 expectedSuffix = contractControlled
+            ? FT_V3_CONTRACT_SUFFIX_HASH
+            : FT_V3_ADDRESS_SUFFIX_HASH;
         if (
             output.scriptLength != FT_V3_CODE_BYTES
                 || keccak256(raw[offset:offset + FT_V3_CONTROLLER_OFFSET])
                     != FT_V3_CODE_PREFIX_HASH
-                || _readBytes20(raw, offset + FT_V3_CONTROLLER_OFFSET) != covenantController
                 || keccak256(raw[offset + FT_V3_CONTROLLER_OFFSET + 20:offset + FT_V3_CODE_BYTES])
-                    != FT_V3_CONTRACT_SUFFIX_HASH
+                    != expectedSuffix
         ) revert InvalidFtCodeScript();
+        controller = _readBytes20(raw, offset + FT_V3_CONTROLLER_OFFSET);
     }
 
     function _verifyFtTape(
@@ -232,6 +397,16 @@ library TbcBridgeDepositVerifier {
         TbcBoundedTransaction.OutputView memory output,
         uint256 committedAmount
     ) private pure {
+        uint256 tapeAmount = _tapeAmount(raw, output);
+        if (tapeAmount != committedAmount) {
+            revert FtTapeAmountMismatch(tapeAmount, committedAmount);
+        }
+    }
+
+    function _tapeAmount(
+        bytes calldata raw,
+        TbcBoundedTransaction.OutputView memory output
+    ) private pure returns (uint256 tapeAmount) {
         if (output.satoshis != 0) revert InvalidFtTapeValue(output.satoshis);
         uint256 offset = output.scriptOffset;
         if (
@@ -240,13 +415,55 @@ library TbcBridgeDepositVerifier {
                 || keccak256(raw[offset + 51:offset + FT_V3_TAPE_BYTES])
                     != FT_V3_TAPE_METADATA_HASH
         ) revert InvalidFtTapeScript();
-        uint256 tapeAmount;
         for (uint256 slot; slot < 6; ++slot) {
             tapeAmount += _readUint64LE(raw, offset + 3 + slot * 8);
         }
-        if (tapeAmount != committedAmount) {
-            revert FtTapeAmountMismatch(tapeAmount, committedAmount);
+    }
+
+    function _verifyTapeAllocation(
+        bytes calldata raw,
+        TbcBoundedTransaction.OutputView memory output,
+        uint64[6] memory balances,
+        uint256 inputCount,
+        uint256 paid,
+        bool change
+    ) private pure {
+        uint256 remaining = paid;
+        uint256 offset = output.scriptOffset + 3;
+        for (uint256 slot; slot < 6; ++slot) {
+            uint64 spent;
+            if (slot < inputCount && remaining != 0) {
+                spent = remaining < balances[slot] ? uint64(remaining) : balances[slot];
+                remaining -= spent;
+            }
+            uint64 expected = change ? balances[slot] - spent : spent;
+            uint64 supplied = _readUint64LE(raw, offset + slot * 8);
+            if (supplied != expected) {
+                revert InvalidTapeAllocation(slot, supplied, expected);
+            }
         }
+        if (remaining != 0) revert InsufficientFtInput(paid - remaining, paid);
+    }
+
+    function _isP2pkh(
+        bytes calldata raw,
+        TbcBoundedTransaction.OutputView memory output
+    ) private pure returns (bool) {
+        uint256 offset = output.scriptOffset;
+        return output.scriptLength == 25 && uint8(raw[offset]) == 0x76
+            && uint8(raw[offset + 1]) == 0xa9 && uint8(raw[offset + 2]) == 0x14
+            && uint8(raw[offset + 23]) == 0x88 && uint8(raw[offset + 24]) == 0xac;
+    }
+
+    function _sameScript(
+        bytes calldata leftRaw,
+        TbcBoundedTransaction.OutputView memory left,
+        bytes calldata rightRaw,
+        TbcBoundedTransaction.OutputView memory right
+    ) private pure returns (bool) {
+        return left.scriptLength == right.scriptLength
+            && keccak256(leftRaw[left.scriptOffset:left.scriptOffset + left.scriptLength])
+                == keccak256(rightRaw[right.scriptOffset:right.scriptOffset + right.scriptLength]);
     }
 
     function _covenantController(bytes calldata raw, uint256 offset, uint256 length)

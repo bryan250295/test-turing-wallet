@@ -38,9 +38,10 @@ commitment vectors, plus the bounded version-10 TXID and pinned v3 Covenant
 output envelope, through read-only HyperEVM Testnet EVM calls. The executable
 route is hard-locked to Testnet and contains no Mainnet provider path. The
 permissionless header-relay core is implemented but not deployed or audited;
-legacy FT input-script execution, replay protection and the proof-backed mint
-gateway remain incomplete. This work does not install TBCNODE or modify the
-running custodial Learning Bridge.
+legacy FT ancestor/input-script execution, replay protection and the proof-backed
+mint gateway remain incomplete. The bounded parent/outpoint and FT/native
+conservation layer is implemented but is not a substitute for script execution.
+This work does not install TBCNODE or modify the running custodial Learning Bridge.
 
 `STUDY2.md` is teacher-provided, read-only source material.
 
