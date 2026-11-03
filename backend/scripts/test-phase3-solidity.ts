@@ -7,6 +7,7 @@ import {
 import { blockWork, decodeCompactTarget } from '../src/bridge/phase1/tbc-consensus';
 import { serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
 import { REAL_MT_DAA_POINTS, REAL_MT_DEPOSIT_BLOCK } from '../src/bridge/phase1/tbc-test-vectors';
+import type { TbcBlockRecord } from '../src/bridge/phase1/tbc-proof.types';
 import {
 	buildTbcdevBootstrapCommitment, decodeTbcdevBootstrapContext, tbcdevBootstrapProof,
 } from '../src/bridge/phase3/bootstrap-history';
@@ -17,6 +18,40 @@ const OVERRIDE_ADDRESS = '0x0000000000000000000000000000000000000333';
 interface Artifact { abi: Abi; deployedBytecode: Hex }
 interface BootstrapManifest { commitmentRoot: Hex; checkpointProof: Hex[]; binaryFile: string }
 interface RpcResponse { result?: Hex; error?: { code: number; message: string; data?: unknown } }
+
+const RELAY_HEADERS = [
+	REAL_MT_DEPOSIT_BLOCK,
+	{
+		height: 839_166, hash: '0000000000000045f9d7756705e5099803897b6ae8ce99901a896ee98efec743',
+		version: 536_969_216, previousBlockHash: REAL_MT_DEPOSIT_BLOCK.hash,
+		merkleRoot: 'ffe05b155fcb2beafa32d8a6b6372b896787c6627dc4c1cbf88382854798f4c9',
+		time: 1_793_341_941, bits: 0x1a041797, nonce: 150_516_801, transactionCount: 1,
+	},
+	{
+		height: 839_167, hash: '0000000000000292b481584e7b48c3563e01d3290c662f1015e7e3d95e7fe7e2',
+		version: 561_209_344, previousBlockHash: '0000000000000045f9d7756705e5099803897b6ae8ce99901a896ee98efec743',
+		merkleRoot: '9a8f44f0aab66939b82dbdc59a4cbf4935bb804f6f5f725a76335c6bdbe0dab4',
+		time: 1_793_342_454, bits: 0x1a04547e, nonce: 2_620_585_543, transactionCount: 1,
+	},
+	{
+		height: 839_168, hash: '00000000000002a70e9760b18d569553bacd3562222dea8f8a23ebe2c1b1fef2',
+		version: 556_187_648, previousBlockHash: '0000000000000292b481584e7b48c3563e01d3290c662f1015e7e3d95e7fe7e2',
+		merkleRoot: 'a610ac97209e1db08aecf2dcffa08714ef729445d7ea75172a4afbe3fa1581b4',
+		time: 1_793_344_027, bits: 0x1a044876, nonce: 2_344_092_997, transactionCount: 1,
+	},
+	{
+		height: 839_169, hash: '00000000000000d19c642b2b1d8bdac8460416536250379e12641711d4fd2e07',
+		version: 548_577_280, previousBlockHash: '00000000000002a70e9760b18d569553bacd3562222dea8f8a23ebe2c1b1fef2',
+		merkleRoot: '40f3bc510b1edd8d4de47a155e0b5be8c442b099bae4727e486a1dde66902691',
+		time: 1_793_344_324, bits: 0x1a043a50, nonce: 3_839_023_393, transactionCount: 2,
+	},
+	{
+		height: 839_170, hash: '000000000000021ab587f5b6e54a172771a16c2cac4f753c9a0d57adb415f7b9',
+		version: 562_413_568, previousBlockHash: '00000000000000d19c642b2b1d8bdac8460416536250379e12641711d4fd2e07',
+		merkleRoot: 'e3c7e24d561f01a73c86df5c29fc2354642b35416e03a2beebe30341d424f42c',
+		time: 1_793_347_382, bits: 0x1a045361, nonce: 2_551_534_348, transactionCount: 1,
+	},
+] as const satisfies readonly TbcBlockRecord[];
 
 async function rpc(method: string, params: unknown[]) {
 	const controller = new AbortController();
@@ -53,6 +88,9 @@ async function expectRevert(artifact: Artifact, functionName: string, args: read
 async function main() {
 	const artifactPath = resolve(process.cwd(), '../wallet/artifacts/phase3/TbcVerifierHarness.json');
 	const artifact = JSON.parse(await readFile(artifactPath, 'utf8')) as Artifact;
+	const relayHarness = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcHeaderRelayIntegrationHarness.json'), 'utf8',
+	)) as Artifact;
 	const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 	const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), 'utf8')) as BootstrapManifest;
 	const bootstrapPoints = decodeTbcdevBootstrapContext(await readFile(resolve(fixtureRoot, manifest.binaryFile)));
@@ -74,6 +112,34 @@ async function main() {
 		]), true);
 	}
 	const checkpointPoint = bootstrapPoints.at(-1)!;
+	const bootstrapByHeight = new Map(bootstrapPoints.map((point, index) => [point.height, index]));
+	const relayWitnesses = RELAY_HEADERS.map((header) => {
+		const previousHeight = header.height - 1;
+		const heights = [
+			previousHeight - 8_064,
+			previousHeight - 146, previousHeight - 145, previousHeight - 144,
+			...Array.from({ length: 23 }, (_, index) => previousHeight - 22 + index),
+		].filter((height) => height < 839_164);
+		return heights.map((height) => {
+			const pointIndex = bootstrapByHeight.get(height);
+			assert.notEqual(pointIndex, undefined, `Missing bootstrap point ${height}.`);
+			return {
+				point: solidityPoint(pointIndex!),
+				siblings: tbcdevBootstrapProof(bootstrapCommitment, height),
+			};
+		});
+	});
+	const relayResult = await call(relayHarness, 'validateSixHeaders', [
+		RELAY_HEADERS.map((header) => `0x${serializeBlockHeader(header).toString('hex')}`),
+		relayWitnesses,
+		`0x${RELAY_HEADERS.at(-1)!.hash}`,
+		`0x${RELAY_HEADERS[0].hash}`,
+	]) as readonly unknown[];
+	const expectedRelayWork = RELAY_HEADERS.reduce(
+		(chainWork, header) => chainWork + blockWork(header.bits), checkpointPoint.chainWork,
+	);
+	assert.deepEqual(relayResult, [839_170, expectedRelayWork]);
+	assert.equal(await call(relayHarness, 'validateEqualWorkFailClosed', []), true);
 	const solidityCheckpoint = solidityPoint(bootstrapPoints.length - 1);
 	assert.deepEqual(tbcdevBootstrapProof(bootstrapCommitment, checkpointPoint.height), manifest.checkpointProof);
 	assert.equal(await call(artifact, 'verifyBootstrapPoint', [
@@ -127,7 +193,7 @@ async function main() {
 		'0x1a3f798f541c6dca88f46d1ee59041cf2a1336c4bde89b598248ca12dc49c372',
 	]]);
 
-	console.log('Phase 3 Solidity vectors passed through read-only HyperEVM Testnet eth_call.');
+	console.log('Phase 3 Solidity and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
 	console.log('No contract was deployed and no transaction or asset movement was submitted.');
 }
 

@@ -1,8 +1,8 @@
 # TBC ↔ HyperEVM Bridge v2 — Phase 3 Solidity Verifier
 
-Status: **Phase 3A consensus/Merkle primitives and Phase 3B authenticated
-bootstrap commitment complete for `tbcdev-testnet`; header relay, FT verifier,
-gateway and proof-backed token are not complete**
+Status: **Phase 3A consensus/Merkle primitives, Phase 3B authenticated
+bootstrap commitment and Phase 3C permissionless header-relay core complete for
+`tbcdev-testnet`; FT verifier, gateway and proof-backed token are not complete**
 
 Implementation date: **2026-11-03 (Asia/Kuala_Lumpur)**
 
@@ -35,10 +35,36 @@ domain, checkpoint hash, range and root in Solidity. A caller cannot substitute
 another root. It verifies height-directed 13-node proofs and exact duplicated
 odd nodes using the same encoding as the TypeScript builder.
 
+`wallet/contracts/phase3/TbcHeaderRelayV2.sol` is a chain-998-only,
+permissionless header relay. It has no owner, operator, pause key, configurable
+checkpoint or asset-moving method. Its constructor installs only the frozen
+height-`839164` checkpoint. Any account may then submit a child of any retained
+branch, but acceptance requires:
+
+- valid 80-byte header parsing and proof of work under the fixed TBC pow limit;
+- a known parent and an exact TBCNODE post-fork DAA result;
+- every required pre-checkpoint DAA point to pass the immutable Phase 3B Merkle
+  commitment, with no unproven or unused witness slots;
+- TBCNODE's signed version rule, median-time-past rule and 20-minute future-time
+  window;
+- checked cumulative work and greatest-work branch selection; and
+- fail-closed canonical queries while two distinct tips have equal best work.
+
+The relay retains a TBCNODE-compatible skip pointer per header, allowing
+checkpoint-bounded ancestor queries without walking all 8,064 DAA blocks.
+`isCanonical` enforces at least six confirmations and `isFinalized` fixes the
+same six-confirmation minimum. A confirmation count includes the queried block.
+
+`TbcHeaderRelayIntegrationHarness.sol` is test-only scaffolding. It deploys a
+temporary relay inside a read-only RPC call, submits six real headers and checks
+finality, ancestry and equal-work fail-closed transitions. It is not part of the
+bridge settlement path.
+
 ## 2. Executed cross-language vectors
 
 The pinned Solidity 0.8.30 compiler targets Cancun, matching HyperEVM Testnet
-chain 998. The compiled harness is 6,728 runtime bytes. A read-only `eth_call`
+chain 998. The compiled primitive harness is 6,728 runtime bytes and the relay
+is 9,314 runtime bytes. A read-only `eth_call`
 injects that runtime temporarily through the RPC state-override parameter; it
 does not deploy code or submit a transaction.
 
@@ -54,7 +80,12 @@ The executed assertions cover:
   `0x1a0420a6`;
 - rejection of an above-pow-limit header and a mutated duplicated odd leaf;
 - the real height `839164` bootstrap point and its 13-node commitment proof; and
-- rejection after changing the committed checkpoint timestamp.
+- rejection after changing the committed checkpoint timestamp;
+- six consecutive official testnet headers `839165..839170`, including each
+  parent link, PoW, exact DAA transition, MTP, version, cumulative work and
+  bootstrap proof set;
+- canonical ancestry and six-confirmation finality for block `839165`; and
+- fail-closed equal-best-work state followed by resolution by a higher-work tip.
 
 Run the checks with:
 
@@ -116,36 +147,62 @@ Accepting arbitrary relayer-supplied DAA points would let a relayer choose an
 easier target and is explicitly forbidden. Calling the API from a backend does
 not close this gap because the Solidity contract cannot authenticate that reply.
 
-## 4. Remaining Phase 3 work
+## 4. Phase 3C trust and time boundary
+
+The relay copies the contextual header rules from the pinned official TBCNODE
+v3.3.1 source. In particular, TBC uses a 20-minute future-time allowance, not
+Bitcoin's commonly cited two-hour window, and requires the new timestamp to be
+strictly greater than the parent branch's median of the previous 11 timestamps.
+
+TBCNODE compares future time with its peer-adjusted node clock. An EVM contract
+cannot read that clock, so the relay uses HyperEVM's consensus `block.timestamp`
+instead. This can delay a header when the two networks' clocks differ; it does
+not let a relayer provide its own time. This clock substitution and submission
+gas must be assessed before deployment.
+
+The relay proves header-chain membership, accumulated work and transaction
+Merkle-root availability. It does not prove TBC UTXO state, transaction script
+execution or FT Covenant semantics. Those remain separate gates.
+
+## 5. Remaining Phase 3 work
 
 Phase 3 is not yet a proof-backed bridge. The next implementation slices are:
 
-1. implement a permissionless header relay with parent linkage, DAA, PoW,
-   cumulative chainwork, competing-branch handling and unresolved-equal-work
-   fail-closed behavior;
-2. implement canonical ancestry and six-confirmation eligibility;
-3. port the version-10 TXID and bounded Phase 2 Covenant/legacy-FT verifier to
+1. port the version-10 TXID and bounded Phase 2 Covenant/legacy-FT verifier to
    Solidity, with calldata and gas limits measured on chain 998;
-4. add exact source-outpoint/logical-deposit replay protection; and
-5. add a new proof-only `WrappedFTV2`/gateway pair with no owner, backend or
+2. add exact source-outpoint/logical-deposit replay protection;
+3. add a new proof-only `WrappedFTV2`/gateway pair with no owner, backend or
    minter proof bypass.
+
+Before any relay deployment, add a pinned local-EVM suite, fuzz malformed
+bootstrap witnesses and long competing branches, measure per-header gas, and
+obtain independent Solidity/consensus review. The current RPC vector executes
+real state transitions but is not a substitute for those gates.
 
 The existing `BridgeWrappedFT`, `LearningWrappedFT` and
 `LearningRedemptionEscrow` must remain separate learning/custodial artifacts.
 They must not be relabelled or upgraded in place as v2 contracts.
 
-## 5. Current security statement
+## 6. Current security statement
 
-Phase 3A/B shows that the frozen TypeScript header, PoW, DAA, Merkle and
-bootstrap-commitment vectors can be reproduced by Solidity on HyperEVM Testnet.
-It does **not** yet establish a canonical TBC chain in a deployed contract and
-cannot authorize minting. Until all remaining gates pass, the forward path
-remains the existing custodial learning flow and must not be described as
-trustless.
+Phase 3A/B/C shows that the frozen TypeScript header, PoW, DAA, Merkle and
+bootstrap-commitment vectors, plus six real sequential relay transitions, can
+be reproduced by Solidity on HyperEVM Testnet. It does **not** establish a live
+canonical TBC chain because the relay is not deployed, independently audited or
+connected to a proof-only gateway. It cannot authorize minting. Until all
+remaining gates pass, the forward path remains the existing custodial learning
+flow and must not be described as trustless.
 
-## 6. Evidence used
+## 7. Evidence used
 
 - [Official TBC Block API](https://docs.turingbitchain.io/en/Block) documents
   height lookup and recent-block pages, including their 100-block maximum.
 - [Official API introduction](https://docs.turingbitchain.io/en/Introduction)
   identifies `api.tbcdev.org` as the Testnet API.
+- [Pinned TBCNODE contextual header validation](https://github.com/TuringBitChain/TBCNODE/blob/6ddea88c57e9bc9390c1730657ac766b56c4a670/src/validation.cpp#L5728-L5765)
+  defines exact difficulty, MTP, future-time and version checks.
+- [Pinned TBCNODE chain constants and MTP](https://github.com/TuringBitChain/TBCNODE/blob/6ddea88c57e9bc9390c1730657ac766b56c4a670/src/chain.h#L21-L32)
+  fixes the future allowance at 20 minutes; the same file defines the 11-block
+  MTP calculation.
+- [Pinned TBCNODE skip-list implementation](https://github.com/TuringBitChain/TBCNODE/blob/6ddea88c57e9bc9390c1730657ac766b56c4a670/src/chain.cpp#L73-L123)
+  is mirrored for efficient canonical ancestry queries.
