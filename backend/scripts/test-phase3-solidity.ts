@@ -4,10 +4,16 @@ import { resolve } from 'node:path';
 import {
 	decodeFunctionResult, encodeAbiParameters, encodeFunctionData, formatEther, keccak256, toHex, type Abi, type Hex,
 } from 'viem';
+import sdk from 'tbc-contract';
+import tbc from 'tbc-lib-js';
 import { blockWork, decodeCompactTarget } from '../src/bridge/phase1/tbc-consensus';
 import { serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
 import { REAL_MT_DAA_POINTS, REAL_MT_DEPOSIT_BLOCK } from '../src/bridge/phase1/tbc-test-vectors';
 import type { TbcBlockRecord } from '../src/bridge/phase1/tbc-proof.types';
+import {
+	bridgeCovenantFtController, buildBridgeCovenantScript, logicalDepositId,
+} from '../src/bridge/phase2/bridge-covenant';
+import { PINNED_MT_V3_GENESIS_RAW } from '../src/bridge/phase2/pinned-mt-v3.vector';
 import {
 	buildTbcdevBootstrapCommitment, decodeTbcdevBootstrapContext, tbcdevBootstrapProof,
 } from '../src/bridge/phase3/bootstrap-history';
@@ -22,6 +28,72 @@ const CHECKPOINT_CHAIN_WORK = BigInt('0x14f15b416fbbd30a34db4b3');
 interface Artifact { abi: Abi; bytecode: Hex; deployedBytecode: Hex }
 interface BootstrapManifest { commitmentRoot: Hex; checkpointProof: Hex[]; binaryFile: string }
 interface RpcResponse { result?: Hex; error?: { code: number; message: string; data?: unknown } }
+interface SolidityVerifiedDeposit {
+	txid: Hex;
+	depositId: Hex;
+	covenantController: Hex;
+	intent: {
+		sourceContractId: Hex;
+		destinationChainId: bigint;
+		destinationGateway: Hex;
+		recipient: Hex;
+		amountRaw: bigint;
+		depositNonce: bigint;
+		reserveControllerPubKeyHash: Hex;
+	};
+}
+
+const PHASE3D_GATEWAY = '0x1111111111111111111111111111111111111111' as const;
+const PHASE3D_RECIPIENT = '0x8221fae04189f1f2f50268495ed95d1a9b220432' as const;
+const PHASE3D_RESERVE_PKH = '2222222222222222222222222222222222222222';
+
+function compactSize(value: number) {
+	assert.ok(Number.isSafeInteger(value) && value >= 0);
+	if (value < 0xfd) return Buffer.from([value]);
+	if (value <= 0xffff) {
+		const result = Buffer.alloc(3); result[0] = 0xfd; result.writeUInt16LE(value, 1); return result;
+	}
+	const result = Buffer.alloc(5); result[0] = 0xfe; result.writeUInt32LE(value, 1); return result;
+}
+
+function uint64le(value: bigint) { const result = Buffer.alloc(8); result.writeBigUInt64LE(value); return result; }
+function uint32le(value: number) { const result = Buffer.alloc(4); result.writeUInt32LE(value); return result; }
+function wireHash(displayed: string) { return Buffer.from(displayed, 'hex').reverse(); }
+
+function phase3dEnvelopeVector() {
+	const genesis = new tbc.Transaction(PINNED_MT_V3_GENESIS_RAW);
+	const amountRaw = 1_234n;
+	const intent = {
+		sourceContractId: genesis.hash, destinationChainId: 998n, destinationGateway: PHASE3D_GATEWAY,
+		recipient: PHASE3D_RECIPIENT, amountRaw, depositNonce: 7n,
+		reserveControllerPubKeyHash: PHASE3D_RESERVE_PKH,
+	};
+	const covenant = buildBridgeCovenantScript(intent);
+	const covenantController = bridgeCovenantFtController(covenant);
+	const code = sdk.FT.buildFTtransferCode(genesis.outputs[0].script.toHex(), covenantController).toBuffer();
+	const { amountHex } = sdk.FT.buildTapeAmount(amountRaw, [amountRaw]);
+	const tape = sdk.FT.buildFTtransferTape(genesis.outputs[1].script.toHex(), amountHex).toBuffer();
+	const input = (txid: string, vout: number) => Buffer.concat([
+		wireHash(txid), uint32le(vout), Buffer.from([0]), Buffer.from('ffffffff', 'hex'),
+	]);
+	const output = (satoshis: bigint, script: Buffer) => Buffer.concat([
+		uint64le(satoshis), compactSize(script.length), script,
+	]);
+	const raw = Buffer.concat([
+		uint32le(10), Buffer.from([2]),
+		input(genesis.hash, 0), input('bb'.repeat(32), 0), Buffer.from([3]),
+		output(100n, covenant.toBuffer()), output(500n, code), output(0n, tape), uint32le(0),
+	]);
+	const parsed = new tbc.Transaction(raw.toString('hex'));
+	assert.equal(parsed.toBuffer().toString('hex'), raw.toString('hex'));
+	return {
+		raw: `0x${raw.toString('hex')}` as Hex,
+		txid: `0x${parsed.hash}` as Hex,
+		depositId: logicalDepositId(intent, { sourceTxid: parsed.hash, sourceVout: 1 }),
+		covenantController: `0x${covenantController}` as Hex,
+		intent,
+	};
+}
 
 const RELAY_HEADERS = [
 	REAL_MT_DEPOSIT_BLOCK,
@@ -162,10 +234,78 @@ async function main() {
 	const relayArtifact = JSON.parse(await readFile(
 		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcHeaderRelayV2.json'), 'utf8',
 	)) as Artifact;
+	const depositArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcBridgeDepositVerifierHarness.json'), 'utf8',
+	)) as Artifact;
 	const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 	const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), 'utf8')) as BootstrapManifest;
 	const bootstrapPoints = decodeTbcdevBootstrapContext(await readFile(resolve(fixtureRoot, manifest.binaryFile)));
 	assert.equal((await rpc('eth_chainId', [])).result, '0x3e6', 'RPC is not HyperEVM Testnet chain 998.');
+	const depositVector = phase3dEnvelopeVector();
+	const expectedReserve = `0x${PHASE3D_RESERVE_PKH}` as Hex;
+	const verifiedDeposit = await call(depositArtifact, 'inspectDeposit', [
+		depositVector.raw, PHASE3D_GATEWAY, expectedReserve,
+	]) as SolidityVerifiedDeposit;
+	assert.equal(verifiedDeposit.txid, depositVector.txid);
+	assert.equal(verifiedDeposit.depositId, depositVector.depositId);
+	assert.equal(verifiedDeposit.covenantController, depositVector.covenantController);
+	assert.equal(verifiedDeposit.intent.sourceContractId, `0x${depositVector.intent.sourceContractId}`);
+	assert.equal(verifiedDeposit.intent.destinationChainId, 998n);
+	assert.equal(verifiedDeposit.intent.destinationGateway.toLowerCase(), PHASE3D_GATEWAY);
+	assert.equal(verifiedDeposit.intent.recipient.toLowerCase(), PHASE3D_RECIPIENT);
+	assert.equal(verifiedDeposit.intent.amountRaw, depositVector.intent.amountRaw);
+	assert.equal(verifiedDeposit.intent.depositNonce, depositVector.intent.depositNonce);
+	assert.equal(verifiedDeposit.intent.reserveControllerPubKeyHash, expectedReserve);
+	const merkleVerified = await call(depositArtifact, 'verifyMerkleDeposit', [
+		depositVector.txid, depositVector.raw, 0, 1, [], PHASE3D_GATEWAY, expectedReserve,
+	]) as SolidityVerifiedDeposit;
+	assert.equal(merkleVerified.depositId, depositVector.depositId);
+
+	const mutatedAmount = Buffer.from(depositVector.raw.slice(2), 'hex');
+	const magicOffset = mutatedAmount.indexOf(Buffer.from('LMBV2DEP', 'ascii'));
+	assert.ok(magicOffset >= 0);
+	mutatedAmount[magicOffset + 209] ^= 1;
+	await expectRevert(depositArtifact, 'inspectDeposit', [
+		`0x${mutatedAmount.toString('hex')}`, PHASE3D_GATEWAY, expectedReserve,
+	]);
+	const mutatedCode = Buffer.from(depositVector.raw.slice(2), 'hex');
+	const codeOffset = mutatedCode.indexOf(Buffer.from('59796b517982', 'hex'));
+	assert.ok(codeOffset >= 0);
+	mutatedCode[codeOffset] ^= 1;
+	await expectRevert(depositArtifact, 'inspectDeposit', [
+		`0x${mutatedCode.toString('hex')}`, PHASE3D_GATEWAY, expectedReserve,
+	]);
+	const nonCanonicalCount = `0x${depositVector.raw.slice(2, 10)}fd0200${depositVector.raw.slice(12)}` as Hex;
+	await expectRevert(depositArtifact, 'inspectDeposit', [
+		nonCanonicalCount, PHASE3D_GATEWAY, expectedReserve,
+	]);
+	await expectRevert(depositArtifact, 'inspectDeposit', [
+		depositVector.raw, '0x3333333333333333333333333333333333333333', expectedReserve,
+	]);
+	await expectRevert(depositArtifact, 'verifyMerkleDeposit', [
+		ZERO_HASH, depositVector.raw, 0, 1, [], PHASE3D_GATEWAY, expectedReserve,
+	]);
+	const depositInspectData = encodeFunctionData({
+		abi: depositArtifact.abi, functionName: 'inspectDeposit',
+		args: [depositVector.raw, PHASE3D_GATEWAY, expectedReserve],
+	});
+	const depositMerkleData = encodeFunctionData({
+		abi: depositArtifact.abi, functionName: 'verifyMerkleDeposit',
+		args: [depositVector.txid, depositVector.raw, 0, 1, [], PHASE3D_GATEWAY, expectedReserve],
+	});
+	const estimateDepositGas = async (data: Hex) => {
+		const response = await rpc('eth_estimateGas', [
+			{ to: OVERRIDE_ADDRESS, data }, 'latest',
+			{ [OVERRIDE_ADDRESS]: { code: depositArtifact.deployedBytecode } },
+		]);
+		if (response.error || !response.result) {
+			throw new Error(`Phase 3D gas estimation failed: ${JSON.stringify(response.error)}`);
+		}
+		return BigInt(response.result);
+	};
+	const [depositInspectGas, depositMerkleGas] = await Promise.all([
+		estimateDepositGas(depositInspectData), estimateDepositGas(depositMerkleData),
+	]);
 	const compact = await call(artifact, 'compactRoundTrip', [0x1d00ffff]) as readonly unknown[];
 	assert.deepEqual(compact, [decodeCompactTarget(0x1d00ffff).target, 0x1d00ffff, false, false]);
 	const bootstrapCommitment = buildTbcdevBootstrapCommitment(bootstrapPoints);
@@ -257,6 +397,13 @@ async function main() {
 		suggestedGasPriceWei,
 		deploymentFeeAtSuggestedGasPriceWei: deploymentGasEstimate * suggestedGasPriceWei,
 		deploymentFeeAtSuggestedGasPriceHype: formatEther(deploymentGasEstimate * suggestedGasPriceWei),
+		phase3dDepositEnvelope: {
+			rawTransactionBytes: (depositVector.raw.length - 2) / 2,
+			inspectCalldataBytes: (depositInspectData.length - 2) / 2,
+			inspectTransactionGasEstimate: depositInspectGas,
+			merkleCalldataBytes: (depositMerkleData.length - 2) / 2,
+			merkleTransactionGasEstimate: depositMerkleGas,
+		},
 		inHarnessDeploymentExecutionGas: profile[0],
 		submissions: submissionProfile,
 		indicativeSixHeaderTransactionGas: submissionProfile.reduce(
@@ -321,7 +468,7 @@ async function main() {
 		'0x1a3f798f541c6dca88f46d1ee59041cf2a1336c4bde89b598248ca12dc49c372',
 	]]);
 
-	console.log('Phase 3 Solidity and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
+	console.log('Phase 3 Solidity, Phase 3D deposit-envelope and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
 	console.log('No contract was deployed and no transaction or asset movement was submitted.');
 }
 

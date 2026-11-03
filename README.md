@@ -32,13 +32,15 @@ The proof-oriented v2 bridge has an accepted
 [Phase 0 protocol baseline](docs/tbc-hyperevm-bridge-v2-phase-0.md), an isolated,
 read-only [Phase 1 API proof builder](docs/tbc-hyperevm-bridge-v2-phase-1.md), and
 the offline [Phase 2 Covenant and legacy-FT proof](docs/tbc-hyperevm-bridge-v2-phase-2.md)
-for the `tbcdev` route. [Phase 3A/B/C Solidity verifier, authenticated bootstrap and permissionless header relay](docs/tbc-hyperevm-bridge-v2-phase-3.md)
-now reproduce the real header, PoW, DAA, Merkle and frozen 8,065-point bootstrap
-commitment vectors through read-only HyperEVM Testnet EVM calls. The executable
+for the `tbcdev` route. [Phase 3A–D Solidity verification work](docs/tbc-hyperevm-bridge-v2-phase-3.md)
+now reproduces the real header, PoW, DAA, Merkle and frozen 8,065-point bootstrap
+commitment vectors, plus the bounded version-10 TXID and pinned v3 Covenant
+output envelope, through read-only HyperEVM Testnet EVM calls. The executable
 route is hard-locked to Testnet and contains no Mainnet provider path. The
 permissionless header-relay core is implemented but not deployed or audited;
-the FT verifier and proof-backed mint gateway are not complete. This work does
-not install TBCNODE or modify the running custodial Learning Bridge.
+legacy FT input-script execution, replay protection and the proof-backed mint
+gateway remain incomplete. This work does not install TBCNODE or modify the
+running custodial Learning Bridge.
 
 `STUDY2.md` is teacher-provided, read-only source material.
 
