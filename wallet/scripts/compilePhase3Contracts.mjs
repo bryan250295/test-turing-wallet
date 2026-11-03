@@ -8,6 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sourceNames = [
     'contracts/phase3/TbcProofVerifier.sol',
     'contracts/phase3/TbcDifficultyVerifier.sol',
+    'contracts/phase3/TbcBootstrapVerifier.sol',
     'contracts/phase3/TbcVerifierHarness.sol',
 ];
 const sources = Object.fromEntries(await Promise.all(sourceNames.map(async (sourceName) => [

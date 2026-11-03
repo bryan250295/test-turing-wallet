@@ -7,11 +7,15 @@ import {
 import { blockWork, decodeCompactTarget } from '../src/bridge/phase1/tbc-consensus';
 import { serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
 import { REAL_MT_DAA_POINTS, REAL_MT_DEPOSIT_BLOCK } from '../src/bridge/phase1/tbc-test-vectors';
+import {
+	buildTbcdevBootstrapCommitment, decodeTbcdevBootstrapContext, tbcdevBootstrapProof,
+} from '../src/bridge/phase3/bootstrap-history';
 
 const RPC_URL = 'https://rpc.hyperliquid-testnet.xyz/evm';
 const OVERRIDE_ADDRESS = '0x0000000000000000000000000000000000000333';
 
 interface Artifact { abi: Abi; deployedBytecode: Hex }
+interface BootstrapManifest { commitmentRoot: Hex; checkpointProof: Hex[]; binaryFile: string }
 interface RpcResponse { result?: Hex; error?: { code: number; message: string; data?: unknown } }
 
 async function rpc(method: string, params: unknown[]) {
@@ -49,9 +53,32 @@ async function expectRevert(artifact: Artifact, functionName: string, args: read
 async function main() {
 	const artifactPath = resolve(process.cwd(), '../wallet/artifacts/phase3/TbcVerifierHarness.json');
 	const artifact = JSON.parse(await readFile(artifactPath, 'utf8')) as Artifact;
+	const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
+	const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), 'utf8')) as BootstrapManifest;
+	const bootstrapPoints = decodeTbcdevBootstrapContext(await readFile(resolve(fixtureRoot, manifest.binaryFile)));
 	assert.equal((await rpc('eth_chainId', [])).result, '0x3e6', 'RPC is not HyperEVM Testnet chain 998.');
 	const compact = await call(artifact, 'compactRoundTrip', [0x1d00ffff]) as readonly unknown[];
 	assert.deepEqual(compact, [decodeCompactTarget(0x1d00ffff).target, 0x1d00ffff, false, false]);
+	const bootstrapCommitment = buildTbcdevBootstrapCommitment(bootstrapPoints);
+	assert.equal(bootstrapCommitment.root, manifest.commitmentRoot);
+	const solidityPoint = (index: number) => ({
+		height: bootstrapPoints[index].height,
+		blockHash: `0x${bootstrapPoints[index].blockHash}`,
+		time: bootstrapPoints[index].time,
+		bits: bootstrapPoints[index].bits,
+		chainWork: bootstrapPoints[index].chainWork,
+	});
+	for (const index of [0, Math.floor(bootstrapPoints.length / 2), bootstrapPoints.length - 1]) {
+		assert.equal(await call(artifact, 'verifyBootstrapPoint', [
+			solidityPoint(index), tbcdevBootstrapProof(bootstrapCommitment, bootstrapPoints[index].height),
+		]), true);
+	}
+	const checkpointPoint = bootstrapPoints.at(-1)!;
+	const solidityCheckpoint = solidityPoint(bootstrapPoints.length - 1);
+	assert.deepEqual(tbcdevBootstrapProof(bootstrapCommitment, checkpointPoint.height), manifest.checkpointProof);
+	assert.equal(await call(artifact, 'verifyBootstrapPoint', [
+		{ ...solidityCheckpoint, time: solidityCheckpoint.time + 1 }, manifest.checkpointProof,
+	]), false);
 
 	const rawHeader = serializeBlockHeader(REAL_MT_DEPOSIT_BLOCK);
 	const inspected = await call(artifact, 'inspectHeader', [`0x${rawHeader.toString('hex')}`]) as readonly unknown[];

@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {TbcProofVerifier} from "./TbcProofVerifier.sol";
 import {TbcDifficultyVerifier} from "./TbcDifficultyVerifier.sol";
+import {TbcBootstrapVerifier} from "./TbcBootstrapVerifier.sol";
 
 /// @notice Non-settlement harness for Phase 3 cross-language vectors.
 /// @dev This contract has no storage, authority, mint path or deployment role.
@@ -65,5 +66,12 @@ contract TbcVerifierHarness {
     {
         (target, negative, overflowed) = TbcProofVerifier.decodeCompactTarget(compact);
         encoded = TbcProofVerifier.encodeCompactTarget(target);
+    }
+
+    function verifyBootstrapPoint(
+        TbcBootstrapVerifier.Point calldata point,
+        bytes32[] calldata siblings
+    ) external pure returns (bool) {
+        return TbcBootstrapVerifier.verify(point, siblings);
     }
 }
