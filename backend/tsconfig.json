@@ -6,7 +6,7 @@
 			"DOM"
 		],
 		"module": "commonjs",
-		"moduleResolution": "node",
+		"moduleResolution": "Bundler",
 		"rootDir": "..",
 		"outDir": "dist",
 		"strict": true,
