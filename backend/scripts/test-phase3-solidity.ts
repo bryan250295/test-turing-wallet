@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
-	decodeFunctionResult, encodeFunctionData, type Abi, type Hex,
+	decodeFunctionResult, encodeAbiParameters, encodeFunctionData, formatEther, keccak256, toHex, type Abi, type Hex,
 } from 'viem';
 import { blockWork, decodeCompactTarget } from '../src/bridge/phase1/tbc-consensus';
 import { serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
@@ -14,8 +14,12 @@ import {
 
 const RPC_URL = 'https://rpc.hyperliquid-testnet.xyz/evm';
 const OVERRIDE_ADDRESS = '0x0000000000000000000000000000000000000333';
+const ZERO_HASH = `0x${'00'.repeat(32)}` as Hex;
+const CHECKPOINT_HASH = '0x000000000000023f252086d278485a61b6c225ad07213fff329ef5e31e1c256b' as Hex;
+const CHECKPOINT_MERKLE_ROOT = '0xd51c636b8a6959ecc9754595884cf7ce4cd79ffb7a2bee75f714a293310ccc50' as Hex;
+const CHECKPOINT_CHAIN_WORK = BigInt('0x14f15b416fbbd30a34db4b3');
 
-interface Artifact { abi: Abi; deployedBytecode: Hex }
+interface Artifact { abi: Abi; bytecode: Hex; deployedBytecode: Hex }
 interface BootstrapManifest { commitmentRoot: Hex; checkpointProof: Hex[]; binaryFile: string }
 interface RpcResponse { result?: Hex; error?: { code: number; message: string; data?: unknown } }
 
@@ -85,11 +89,78 @@ async function expectRevert(artifact: Artifact, functionName: string, args: read
 	assert.ok(response.error, `${functionName} mutation unexpectedly succeeded.`);
 }
 
+function calldataGas(data: Hex) {
+	let gas = 0n;
+	for (let index = 2; index < data.length; index += 2) gas += data.slice(index, index + 2) === '00' ? 4n : 16n;
+	return gas;
+}
+
+interface StoredHeader {
+	blockHash: Hex;
+	parentHash: Hex;
+	merkleRoot: Hex;
+	skipHash: Hex;
+	chainWork: bigint;
+	height: number;
+	time: number;
+	bits: number;
+}
+
+function invertLowestOne(value: number) { return value === 0 ? 0 : (value & (value - 1)) >>> 0; }
+function skipHeight(height: number) {
+	if (height < 2) return 0;
+	return (height & 1) === 1 ? invertLowestOne(invertLowestOne(height - 1)) + 1 : invertLowestOne(height);
+}
+
+function relayStorage(priorHeaderCount: number) {
+	const stored: StoredHeader[] = [{
+		blockHash: CHECKPOINT_HASH, parentHash: ZERO_HASH, merkleRoot: CHECKPOINT_MERKLE_ROOT,
+		skipHash: ZERO_HASH, chainWork: CHECKPOINT_CHAIN_WORK, height: 839_164,
+		time: 1_793_335_668, bits: 0x1a041f18,
+	}];
+	for (const header of RELAY_HEADERS.slice(0, priorHeaderCount)) {
+		const parent = stored.at(-1)!;
+		const height = parent.height + 1;
+		const requestedSkipHeight = skipHeight(height);
+		const skip = requestedSkipHeight < 839_164
+			? undefined : stored.find((candidate) => candidate.height === requestedSkipHeight);
+		assert.ok(requestedSkipHeight < 839_164 || skip, `Missing synthetic skip ancestor ${requestedSkipHeight}.`);
+		stored.push({
+			blockHash: `0x${header.hash}`, parentHash: `0x${header.previousBlockHash}`,
+			merkleRoot: `0x${header.merkleRoot}`, skipHash: skip?.blockHash ?? ZERO_HASH,
+			chainWork: parent.chainWork + blockWork(header.bits), height, time: header.time, bits: header.bits,
+		});
+	}
+
+	const stateDiff: Record<Hex, Hex> = {};
+	for (const node of stored) {
+		const base = BigInt(keccak256(encodeAbiParameters(
+			[{ type: 'bytes32' }, { type: 'uint256' }], [node.blockHash, 0n],
+		)));
+		const slot = (offset: bigint) => toHex(base + offset, { size: 32 });
+		stateDiff[slot(0n)] = node.parentHash;
+		stateDiff[slot(1n)] = node.merkleRoot;
+		stateDiff[slot(2n)] = node.skipHash;
+		stateDiff[slot(3n)] = toHex(node.chainWork, { size: 32 });
+		const packed = BigInt(node.height) | (BigInt(node.time) << 32n)
+			| (BigInt(node.bits) << 64n) | (1n << 96n);
+		stateDiff[slot(4n)] = toHex(packed, { size: 32 });
+	}
+	const tip = stored.at(-1)!;
+	stateDiff[toHex(1n, { size: 32 })] = tip.blockHash;
+	stateDiff[toHex(2n, { size: 32 })] = toHex(tip.chainWork, { size: 32 });
+	stateDiff[toHex(3n, { size: 32 })] = ZERO_HASH;
+	return stateDiff;
+}
+
 async function main() {
 	const artifactPath = resolve(process.cwd(), '../wallet/artifacts/phase3/TbcVerifierHarness.json');
 	const artifact = JSON.parse(await readFile(artifactPath, 'utf8')) as Artifact;
 	const relayHarness = JSON.parse(await readFile(
 		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcHeaderRelayIntegrationHarness.json'), 'utf8',
+	)) as Artifact;
+	const relayArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcHeaderRelayV2.json'), 'utf8',
 	)) as Artifact;
 	const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 	const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), 'utf8')) as BootstrapManifest;
@@ -140,6 +211,63 @@ async function main() {
 	);
 	assert.deepEqual(relayResult, [839_170, expectedRelayWork]);
 	assert.equal(await call(relayHarness, 'validateEqualWorkFailClosed', []), true);
+	const profile = await call(relayHarness, 'profileSixHeaders', [
+		RELAY_HEADERS.map((header) => `0x${serializeBlockHeader(header).toString('hex')}`), relayWitnesses,
+	]) as readonly [bigint, readonly bigint[]];
+	assert.equal(profile[1].length, 6);
+	const deploymentEstimateResponse = await rpc('eth_estimateGas', [{ data: relayArtifact.bytecode }]);
+	if (deploymentEstimateResponse.error || !deploymentEstimateResponse.result) {
+		throw new Error(`Relay deployment gas estimation failed: ${JSON.stringify(deploymentEstimateResponse.error)}`);
+	}
+	const deploymentGasEstimate = BigInt(deploymentEstimateResponse.result);
+	const gasPriceResponse = await rpc('eth_gasPrice', []);
+	if (gasPriceResponse.error || !gasPriceResponse.result) {
+		throw new Error(`Gas-price lookup failed: ${JSON.stringify(gasPriceResponse.error)}`);
+	}
+	const suggestedGasPriceWei = BigInt(gasPriceResponse.result);
+	const encodedSubmissions = RELAY_HEADERS.map((header, index) => encodeFunctionData({
+		abi: relayArtifact.abi, functionName: 'submitHeader',
+		args: [`0x${serializeBlockHeader(header).toString('hex')}`, relayWitnesses[index]],
+	}));
+	const directGasEstimates = await Promise.all(encodedSubmissions.map(async (data, index) => {
+		const response = await rpc('eth_estimateGas', [
+			{ to: OVERRIDE_ADDRESS, data }, 'latest',
+			{ [OVERRIDE_ADDRESS]: { code: relayArtifact.deployedBytecode, stateDiff: relayStorage(index) } },
+		]);
+		if (response.error || !response.result) {
+			throw new Error(`Header ${RELAY_HEADERS[index].height} gas estimation failed: ${JSON.stringify(response.error)}`);
+		}
+		return BigInt(response.result);
+	}));
+	const submissionProfile = RELAY_HEADERS.map((header, index) => {
+		const data = encodedSubmissions[index];
+		const intrinsicGas = 21_000n + calldataGas(data);
+		return {
+			height: header.height,
+			bootstrapWitnesses: relayWitnesses[index].length,
+			calldataBytes: (data.length - 2) / 2,
+			executionGas: profile[1][index],
+			indicativeTransactionGas: intrinsicGas + profile[1][index],
+			directTransactionGasEstimate: directGasEstimates[index],
+		};
+	});
+	const directSixHeaderTransactionGasEstimate = directGasEstimates.reduce((total, gas) => total + gas, 0n);
+	console.log(JSON.stringify({
+		deploymentGasEstimate,
+		suggestedGasPriceWei,
+		deploymentFeeAtSuggestedGasPriceWei: deploymentGasEstimate * suggestedGasPriceWei,
+		deploymentFeeAtSuggestedGasPriceHype: formatEther(deploymentGasEstimate * suggestedGasPriceWei),
+		inHarnessDeploymentExecutionGas: profile[0],
+		submissions: submissionProfile,
+		indicativeSixHeaderTransactionGas: submissionProfile.reduce(
+			(total, entry) => total + entry.indicativeTransactionGas, 0n,
+		),
+		directSixHeaderTransactionGasEstimate,
+		directSixHeaderFeeAtSuggestedGasPriceWei: directSixHeaderTransactionGasEstimate * suggestedGasPriceWei,
+		directSixHeaderFeeAtSuggestedGasPriceHype: formatEther(
+			directSixHeaderTransactionGasEstimate * suggestedGasPriceWei,
+		),
+	}, (_, value: unknown) => typeof value === 'bigint' ? value.toString() : value, 2));
 	const solidityCheckpoint = solidityPoint(bootstrapPoints.length - 1);
 	assert.deepEqual(tbcdevBootstrapProof(bootstrapCommitment, checkpointPoint.height), manifest.checkpointProof);
 	assert.equal(await call(artifact, 'verifyBootstrapPoint', [

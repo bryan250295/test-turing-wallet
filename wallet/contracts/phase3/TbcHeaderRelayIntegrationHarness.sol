@@ -38,4 +38,22 @@ contract TbcHeaderRelayIntegrationHarness is TbcHeaderRelayV2 {
         require(bestTip == winner && !bestWorkTie, "greater-work branch did not resolve tie");
         return true;
     }
+
+    /// @notice Read-only RPC benchmark; values exclude the outer transaction's
+    ///         intrinsic/calldata gas and include the Solidity external-call wrapper.
+    function profileSixHeaders(
+        bytes[] calldata rawHeaders,
+        TbcHeaderRelayV2.BootstrapWitness[][] calldata witnesses
+    ) external returns (uint256 deploymentExecutionGas, uint256[] memory submissionExecutionGas) {
+        require(rawHeaders.length == 6 && witnesses.length == 6, "six headers required");
+        submissionExecutionGas = new uint256[](rawHeaders.length);
+        uint256 beforeOperation = gasleft();
+        TbcHeaderRelayV2 relay = new TbcHeaderRelayV2();
+        deploymentExecutionGas = beforeOperation - gasleft();
+        for (uint256 index; index < rawHeaders.length; ++index) {
+            beforeOperation = gasleft();
+            relay.submitHeader(rawHeaders[index], witnesses[index]);
+            submissionExecutionGas[index] = beforeOperation - gasleft();
+        }
+    }
 }

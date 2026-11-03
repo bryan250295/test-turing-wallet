@@ -103,6 +103,41 @@ The RPC test is an integration vector, not the only future test layer. Before a
 deployment, the same vectors must run in a pinned local EVM and the production
 contracts need independent security and gas review.
 
+### 2.1 Read-only gas profile
+
+The RPC test also runs `eth_estimateGas` against the relay deployment bytecode
+and against the deployed runtime plus an exact storage override for each prior
+header. Unlike the in-harness `gasleft()` diagnostic, the direct transaction
+estimate includes transaction intrinsic gas and the submitted calldata.
+
+Observed on HyperEVM Testnet on 2026-11-03:
+
+| Operation | Bootstrap witnesses | Calldata bytes | Direct transaction gas estimate |
+| --- | ---: | ---: | ---: |
+| Deploy `TbcHeaderRelayV2` | — | — | 2,211,582 |
+| Submit header 839165 | 26 | 17,700 | 1,120,055 |
+| Submit header 839166 | 25 | 17,028 | 1,123,234 |
+| Submit header 839167 | 24 | 16,356 | 1,079,180 |
+| Submit header 839168 | 23 | 15,684 | 1,064,072 |
+| Submit header 839169 | 22 | 15,012 | 1,051,412 |
+| Submit header 839170 | 21 | 14,340 | 1,062,044 |
+| Six header transactions | — | — | 6,499,997 |
+
+The RPC's suggested gas price during that run was `100,000,000 wei` (0.1 gwei).
+At that temporary price, deployment was approximately `0.0002211582 HYPE` and
+the six separate header submissions totalled approximately `0.0006499997 HYPE`.
+Deployment plus those six submissions was `8,711,579 gas`, or approximately
+`0.0008711579 HYPE` at the observed price.
+These are testnet observations, not fixed fees: the payable amount is always
+`gasUsed × effectiveGasPrice` at inclusion time.
+
+The six-header total is relay maintenance cost, normally paid across six
+relayer transactions; it is not automatically charged as one transaction to a
+bridge user. It also excludes the future Phase 3D FT/Covenant proof, replay
+protection and mint transaction. Bootstrap calldata shrinks as the relay moves
+forward, but production budgeting still requires longer-range profiles and a
+real deployed-state benchmark.
+
 ## 3. Authenticated bootstrap history
 
 The accepted checkpoint at height `839164` authenticates one header and its
@@ -206,3 +241,6 @@ flow and must not be described as trustless.
   MTP calculation.
 - [Pinned TBCNODE skip-list implementation](https://github.com/TuringBitChain/TBCNODE/blob/6ddea88c57e9bc9390c1730657ac766b56c4a670/src/chain.cpp#L73-L123)
   is mirrored for efficient canonical ancestry queries.
+- [Official HyperEVM documentation](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm)
+  identifies Testnet as chain 998, Cancun as its EVM target and HYPE as the
+  native gas token.
