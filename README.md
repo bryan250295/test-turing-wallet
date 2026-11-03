@@ -28,10 +28,14 @@ remaining acceptance limits and reverse-redemption options are recorded in
 See [setup, authentication, migration and backups / 启动与迁移](docs/backend-architecture.md),
 [backend modules](backend/README.md), and [wallet usage](wallet/README.md).
 
-The proposed proof-oriented v2 bridge is still design-only. Its accepted Phase 0
-protocol baseline is documented in
-[TBC ↔ HyperEVM Bridge v2 Phase 0](docs/tbc-hyperevm-bridge-v2-phase-0.md).
-It does not modify the running custodial Learning Bridge.
+The proof-oriented v2 bridge has an accepted
+[Phase 0 protocol baseline](docs/tbc-hyperevm-bridge-v2-phase-0.md) and an isolated,
+read-only [Phase 1 API proof builder](docs/tbc-hyperevm-bridge-v2-phase-1.md)
+for the `tbcdev` route. Its API acquisition, local proof checks, official `tbcdev`
+checkpoint, real MT difficulty vector and post-checkpoint chainwork selection are
+implemented. The executable Phase 1 route is hard-locked to Testnet and contains
+no Mainnet provider path. It does not install TBCNODE or modify the running
+custodial Learning Bridge.
 
 `STUDY2.md` is teacher-provided, read-only source material.
 

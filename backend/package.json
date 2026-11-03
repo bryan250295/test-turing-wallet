@@ -14,7 +14,9 @@
 		"db:migrate": "prisma migrate deploy",
 		"db:import": "tsx scripts/import-storage.ts",
 		"db:studio": "prisma studio",
-		"bridge:verify": "tsx scripts/verify-bridge-asset.ts"
+		"bridge:verify": "tsx scripts/verify-bridge-asset.ts",
+		"phase1:proof": "tsx scripts/build-tbc-proof.ts",
+		"phase1:test": "tsx --test src/bridge/phase1/*.test.ts"
 	},
 	"dependencies": {
 		"@nestjs/common": "^11.1.0",

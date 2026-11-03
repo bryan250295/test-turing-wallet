@@ -4,6 +4,8 @@ Status: **Phase 0 complete; no runtime behavior has changed**
 
 Baseline date: **2026-11-02 (Asia/Kuala_Lumpur)**
 
+API-only execution revision: **2026-11-03 (Asia/Kuala_Lumpur)**
+
 TBCNODE review baseline: [`6ddea88c57e9bc9390c1730657ac766b56c4a670`](https://github.com/TuringBitChain/TBCNODE/tree/6ddea88c57e9bc9390c1730657ac766b56c4a670)
 
 This document freezes the intended v2 scope before implementation. It is not a
@@ -18,8 +20,8 @@ baseline; later translations must not change their meaning.
 ## 中文执行摘要
 
 - 现有Learning Bridge继续作为托管式测试系统，不会被静默升级或迁移。
-- 项目只运行官方未修改的TBCNODE，并修改自己仓库里的合约、证明服务、Indexer
-  和Relayer；不会fork官方节点代码。
+- 项目不安装或运行TBCNODE；只修改自己仓库里的API adapter、证明服务、合约、
+  Indexer和Relayer，也不会fork官方节点代码。TBCNODE源码只作为共识规则参考基线。
 - TBC → HyperEVM的v2目标是由HyperEVM合约验证TBC header、chainwork、TXID、
   Merkle和指定FT状态，任何Relayer都能提交，Backend不能无证明mint。
 - HyperEVM → TBC在不升级TBCNODE的范围内采用threshold/MPC，因此必须标示为
@@ -46,28 +48,28 @@ while it depends on a signer threshold.
 
 This project will:
 
-- run unmodified official TBCNODE instances;
-- build its own protected RPC adapter, FT indexer and proof service;
+- consume public read-only TBCScan and official TBC APIs as untrusted proof-material
+  sources, without installing TBCNODE;
+- build its own provider adapter, FT indexer and proof service;
 - independently implement the minimum TBC verifier required on HyperEVM;
 - deploy project-owned HyperEVM contracts and TBC covenant transactions.
 
 This project will not fork or publish modified TBCNODE or HyperEVM node software.
 Changing TBC consensus or adding BVM opcodes is explicitly outside v2 scope.
 
-### 1.3 Official TBCNODE version policy
+### 1.3 Official TBCNODE reference policy
 
 At the Phase 0 baseline date, the latest official stable TBCNODE release is
 `v3.3.1`, commit
 `6ddea88c57e9bc9390c1730657ac766b56c4a670`. This is the exact source baseline
 reviewed for this document; it is not an old or project-modified node version.
+The project does not deploy this binary. It pins the commit only so header, TXID,
+difficulty and Merkle behavior can be traced to an exact consensus implementation.
 
-Before Phase 1 deployment, the project MUST check the official TBCNODE releases
-again. Production nodes MUST pin an exact official release tag, full commit hash,
-verified build artifact and configuration. They MUST NOT automatically follow a
-floating `main`, `latest` container tag or newly published release. A newer
-official release may replace the pinned version only after compatibility,
-security, RPC/proof-vector and rollback testing. An unreviewed development-branch
-commit is not equivalent to the latest stable release.
+Before a production release, the project MUST compare the pinned reference with
+the then-current official stable release and rerun compatibility and proof-vector
+tests. A newer reference may replace it only through an explicit reviewed update;
+a floating `main` branch or undocumented API response is not a protocol version.
 
 ### 1.4 Initial supported route
 
@@ -207,8 +209,11 @@ MAY locate data, but neither an indexer nor a relayer is a trust root.
 The final light-client bootstrap checkpoint is intentionally **not frozen yet**.
 The currently pinned asset-genesis block proves asset identity for the learning
 route; it is not automatically a sufficient light-client consensus checkpoint.
-Phase 1 MUST confirm network identity and the checkpoint against independently
-operated official TBCNODE instances before Phase 3 deployment.
+For the `tbcdev` learning/test route, the project owner accepted official TBCScan
+as the bootstrap-checkpoint authority on 2026-11-03. A second provider remains a
+recommended availability and cross-check control, but is not a Phase 1 blocker.
+Post-checkpoint headers still require local linkage, proof-of-work, difficulty and
+cumulative-chainwork verification; an API's `confirmed` flag is not sufficient.
 
 ## 5. Trust and authority model
 
@@ -278,7 +283,7 @@ zero.
 ### Completed Phase 0 decisions
 
 - [x] Only project-owned code and infrastructure will change.
-- [x] Official TBCNODE will be run unmodified.
+- [x] TBCNODE will not be installed or modified; its pinned source is a consensus-reference baseline only.
 - [x] The first route supports one pinned legacy FT and exact 1:1 raw units.
 - [x] TBC → HyperEVM targets proof-verified, permissionless minting.
 - [x] HyperEVM → TBC is honestly scoped as threshold/MPC trust-minimized.
@@ -293,11 +298,11 @@ zero.
 
 ### External and later-phase gates
 
-- [ ] Before production-oriented Phase 1 deployment, the TBC project/licensor
-  confirms the intended commercial operation of unmodified TBCNODE and an
-  independently written interoperable light client.
-- [ ] During Phase 1, independently operated nodes confirm the source network
-  identity, chain parameters and a suitable light-client bootstrap checkpoint.
+- [ ] Before production deployment, the TBC project/licensor confirms the intended
+  commercial use of its public APIs and an independently written interoperable
+  light client.
+- [x] During Phase 1, official TBCScan is accepted as checkpoint authority for
+  the `tbcdev` learning/test route; this does not authorize a future mainnet checkpoint.
 - [ ] During Phase 2, the exact TBC Bridge Covenant serialization and bounded
   legacy-FT proof shape are specified and attached as versioned test vectors.
 
@@ -307,13 +312,14 @@ protocol version and an explicit update to this decision register.
 
 ## 9. Next authorized implementation step
 
-Phase 0 is complete. Phase 1 may begin with read-only infrastructure:
+Phase 0 is complete. Phase 1 may begin with read-only API infrastructure:
 
-1. deploy two isolated official TBCNODE instances with `txindex`;
-2. record binary/source version, network parameters and startup configuration;
-3. expose authenticated internal RPC only;
-4. compare best block hash, height and chainwork;
-5. capture raw header, transaction and Merkle-proof fixtures without changing the
-   current bridge settlement path.
+1. use TBCScan as the primary locator and official TBC API as a whole-proof fallback;
+2. locate a transaction directly by TXID, then obtain its block and transaction order;
+3. locally reproduce the raw-transaction TXID, 80-byte header hash, Merkle root and branch;
+4. reject missing, malformed or mutually inconsistent provider data;
+5. capture versioned fixtures without changing the current bridge settlement path;
+6. separately research difficulty transitions, chainwork and bootstrap checkpoint inputs
+   for the future HyperEVM verifier.
 
 No Phase 1 activity should mint, burn, release, migrate, or move user assets.
