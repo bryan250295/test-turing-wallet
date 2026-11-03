@@ -17,7 +17,8 @@
 		"bridge:verify": "tsx scripts/verify-bridge-asset.ts",
 		"phase1:proof": "tsx scripts/build-tbc-proof.ts",
 		"phase1:test": "tsx --test src/bridge/phase1/*.test.ts",
-		"phase2:test": "tsx --test src/bridge/phase2/*.test.ts"
+		"phase2:test": "tsx --test src/bridge/phase2/*.test.ts",
+		"phase3:solidity-rpc-test": "tsx scripts/test-phase3-solidity.ts"
 	},
 	"dependencies": {
 		"@nestjs/common": "^11.1.0",
