@@ -29,11 +29,12 @@ See [setup, authentication, migration and backups / 启动与迁移](docs/backen
 [backend modules](backend/README.md), and [wallet usage](wallet/README.md).
 
 The proof-oriented v2 bridge has an accepted
-[Phase 0 protocol baseline](docs/tbc-hyperevm-bridge-v2-phase-0.md) and an isolated,
-read-only [Phase 1 API proof builder](docs/tbc-hyperevm-bridge-v2-phase-1.md)
+[Phase 0 protocol baseline](docs/tbc-hyperevm-bridge-v2-phase-0.md), an isolated,
+read-only [Phase 1 API proof builder](docs/tbc-hyperevm-bridge-v2-phase-1.md), and
+the offline [Phase 2 Covenant and legacy-FT proof](docs/tbc-hyperevm-bridge-v2-phase-2.md)
 for the `tbcdev` route. Its API acquisition, local proof checks, official `tbcdev`
 checkpoint, real MT difficulty vector and post-checkpoint chainwork selection are
-implemented. The executable Phase 1 route is hard-locked to Testnet and contains
+implemented. The executable Phase 1/2 route is hard-locked to Testnet and contains
 no Mainnet provider path. It does not install TBCNODE or modify the running
 custodial Learning Bridge.
 

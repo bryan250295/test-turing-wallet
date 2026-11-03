@@ -303,8 +303,9 @@ zero.
   light client.
 - [x] During Phase 1, official TBCScan is accepted as checkpoint authority for
   the `tbcdev` learning/test route; this does not authorize a future mainnet checkpoint.
-- [ ] During Phase 2, the exact TBC Bridge Covenant serialization and bounded
-  legacy-FT proof shape are specified and attached as versioned test vectors.
+- [x] During Phase 2, the exact TBC Bridge Covenant serialization and bounded
+  legacy-FT proof shape were specified and attached as versioned offline test
+  vectors for `tbcdev-testnet`; deployment and Phase 3 integration remain gated.
 
 These later-phase items are deliberate hand-offs, not permission to change the
 logical fields or trust model silently. Any incompatible change requires a new
