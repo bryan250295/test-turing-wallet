@@ -2,11 +2,12 @@
 
 Status: **Phase 3A consensus/Merkle primitives, Phase 3B authenticated
 bootstrap commitment, Phase 3C permissionless header-relay core and the Phase
-3D bounded TXID/Covenant/v3 output-envelope and parent/outpoint conservation
-layers are complete for `tbcdev-testnet`; full FT ancestor/input-script
-verification, gateway and proof-backed token are not complete**
+3D bounded TXID/Covenant/v3 output-envelope, parent/outpoint conservation and
+one-level FT ancestor-authentication layers are complete for `tbcdev-testnet`;
+full FT input-script/signature verification, gateway and proof-backed token are
+not complete**
 
-Implementation date: **2026-11-03 (Asia/Kuala_Lumpur)**
+Implementation date: **2026-11-04 (Asia/Kuala_Lumpur)**
 
 Nothing in this phase has been deployed. No transaction, mint, burn, release or
 asset movement was submitted. The existing custodial Learning Bridge contracts
@@ -86,17 +87,25 @@ controller, exact six-slot amount/change allocation, output shape and positive
 native fee. The parent bytes are therefore cryptographically bound by the
 deposit inputs rather than trusted backend metadata.
 
-This slice still does not authenticate the FT parents' required ancestor set,
-execute TBC scripts or verify the input signatures. It also does not provide an
-independent UTXO non-membership/unspent proof. Accordingly it is a structural
-legacy-FT transition verifier, not yet the full Phase 2 verifier and not a mint
-authorization gate.
+The third Phase 3D slice accepts one ancestor group per deposit input. For every
+non-zero legacy-v3 Tape slot it requires exactly one bounded ancestor raw
+transaction, in ascending slot order, recomputes its version-10 TXID, binds it
+to the corresponding parent input and verifies that the referenced ancestor
+vout exists. Missing, extra, reordered or changed ancestor bytes therefore fail
+closed. The final native fee input must have an empty ancestor group. This is
+the exact one-level raw-transaction set selected by Phase 2's
+`buildFtPrePreTxData`; the parent input TXID is the authentication commitment.
+
+This slice still does not execute TBC scripts or verify the input signatures.
+It also does not provide an independent UTXO non-membership/unspent proof.
+Accordingly it is an ancestor-authenticated structural legacy-FT transition
+verifier, not yet the full Phase 2 verifier and not a mint authorization gate.
 
 ## 2. Executed cross-language vectors
 
 The pinned Solidity 0.8.30 compiler targets Cancun, matching HyperEVM Testnet
 chain 998. The compiled primitive harness is 6,728 runtime bytes, the relay is
-9,314 runtime bytes and the Phase 3D deposit harness is 12,958 runtime bytes. A read-only `eth_call`
+9,314 runtime bytes and the Phase 3D deposit harness is 14,446 runtime bytes. A read-only `eth_call`
 injects that runtime temporarily through the RPC state-override parameter; it
 does not deploy code or submit a transaction.
 
@@ -173,21 +182,23 @@ real deployed-state benchmark.
 ### 2.2 Phase 3D bounded deposit-envelope gas
 
 The same read-only RPC suite builds a 2,405-byte version-10 transaction and
-2,113 bytes of bounded parent transactions from the real pinned MT v3
-Code/Tape artifact. The vector is deliberately unsigned: it tests only the
-boundary implemented by these slices and is not presented as a valid FT spend.
+2,113 bytes of bounded parent transactions and an 85-byte bound ancestor from
+the real pinned MT v3 Code/Tape artifact. The vector is deliberately unsigned:
+it tests only the boundary implemented by these slices and is not presented as
+a valid FT spend.
 Solidity and `tbc-lib-js` produced the same TXIDs, Covenant controller and
 logical deposit ID. Mutated amount, Code template, CompactSize, gateway,
-Merkle-root, parent ordering, Tape allocation and native-change cases all
-reverted.
+Merkle-root, parent ordering, Tape allocation, native change, missing/mutated
+ancestor, ancestor-group count and native-ancestor cases all reverted.
 
-Observed direct transaction estimates on HyperEVM Testnet on 2026-11-03:
+Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 
 | Operation | Calldata bytes | Direct transaction gas estimate |
 | --- | ---: | ---: |
-| Parse TXID + Covenant/v3 output envelope | 2,564 | 141,617 |
+| Parse TXID + Covenant/v3 output envelope | 2,564 | 141,639 |
 | Same envelope + one-leaf Merkle reconstruction | 2,724 | 149,624 |
-| Envelope + 2 bound parents + FT/native conservation | 4,900 | 318,405 |
+| Envelope + 2 bound parents + FT/native conservation | 4,900 | 318,393 |
+| Same transition + exact one-level ancestor authentication | 5,252 | 483,166 |
 
 The one-leaf vector has no sibling hashes and the second estimate does not call
 a deployed relay. The transition estimate parses two small synthetic parents;
@@ -260,10 +271,10 @@ execution or FT Covenant semantics. Those remain separate gates.
 
 Phase 3 is not yet a proof-backed bridge. The next implementation slices are:
 
-1. complete the remaining Phase 2 legacy-FT input proof: authenticate the
-   required ancestor transactions and exact input ownership/signature and TBC
-   script semantics; choose and review either a bounded direct verifier or a
-   proof-system circuit before calling it trustless;
+1. complete the remaining Phase 2 legacy-FT input proof: verify exact input
+   ownership/signatures and TBC script semantics over the now-authenticated
+   parent/ancestor bytes; choose and review either a bounded direct verifier or
+   a proof-system circuit before calling it trustless;
 2. add exact source-outpoint/logical-deposit replay protection;
 3. add a new proof-only `WrappedFTV2`/gateway pair with no owner, backend or
    minter proof bypass.
@@ -283,10 +294,12 @@ Phase 3A/B/C shows that the frozen TypeScript header, PoW, DAA, Merkle and
 bootstrap-commitment vectors, plus six real sequential relay transitions, can
 be reproduced by Solidity on HyperEVM Testnet. Phase 3D additionally reproduces
 the version-10 TXID, validates the pinned Covenant/v3 output envelope and binds
-the deposit inputs to parent outpoints with structural FT/native conservation.
+the deposit inputs to parent outpoints with structural FT/native conservation,
+then authenticates the exact one-level legacy-FT ancestor set committed by
+those parents.
 It does **not** establish a live canonical TBC chain because the relay is not
-deployed or independently audited, and it does not authenticate every ancestor
-or execute the legacy FT input scripts. It cannot authorize minting. Until all
+deployed or independently audited, and it does not execute or validate the
+legacy FT input scripts/signatures. It cannot authorize minting. Until all
 remaining gates pass, the forward path remains the existing custodial learning
 flow and must not be described as trustless.
 

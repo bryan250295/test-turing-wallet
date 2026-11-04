@@ -52,6 +52,22 @@ contract TbcBridgeDepositVerifierHarness {
         );
     }
 
+    function verifyAuthenticatedTransition(
+        bytes calldata rawTransaction,
+        bytes[] calldata parentTransactions,
+        bytes[][] calldata ancestorTransactions,
+        address expectedGateway,
+        bytes20 expectedReserveController
+    ) external pure returns (TbcBridgeDepositVerifier.VerifiedTransition memory) {
+        return TbcBridgeDepositVerifier.verifyAuthenticatedTransition(
+            rawTransaction,
+            parentTransactions,
+            ancestorTransactions,
+            expectedGateway,
+            expectedReserveController
+        );
+    }
+
     function verifyFinalizedDeposit(
         ITbcHeaderRelayV2 relay,
         bytes32 blockHash,

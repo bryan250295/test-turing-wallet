@@ -95,8 +95,13 @@ function phase3dEnvelopeVector() {
 	const { amountHex } = sdk.FT.buildTapeAmount(amountRaw, [amountRaw]);
 	const tape = sdk.FT.buildFTtransferTape(genesis.outputs[1].script.toHex(), amountHex).toBuffer();
 	const ownerCode = genesis.outputs[0].script.toBuffer();
+	const ancestorScript = Buffer.from(`76a914${'44'.repeat(20)}88ac`, 'hex');
+	const ancestorRaw = serializedTransaction(
+		[{ txid: 'aa'.repeat(32), vout: 0 }], [{ satoshis: 900n, script: ancestorScript }],
+	);
+	const ancestor = new tbc.Transaction(ancestorRaw.toString('hex'));
 	const ftParentRaw = serializedTransaction(
-		[{ txid: 'aa'.repeat(32), vout: 0 }],
+		[{ txid: ancestor.hash, vout: 0 }],
 		[{ satoshis: 500n, script: ownerCode }, { satoshis: 0n, script: tape }],
 	);
 	const ftParent = new tbc.Transaction(ftParentRaw.toString('hex'));
@@ -125,6 +130,7 @@ function phase3dEnvelopeVector() {
 			`0x${ftParentRaw.toString('hex')}` as Hex,
 			`0x${nativeParentRaw.toString('hex')}` as Hex,
 		],
+		ancestors: [[`0x${ancestorRaw.toString('hex')}` as Hex], []] as Hex[][],
 		feeRaw: 1_900n,
 		intent,
 	};
@@ -301,6 +307,11 @@ async function main() {
 	assert.equal(verifiedTransition.deposit.depositId, depositVector.depositId);
 	assert.equal(verifiedTransition.ftInputTotal, depositVector.intent.amountRaw);
 	assert.equal(verifiedTransition.feeRaw, depositVector.feeRaw);
+	const authenticatedTransition = await call(depositArtifact, 'verifyAuthenticatedTransition', [
+		depositVector.raw, depositVector.parents, depositVector.ancestors,
+		PHASE3D_GATEWAY, expectedReserve,
+	]) as SolidityVerifiedTransition;
+	assert.deepEqual(authenticatedTransition, verifiedTransition);
 
 	const mutatedAmount = Buffer.from(depositVector.raw.slice(2), 'hex');
 	const magicOffset = mutatedAmount.indexOf(Buffer.from('LMBV2DEP', 'ascii'));
@@ -351,6 +362,23 @@ async function main() {
 		`0x${invalidNativeChange.toString('hex')}`, depositVector.parents,
 		PHASE3D_GATEWAY, expectedReserve,
 	]);
+	await expectRevert(depositArtifact, 'verifyAuthenticatedTransition', [
+		depositVector.raw, depositVector.parents, [[], []], PHASE3D_GATEWAY, expectedReserve,
+	]);
+	await expectRevert(depositArtifact, 'verifyAuthenticatedTransition', [
+		depositVector.raw, depositVector.parents, [depositVector.ancestors[0]],
+		PHASE3D_GATEWAY, expectedReserve,
+	]);
+	await expectRevert(depositArtifact, 'verifyAuthenticatedTransition', [
+		depositVector.raw, depositVector.parents,
+		[depositVector.ancestors[0], depositVector.ancestors[0]], PHASE3D_GATEWAY, expectedReserve,
+	]);
+	const mismatchedAncestor = Buffer.from(depositVector.ancestors[0][0].slice(2), 'hex');
+	mismatchedAncestor[mismatchedAncestor.length - 5] ^= 1;
+	await expectRevert(depositArtifact, 'verifyAuthenticatedTransition', [
+		depositVector.raw, depositVector.parents,
+		[[`0x${mismatchedAncestor.toString('hex')}`], []], PHASE3D_GATEWAY, expectedReserve,
+	]);
 	const depositInspectData = encodeFunctionData({
 		abi: depositArtifact.abi, functionName: 'inspectDeposit',
 		args: [depositVector.raw, PHASE3D_GATEWAY, expectedReserve],
@@ -363,6 +391,13 @@ async function main() {
 		abi: depositArtifact.abi, functionName: 'verifyTransition',
 		args: [depositVector.raw, depositVector.parents, PHASE3D_GATEWAY, expectedReserve],
 	});
+	const depositAuthenticatedTransitionData = encodeFunctionData({
+		abi: depositArtifact.abi, functionName: 'verifyAuthenticatedTransition',
+		args: [
+			depositVector.raw, depositVector.parents, depositVector.ancestors,
+			PHASE3D_GATEWAY, expectedReserve,
+		],
+	});
 	const estimateDepositGas = async (data: Hex) => {
 		const response = await rpc('eth_estimateGas', [
 			{ to: OVERRIDE_ADDRESS, data }, 'latest',
@@ -373,9 +408,11 @@ async function main() {
 		}
 		return BigInt(response.result);
 	};
-	const [depositInspectGas, depositMerkleGas, depositTransitionGas] = await Promise.all([
+	const [depositInspectGas, depositMerkleGas, depositTransitionGas,
+		depositAuthenticatedTransitionGas] = await Promise.all([
 		estimateDepositGas(depositInspectData), estimateDepositGas(depositMerkleData),
 		estimateDepositGas(depositTransitionData),
+		estimateDepositGas(depositAuthenticatedTransitionData),
 	]);
 	const compact = await call(artifact, 'compactRoundTrip', [0x1d00ffff]) as readonly unknown[];
 	assert.deepEqual(compact, [decodeCompactTarget(0x1d00ffff).target, 0x1d00ffff, false, false]);
@@ -473,12 +510,18 @@ async function main() {
 			parentTransactionBytes: depositVector.parents.reduce(
 				(total, parent) => total + (parent.length - 2) / 2, 0,
 			),
+			ancestorTransactionBytes: depositVector.ancestors.flat().reduce(
+				(total, ancestor) => total + (ancestor.length - 2) / 2, 0,
+			),
 			inspectCalldataBytes: (depositInspectData.length - 2) / 2,
 			inspectTransactionGasEstimate: depositInspectGas,
 			merkleCalldataBytes: (depositMerkleData.length - 2) / 2,
 			merkleTransactionGasEstimate: depositMerkleGas,
 			transitionCalldataBytes: (depositTransitionData.length - 2) / 2,
 			transitionTransactionGasEstimate: depositTransitionGas,
+			authenticatedTransitionCalldataBytes:
+				(depositAuthenticatedTransitionData.length - 2) / 2,
+			authenticatedTransitionTransactionGasEstimate: depositAuthenticatedTransitionGas,
 		},
 		inHarnessDeploymentExecutionGas: profile[0],
 		submissions: submissionProfile,

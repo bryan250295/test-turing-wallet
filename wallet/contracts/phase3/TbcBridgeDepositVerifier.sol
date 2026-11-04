@@ -24,8 +24,9 @@ interface ITbcHeaderRelayV2 {
 ///         Bridge Covenant envelope and bounded parent/outpoint conservation.
 /// @dev This proves canonical transaction bytes, TXID, Merkle inclusion, Covenant
 ///      intent, pinned v3 Code/Tape encoding, referenced parent bytes and balance
-///      conservation. It intentionally does NOT claim to execute the legacy FT
-///      input scripts, authenticate every ancestor or prove UTXO unspentness.
+///      conservation and the exact one-level ancestor set selected by the
+///      legacy-v3 Tape. It intentionally does NOT claim to execute the legacy
+///      FT input scripts/signatures or prove UTXO unspentness.
 library TbcBridgeDepositVerifier {
     uint256 internal constant TARGET_CHAIN_ID = 998;
     uint32 internal constant SOURCE_VOUT = 1;
@@ -110,6 +111,12 @@ library TbcBridgeDepositVerifier {
     error InvalidNativeChange();
     error InvalidNativeFee(uint256 inputs, uint256 outputs);
     error InvalidTapeAllocation(uint256 slot, uint64 supplied, uint64 expected);
+    error AncestorGroupCountMismatch(uint256 supplied, uint256 expected);
+    error AncestorCountMismatch(uint256 vin, uint256 supplied, uint256 expected);
+    error AncestorInputSlotMissing(uint256 vin, uint256 slot);
+    error AncestorTxidMismatch(uint256 vin, uint256 slot, bytes32 supplied, bytes32 expected);
+    error AncestorOutputMissing(uint256 vin, uint256 slot, uint32 vout);
+    error NativeAncestorsNotEmpty(uint256 supplied);
 
     function verifyEnvelope(
         bytes calldata rawTransaction,
@@ -258,6 +265,30 @@ library TbcBridgeDepositVerifier {
         result.feeRaw = state.nativeInputTotal - outputTotal;
     }
 
+    /// @notice Add the exact one-level ancestor set consumed by legacy-v3 FT
+    ///         `buildFtPrePreTxData` to the bounded transition proof.
+    /// @dev Each FT group is canonically ordered by ascending non-zero Tape slot.
+    ///      The final native fee input must have an empty group. This binds all
+    ///      ancestor bytes used by the later script verifier, but does not itself
+    ///      execute that script or verify its signature.
+    function verifyAuthenticatedTransition(
+        bytes calldata rawTransaction,
+        bytes[] calldata parentTransactions,
+        bytes[][] calldata ancestorTransactions,
+        address expectedGateway,
+        bytes20 expectedReserveController
+    ) internal pure returns (VerifiedTransition memory result) {
+        result = verifyTransition(
+            rawTransaction,
+            parentTransactions,
+            expectedGateway,
+            expectedReserveController
+        );
+        TbcBoundedTransaction.TransactionView memory deposit =
+            TbcBoundedTransaction.inspect(rawTransaction);
+        _verifyAncestors(deposit, parentTransactions, ancestorTransactions);
+    }
+
     function verifyFinalizedInclusion(
         ITbcHeaderRelayV2 relay,
         bytes32 blockHash,
@@ -369,6 +400,55 @@ library TbcBridgeDepositVerifier {
             if (balance == 0 || balance > type(uint64).max) revert InvalidFtInput(vin);
             state.balances[vin] = uint64(balance);
             state.ftInputTotal += balance;
+        }
+    }
+
+    function _verifyAncestors(
+        TbcBoundedTransaction.TransactionView memory deposit,
+        bytes[] calldata parents,
+        bytes[][] calldata ancestorGroups
+    ) private pure {
+        if (ancestorGroups.length != deposit.inputCount) {
+            revert AncestorGroupCountMismatch(ancestorGroups.length, deposit.inputCount);
+        }
+        uint256 nativeVin = deposit.inputCount - 1;
+        if (ancestorGroups[nativeVin].length != 0) {
+            revert NativeAncestorsNotEmpty(ancestorGroups[nativeVin].length);
+        }
+        for (uint256 vin; vin < nativeVin; ++vin) {
+            TbcBoundedTransaction.TransactionView memory parent =
+                TbcBoundedTransaction.inspectParent(parents[vin]);
+            uint32 parentVout = deposit.inputs[vin].outputIndex;
+            if (parentVout + 1 >= parent.outputCount) revert InvalidFtInput(vin);
+            TbcBoundedTransaction.OutputView memory tape = parent.outputs[parentVout + 1];
+            _tapeAmount(parents[vin], tape);
+            uint256 suppliedIndex;
+            for (uint256 slot; slot < 6; ++slot) {
+                if (_readUint64LE(parents[vin], tape.scriptOffset + 3 + slot * 8) == 0) {
+                    continue;
+                }
+                if (slot >= parent.inputCount) revert AncestorInputSlotMissing(vin, slot);
+                if (suppliedIndex >= ancestorGroups[vin].length) {
+                    revert AncestorCountMismatch(
+                        vin, ancestorGroups[vin].length, suppliedIndex + 1
+                    );
+                }
+                TbcBoundedTransaction.TransactionView memory ancestor =
+                    TbcBoundedTransaction.inspectParent(ancestorGroups[vin][suppliedIndex]);
+                TbcBoundedTransaction.InputView memory sourceInput = parent.inputs[slot];
+                if (ancestor.txid != sourceInput.previousTxid) {
+                    revert AncestorTxidMismatch(
+                        vin, slot, ancestor.txid, sourceInput.previousTxid
+                    );
+                }
+                if (sourceInput.outputIndex >= ancestor.outputCount) {
+                    revert AncestorOutputMissing(vin, slot, sourceInput.outputIndex);
+                }
+                ++suppliedIndex;
+            }
+            if (suppliedIndex != ancestorGroups[vin].length) {
+                revert AncestorCountMismatch(vin, ancestorGroups[vin].length, suppliedIndex);
+            }
         }
     }
 
