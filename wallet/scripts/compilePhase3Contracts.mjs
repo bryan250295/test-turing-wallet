@@ -16,6 +16,7 @@ const sourceNames = [
     'contracts/phase3/TbcBridgeDepositVerifier.sol',
     'contracts/phase3/TbcInputAuthorization.sol',
     'contracts/phase3/TbcBridgeDepositVerifierHarness.sol',
+    'contracts/phase3/TbcAuthorizedTransitionHarness.sol',
 ];
 const sources = Object.fromEntries(await Promise.all(sourceNames.map(async (sourceName) => [
     sourceName,

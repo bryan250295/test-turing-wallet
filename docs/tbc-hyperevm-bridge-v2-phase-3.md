@@ -123,12 +123,22 @@ non-membership/unspent proof.
 Accordingly it is an owner-authorized structural legacy-FT transition verifier,
 not yet the full Phase 2 Script verifier and not a mint authorization gate.
 
+`TbcBridgeDepositVerifierHarness.sol` now exposes only the structural, Merkle
+and finalized-inclusion test paths. `TbcAuthorizedTransitionHarness.sol`
+exposes only the complete authorization/parent-witness path. This is compiler
+and deployment isolation for test measurement; it does not remove any check
+from the authorization entry point or create a second trust decision.
+
 ## 2. Executed cross-language vectors
 
 The pinned Solidity 0.8.30 compiler targets Cancun, matching HyperEVM Testnet
-chain 998. The compiled primitive harness is 6,728 runtime bytes, the relay is
-9,314 runtime bytes and the Phase 3D deposit harness is 23,224 runtime bytes,
-leaving 1,352 bytes below the EVM runtime limit. A read-only `eth_call`
+chain 998. The compiled primitive harness is 6,728 runtime bytes and the relay
+is 9,314 runtime bytes. Phase 3D is split into a 14,483-byte structural/Merkle
+harness and a 20,387-byte authorization/parent-witness harness, leaving 10,093
+and 4,189 bytes respectively below the EVM runtime limit. The split lets the
+compiler remove unrelated external paths, while parsed deposit and FT-parent
+views are reused inside the authorization path to avoid repeated hashing and
+decoding. A read-only `eth_call`
 injects that runtime temporarily through the RPC state-override parameter; it
 does not deploy code or submit a transaction.
 
@@ -223,11 +233,16 @@ Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 
 | Operation | Calldata bytes | Direct transaction gas estimate |
 | --- | ---: | ---: |
-| Parse TXID + Covenant/v3 output envelope | 3,428 | 154,321 |
-| Same envelope + one-leaf Merkle reconstruction | 3,588 | 163,574 |
-| Envelope + 2 bound parents + FT/native conservation | 5,764 | 331,174 |
-| Same transition + exact one-level ancestor authentication | 6,116 | 496,870 |
-| Same transition + FT/native input authorization + exact parent witness | 6,372 | 864,413 |
+| Parse TXID + Covenant/v3 output envelope | 3,428 | 154,343 |
+| Same envelope + one-leaf Merkle reconstruction | 3,588 | 163,551 |
+| Envelope + 2 bound parents + FT/native conservation | 5,764 | 331,599 |
+| Same transition + exact one-level ancestor authentication | 6,116 | 446,233 |
+| Same transition + FT/native input authorization + exact parent witness | 6,372 | 722,098 |
+
+Before harness separation and parsed-view reuse, the final row cost 864,413 gas
+and the combined runtime was 23,224 bytes. The optimized authorization path is
+142,315 gas (about 16.46%) lower, and its deployable runtime is 2,837 bytes
+smaller, without changing calldata or accepted proof semantics.
 
 The one-leaf vector has no sibling hashes and the second estimate does not call
 a deployed relay. The transition estimate parses two small synthetic parents;

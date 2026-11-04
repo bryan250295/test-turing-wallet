@@ -198,6 +198,22 @@ library TbcBridgeDepositVerifier {
     ) internal pure returns (VerifiedTransition memory result) {
         TbcBoundedTransaction.TransactionView memory depositTransaction =
             TbcBoundedTransaction.inspect(rawTransaction);
+        return _verifyTransition(
+            rawTransaction,
+            depositTransaction,
+            parentTransactions,
+            expectedGateway,
+            expectedReserveController
+        );
+    }
+
+    function _verifyTransition(
+        bytes calldata rawTransaction,
+        TbcBoundedTransaction.TransactionView memory depositTransaction,
+        bytes[] calldata parentTransactions,
+        address expectedGateway,
+        bytes20 expectedReserveController
+    ) private pure returns (VerifiedTransition memory result) {
         result.deposit = _verifyEnvelope(
             rawTransaction, depositTransaction, expectedGateway, expectedReserveController
         );
@@ -233,22 +249,37 @@ library TbcBridgeDepositVerifier {
             );
             nextOutput = 5;
         }
+        result.ftInputTotal = state.ftInputTotal;
+        result.feeRaw = _verifyNativeOutputsAndFee(
+            rawTransaction,
+            depositTransaction,
+            parentTransactions,
+            nextOutput,
+            state.nativeInputTotal
+        );
+    }
+
+    function _verifyNativeOutputsAndFee(
+        bytes calldata rawTransaction,
+        TbcBoundedTransaction.TransactionView memory depositTransaction,
+        bytes[] calldata parentTransactions,
+        uint256 nextOutput,
+        uint256 nativeInputTotal
+    ) private pure returns (uint256 feeRaw) {
         if (
             depositTransaction.outputCount != nextOutput
                 && depositTransaction.outputCount != nextOutput + 1
         ) revert InvalidOutputShape(depositTransaction.outputCount, nextOutput);
         if (depositTransaction.outputCount == nextOutput + 1) {
+            uint256 nativeVin = depositTransaction.inputCount - 1;
             TbcBoundedTransaction.TransactionView memory nativeParent =
-                TbcBoundedTransaction.inspectParent(
-                    parentTransactions[depositTransaction.inputCount - 1]
-                );
-            uint32 nativeVout =
-                depositTransaction.inputs[depositTransaction.inputCount - 1].outputIndex;
+                TbcBoundedTransaction.inspectParent(parentTransactions[nativeVin]);
+            uint32 nativeVout = depositTransaction.inputs[nativeVin].outputIndex;
             if (
                 !_sameScript(
                     rawTransaction,
                     depositTransaction.outputs[nextOutput],
-                    parentTransactions[depositTransaction.inputCount - 1],
+                    parentTransactions[nativeVin],
                     nativeParent.outputs[nativeVout]
                 )
             ) revert InvalidNativeChange();
@@ -258,11 +289,10 @@ library TbcBridgeDepositVerifier {
         for (uint256 index; index < depositTransaction.outputCount; ++index) {
             outputTotal += depositTransaction.outputs[index].satoshis;
         }
-        if (state.nativeInputTotal <= outputTotal) {
-            revert InvalidNativeFee(state.nativeInputTotal, outputTotal);
+        if (nativeInputTotal <= outputTotal) {
+            revert InvalidNativeFee(nativeInputTotal, outputTotal);
         }
-        result.ftInputTotal = state.ftInputTotal;
-        result.feeRaw = state.nativeInputTotal - outputTotal;
+        return nativeInputTotal - outputTotal;
     }
 
     /// @notice Add the exact one-level ancestor set consumed by legacy-v3 FT
@@ -278,14 +308,35 @@ library TbcBridgeDepositVerifier {
         address expectedGateway,
         bytes20 expectedReserveController
     ) internal pure returns (VerifiedTransition memory result) {
-        result = verifyTransition(
+        (result,) = verifyAuthenticatedTransitionWithView(
             rawTransaction,
+            parentTransactions,
+            ancestorTransactions,
+            expectedGateway,
+            expectedReserveController
+        );
+    }
+
+    /// @dev Lets the authorization layer reuse the already parsed deposit view
+    ///      instead of hashing and decoding the same transaction a third time.
+    function verifyAuthenticatedTransitionWithView(
+        bytes calldata rawTransaction,
+        bytes[] calldata parentTransactions,
+        bytes[][] calldata ancestorTransactions,
+        address expectedGateway,
+        bytes20 expectedReserveController
+    ) internal pure returns (
+        VerifiedTransition memory result,
+        TbcBoundedTransaction.TransactionView memory deposit
+    ) {
+        deposit = TbcBoundedTransaction.inspect(rawTransaction);
+        result = _verifyTransition(
+            rawTransaction,
+            deposit,
             parentTransactions,
             expectedGateway,
             expectedReserveController
         );
-        TbcBoundedTransaction.TransactionView memory deposit =
-            TbcBoundedTransaction.inspect(rawTransaction);
         _verifyAncestors(deposit, parentTransactions, ancestorTransactions);
     }
 

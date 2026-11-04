@@ -5,7 +5,6 @@ import {
     ITbcHeaderRelayV2,
     TbcBridgeDepositVerifier
 } from "./TbcBridgeDepositVerifier.sol";
-import {TbcInputAuthorization} from "./TbcInputAuthorization.sol";
 
 /// @notice Stateless Phase 3D cross-language and gas-test harness only.
 contract TbcBridgeDepositVerifierHarness {
@@ -67,32 +66,6 @@ contract TbcBridgeDepositVerifierHarness {
             expectedGateway,
             expectedReserveController
         );
-    }
-
-    function verifyAuthorizedTransition(
-        bytes calldata rawTransaction,
-        bytes[] calldata parentTransactions,
-        bytes[][] calldata ancestorTransactions,
-        TbcInputAuthorization.SignatureWitness[] calldata signatureWitnesses,
-        address expectedGateway,
-        bytes20 expectedReserveController
-    ) external pure returns (TbcBridgeDepositVerifier.VerifiedTransition memory) {
-        return TbcInputAuthorization.verifyAuthorizedTransition(
-            rawTransaction,
-            parentTransactions,
-            ancestorTransactions,
-            signatureWitnesses,
-            expectedGateway,
-            expectedReserveController
-        );
-    }
-
-    function signatureDigest(
-        bytes calldata rawTransaction,
-        bytes calldata parentTransaction,
-        uint256 vin
-    ) external pure returns (bytes32) {
-        return TbcInputAuthorization.signatureDigest(rawTransaction, parentTransaction, vin);
     }
 
     function verifyFinalizedDeposit(

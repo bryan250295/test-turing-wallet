@@ -47,10 +47,6 @@ library TbcInputAuthorization {
     struct AuthorizationTarget {
         TbcBoundedTransaction.OutputView sourceOutput;
         bytes20 owner;
-        bool exactP2pkhUnlock;
-        uint8 parentInputCount;
-        uint8 parentOutputCount;
-        uint32 parentVout;
     }
 
     error SignatureWitnessCountMismatch(uint256 supplied, uint256 expected);
@@ -70,15 +66,14 @@ library TbcInputAuthorization {
         address expectedGateway,
         bytes20 expectedReserveController
     ) internal pure returns (TbcBridgeDepositVerifier.VerifiedTransition memory result) {
-        result = TbcBridgeDepositVerifier.verifyAuthenticatedTransition(
+        TbcBoundedTransaction.TransactionView memory transaction;
+        (result, transaction) = TbcBridgeDepositVerifier.verifyAuthenticatedTransitionWithView(
             rawTransaction,
             parentTransactions,
             ancestorTransactions,
             expectedGateway,
             expectedReserveController
         );
-        TbcBoundedTransaction.TransactionView memory transaction =
-            TbcBoundedTransaction.inspect(rawTransaction);
         if (signatureWitnesses.length != transaction.inputCount) {
             revert SignatureWitnessCountMismatch(
                 signatureWitnesses.length, transaction.inputCount
@@ -105,30 +100,67 @@ library TbcInputAuthorization {
         uint256 vin,
         bool nativeInput
     ) private pure {
-        TbcBoundedTransaction.TransactionView memory parent =
-            TbcBoundedTransaction.inspectParent(parentTransaction);
-        uint32 parentVout = transaction.inputs[vin].outputIndex;
-        TbcBoundedTransaction.OutputView memory sourceOutput =
-            parent.outputs[parentVout];
-        AuthorizationTarget memory target = AuthorizationTarget({
-            sourceOutput: sourceOutput,
-            owner: _readBytes20(
+        (AuthorizationTarget memory target, LocatedSignature memory located) =
+            _authorizationContext(
+                rawTransaction,
+                transaction,
                 parentTransaction,
-                sourceOutput.scriptOffset + (nativeInput ? 3 : FT_V3_CONTROLLER_OFFSET)
-            ),
-            exactP2pkhUnlock: nativeInput,
-            parentInputCount: parent.inputCount,
-            parentOutputCount: parent.outputCount,
-            parentVout: parentVout
-        });
+                witness,
+                vin,
+                nativeInput
+            );
         _verifyInputSignature(
             rawTransaction,
             transaction,
             vin,
             parentTransaction,
             target,
-            witness
+            witness,
+            located
         );
+    }
+
+    function _authorizationContext(
+        bytes calldata rawTransaction,
+        TbcBoundedTransaction.TransactionView memory transaction,
+        bytes calldata parentTransaction,
+        SignatureWitness calldata witness,
+        uint256 vin,
+        bool nativeInput
+    ) private pure returns (
+        AuthorizationTarget memory target,
+        LocatedSignature memory located
+    ) {
+        TbcBoundedTransaction.TransactionView memory parent =
+            TbcBoundedTransaction.inspectParent(parentTransaction);
+        uint32 parentVout = transaction.inputs[vin].outputIndex;
+        TbcBoundedTransaction.InputView memory input = transaction.inputs[vin];
+        located = _locateSignature(
+            rawTransaction,
+            input,
+            witness.signaturePushOffset,
+            nativeInput,
+            vin
+        );
+        if (!nativeInput) {
+            _verifyFtParentWitness(
+                rawTransaction,
+                input,
+                parentTransaction,
+                parent,
+                parentVout,
+                located.publicKeyOffset + 33,
+                vin
+            );
+        }
+        TbcBoundedTransaction.OutputView memory sourceOutput = parent.outputs[parentVout];
+        target = AuthorizationTarget({
+            sourceOutput: sourceOutput,
+            owner: _readBytes20(
+                parentTransaction,
+                sourceOutput.scriptOffset + (nativeInput ? 3 : FT_V3_CONTROLLER_OFFSET)
+            )
+        });
     }
 
     function signatureDigest(
@@ -152,26 +184,9 @@ library TbcInputAuthorization {
         uint256 vin,
         bytes calldata parentTransaction,
         AuthorizationTarget memory target,
-        SignatureWitness calldata witness
+        SignatureWitness calldata witness,
+        LocatedSignature memory located
     ) private pure {
-        TbcBoundedTransaction.InputView memory input = transaction.inputs[vin];
-        LocatedSignature memory located = _locateSignature(
-            rawTransaction,
-            input,
-            witness.signaturePushOffset,
-            target.exactP2pkhUnlock,
-            vin
-        );
-        if (!target.exactP2pkhUnlock) {
-            _verifyFtParentWitness(
-                rawTransaction,
-                input,
-                parentTransaction,
-                target,
-                located.publicKeyOffset + 33,
-                vin
-            );
-        }
         address expectedPublicKey = _verifyPublicKey(
             rawTransaction, located.publicKeyOffset, witness, target.owner, vin
         );
@@ -196,12 +211,13 @@ library TbcInputAuthorization {
         bytes calldata rawTransaction,
         TbcBoundedTransaction.InputView memory input,
         bytes calldata parentTransaction,
-        AuthorizationTarget memory target,
+        TbcBoundedTransaction.TransactionView memory parent,
+        uint32 parentVout,
         uint256 cursor,
         uint256 vin
     ) private pure {
         uint256 end = uint256(input.scriptOffset) + input.scriptLength;
-        if (cursor >= end || target.parentVout + 1 >= target.parentOutputCount) {
+        if (cursor >= end || parentVout + 1 >= parent.outputCount) {
             revert InvalidFtWitnessLayout(vin);
         }
 
@@ -210,16 +226,14 @@ library TbcInputAuthorization {
             _readUint32LE(rawTransaction, cursor) != 10
                 || _readUint32LE(rawTransaction, cursor + 4)
                     != _readUint32LE(parentTransaction, parentTransaction.length - 4)
-                || _readUint32LE(rawTransaction, cursor + 8) != target.parentInputCount
-                || _readUint32LE(rawTransaction, cursor + 12) != target.parentOutputCount
+                || _readUint32LE(rawTransaction, cursor + 8) != parent.inputCount
+                || _readUint32LE(rawTransaction, cursor + 12) != parent.outputCount
         ) revert InvalidFtWitnessLayout(vin);
         cursor += 16;
 
-        uint256 inputDataLength = uint256(target.parentInputCount) * 40;
+        uint256 inputDataLength = uint256(parent.inputCount) * 40;
         cursor = _consumePush(rawTransaction, cursor, end, inputDataLength, vin);
-        TbcBoundedTransaction.TransactionView memory parent =
-            TbcBoundedTransaction.inspectParent(parentTransaction);
-        for (uint256 index; index < target.parentInputCount; ++index) {
+        for (uint256 index; index < parent.inputCount; ++index) {
             TbcBoundedTransaction.InputView memory parentInput = parent.inputs[index];
             if (
                 _readBytes32(rawTransaction, cursor)
@@ -237,10 +251,10 @@ library TbcInputAuthorization {
         cursor += 32;
 
         cursor = _verifyOutputCommitments(
-            rawTransaction, cursor, end, parentTransaction, parent, 0, target.parentVout, vin
+            rawTransaction, cursor, end, parentTransaction, parent, 0, parentVout, vin
         );
         cursor = _verifyCodeTapeAndTrailingOutputs(
-            rawTransaction, cursor, end, parentTransaction, parent, target.parentVout, vin
+            rawTransaction, cursor, end, parentTransaction, parent, parentVout, vin
         );
         if (cursor != end) revert InvalidFtWitnessLayout(vin);
     }

@@ -363,6 +363,9 @@ async function main() {
 	const depositArtifact = JSON.parse(await readFile(
 		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcBridgeDepositVerifierHarness.json'), 'utf8',
 	)) as Artifact;
+	const authorizationArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcAuthorizedTransitionHarness.json'), 'utf8',
+	)) as Artifact;
 	const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 	const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), 'utf8')) as BootstrapManifest;
 	const bootstrapPoints = decodeTbcdevBootstrapContext(await readFile(resolve(fixtureRoot, manifest.binaryFile)));
@@ -397,7 +400,7 @@ async function main() {
 		PHASE3D_GATEWAY, expectedReserve,
 	]) as SolidityVerifiedTransition;
 	assert.deepEqual(authenticatedTransition, verifiedTransition);
-	const authorizedTransition = await call(depositArtifact, 'verifyAuthorizedTransition', [
+	const authorizedTransition = await call(authorizationArtifact, 'verifyAuthorizedTransition', [
 		// The witness offset is relative to the serialized input script and points
 		// to the canonical one-byte signature push opcode.
 		depositVector.raw, depositVector.parents, depositVector.ancestors,
@@ -471,11 +474,11 @@ async function main() {
 		depositVector.raw, depositVector.parents,
 		[[`0x${mismatchedAncestor.toString('hex')}`], []], PHASE3D_GATEWAY, expectedReserve,
 	]);
-	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+	await expectRevert(authorizationArtifact, 'verifyAuthorizedTransition', [
 		depositVector.raw, depositVector.parents, depositVector.ancestors,
 		depositVector.signatureWitnesses.slice(0, 1), PHASE3D_GATEWAY, expectedReserve,
 	]);
-	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+	await expectRevert(authorizationArtifact, 'verifyAuthorizedTransition', [
 		depositVector.raw, depositVector.parents, depositVector.ancestors,
 		[
 			{ ...depositVector.signatureWitnesses[0], signaturePushOffset:
@@ -485,7 +488,7 @@ async function main() {
 		PHASE3D_GATEWAY, expectedReserve,
 	]);
 	for (const mutatedWitness of Object.values(depositVector.witnessLayoutMutations)) {
-		await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+		await expectRevert(authorizationArtifact, 'verifyAuthorizedTransition', [
 			mutatedWitness, depositVector.parents, depositVector.ancestors,
 			depositVector.signatureWitnesses, PHASE3D_GATEWAY, expectedReserve,
 		]);
@@ -496,12 +499,12 @@ async function main() {
 	);
 	assert.ok(ftSignatureOffset >= 0);
 	invalidSignature[ftSignatureOffset + 10] ^= 1;
-	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+	await expectRevert(authorizationArtifact, 'verifyAuthorizedTransition', [
 		`0x${invalidSignature.toString('hex')}`, depositVector.parents,
 		depositVector.ancestors, depositVector.signatureWitnesses,
 		PHASE3D_GATEWAY, expectedReserve,
 	]);
-	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+	await expectRevert(authorizationArtifact, 'verifyAuthorizedTransition', [
 		depositVector.raw, depositVector.parents, depositVector.ancestors,
 		[
 			{ ...depositVector.signatureWitnesses[0], publicKeyY:
@@ -530,16 +533,16 @@ async function main() {
 		],
 	});
 	const depositAuthorizedTransitionData = encodeFunctionData({
-		abi: depositArtifact.abi, functionName: 'verifyAuthorizedTransition',
+		abi: authorizationArtifact.abi, functionName: 'verifyAuthorizedTransition',
 		args: [
 			depositVector.raw, depositVector.parents, depositVector.ancestors,
 			depositVector.signatureWitnesses, PHASE3D_GATEWAY, expectedReserve,
 		],
 	});
-	const estimateDepositGas = async (data: Hex) => {
+	const estimateDepositGas = async (data: Hex, artifact = depositArtifact) => {
 		const response = await rpc('eth_estimateGas', [
 			{ to: OVERRIDE_ADDRESS, data }, 'latest',
-			{ [OVERRIDE_ADDRESS]: { code: depositArtifact.deployedBytecode } },
+			{ [OVERRIDE_ADDRESS]: { code: artifact.deployedBytecode } },
 		]);
 		if (response.error || !response.result) {
 			throw new Error(`Phase 3D gas estimation failed: ${JSON.stringify(response.error)}`);
@@ -551,7 +554,7 @@ async function main() {
 		estimateDepositGas(depositInspectData), estimateDepositGas(depositMerkleData),
 		estimateDepositGas(depositTransitionData),
 		estimateDepositGas(depositAuthenticatedTransitionData),
-		estimateDepositGas(depositAuthorizedTransitionData),
+		estimateDepositGas(depositAuthorizedTransitionData, authorizationArtifact),
 	]);
 	const compact = await call(artifact, 'compactRoundTrip', [0x1d00ffff]) as readonly unknown[];
 	assert.deepEqual(compact, [decodeCompactTarget(0x1d00ffff).target, 0x1d00ffff, false, false]);
