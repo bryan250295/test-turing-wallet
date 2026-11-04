@@ -1,0 +1,11 @@
+{
+	"name": "learningmaterials-phase3e-local-evm",
+	"private": true,
+	"type": "module",
+	"devDependencies": {
+		"hardhat": "3.21.2"
+	},
+	"overrides": {
+		"zod": "4.6.6"
+	}
+}

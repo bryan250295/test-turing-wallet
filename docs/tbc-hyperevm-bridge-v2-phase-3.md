@@ -6,7 +6,9 @@ bootstrap commitment, Phase 3C permissionless header-relay core and the Phase
 one-level FT ancestor-authentication, input-signature and exact legacy-v3
 unlock-stack semantic layers, plus the dual-key replay-protection storage
 primitive and proof-only Gateway/WrappedFTV2 composition, are implemented and
-cross-checked for the frozen `tbcdev-testnet` vector; nothing is deployed or
+cross-checked for the frozen `tbcdev-testnet` vector; Phase 3E also executes the
+same production composition through persistent transactions on a disposable,
+pinned local Cancun EVM; nothing is deployed to a public network or
 independently audited**
 
 Implementation date: **2026-11-04 (Asia/Kuala_Lumpur)**
@@ -233,12 +235,12 @@ npm run phase3:compile
 cd ../backend
 npm run phase3:test
 npm run phase3:solidity-rpc-test
+npm run phase3:local-evm-test
 npm run typecheck
 ```
 
-The RPC test is an integration vector, not the only future test layer. Before a
-deployment, the same vectors must run in a pinned local EVM and the production
-contracts need independent security and gas review.
+The RPC state-override and persistent local-EVM suites cover different
+boundaries. Neither is a substitute for independent security and gas review.
 
 ### 2.1 Read-only gas profile
 
@@ -347,6 +349,44 @@ synthetic parents, so real parent/ancestor sizes and nontrivial Merkle branches
 can be materially larger. These measurements therefore cannot be used as a
 final per-deposit fee quote.
 
+### 2.3 Phase 3E persistent local-EVM rehearsal
+
+The pinned `Hardhat 3.21.2` EDR engine runs a disposable Cancun chain with
+chain ID `998`. The test deploys the authorization module, prefix module and
+Gateway in the production order. The Gateway constructor creates its own relay
+and WrappedFTV2. Six official headers `839165..839170` are then submitted as
+six real local transactions, after which the test checks six-confirmation
+finality and cumulative work.
+
+The synthetic deposit is not part of historical TBC Testnet. The suite makes
+that boundary explicit by changing only the retained block's Merkle-root slot
+inside the disposable EVM before sending the proof-mint transaction. It then
+checks the exact `DepositConsumed` and `ProofMinted` event fields, both replay
+keys, recipient balance, total supply and state preservation after a reverted
+same-proof replay. It also rejects wrong verifier offsets, an invalid Merkle
+index, direct token mint, supply-cap overflow, three malformed authorization
+witness layouts, three malformed unlock prefixes and a Gateway deployment with
+the wrong module runtime.
+
+The compiler/build hash, runtime codehashes, deterministic deployment order,
+addresses and gas results are frozen in
+`backend/src/bridge/phase3/fixtures/phase3e-local-evm-v1.json`. A change fails
+the test until it is deliberately reviewed and the manifest is updated.
+
+Observed persistent local transaction gas on 2026-11-04:
+
+| Operation | Gas used |
+| --- | ---: |
+| Deploy authorization module | 4,507,405 |
+| Deploy prefix module | 2,725,013 |
+| Deploy Gateway + self-created relay/token | 5,580,339 |
+| Submit headers 839165..839170 | 6,441,867 |
+| Finalized proof + both modules + replay + mint | 2,004,400 |
+| Rejected same-proof replay | 248,910 |
+
+These numbers are a deterministic regression baseline, not a public-network
+fee quote. No public RPC transaction, token mint or asset movement occurs.
+
 ## 3. Authenticated bootstrap history
 
 The accepted checkpoint at height `839164` authenticates one header and its
@@ -411,14 +451,21 @@ execution or FT Covenant semantics. Those remain separate gates.
 ## 5. Remaining Phase 3 work
 
 Phase 3 now contains the proof-only `WrappedFTV2`/Gateway implementation, but it
-is not yet an operational proof-backed bridge. Before any deployment, add a
-pinned local-EVM suite, fuzz malformed bootstrap witnesses, proof envelopes and
-long competing branches, benchmark real-size deposits and Merkle branches, and
-obtain independent Solidity, TBC Script and consensus review. Then rehearse the
-exact verifier-modules → Gateway/self-created relay and token → header-sync
-order, verify every runtime hash and run a real testnet deposit without moving
-existing custodial balances. The current RPC state-override vector is not a
-substitute for those gates.
+is not yet an operational proof-backed bridge. The pinned local-EVM deployment,
+header-sync, mint and replay rehearsal is complete. Before any public-network
+deployment, remaining work includes randomized/property fuzzing of malformed
+bootstrap witnesses and proof envelopes, long competing-branch tests,
+real-size deposit/Merkle-branch benchmarks and independent Solidity, TBC Script
+and consensus review. A real testnet deposit must then pass through newly
+deployed contracts without moving existing custodial balances.
+
+The main protocol blocker is unchanged: finalized transaction inclusion does
+not prove that the minted source FT outpoint remains unspent. An API or TBCScan
+status is operational evidence, not a cryptographic fact authenticated by the
+EVM. Production therefore still needs either an EVM-verifiable TBC UTXO
+commitment/proof or a separately reviewed TBC Bridge Covenant/redemption design
+that constrains reserve movement and prevents an already represented deposit
+from being spent outside the authorized release transition.
 
 The existing `BridgeWrappedFT`, `LearningWrappedFT` and
 `LearningRedemptionEscrow` must remain separate learning/custodial artifacts.
@@ -447,11 +494,13 @@ The proof-only Gateway composes finalized inclusion, both exact semantic gates,
 dual replay consumption and WrappedFTV2 minting without an administrative mint
 path, and its constructor pins every external verifier runtime by codehash.
 It does **not** establish a live canonical TBC chain because the relay is not
-deployed or independently audited. It also does not prove current UTXO
-unspentness, and the Gateway has only been executed against synthetic state in
-read-only RPC simulation. Until deployment rehearsal, independent review and a
-real testnet proof pass, the forward path remains the existing custodial
-learning flow and must not be described as production-trustless.
+deployed on a public network or independently audited. It also does not prove
+current UTXO unspentness. The Gateway has now executed against persistent state
+on a disposable local chain, but its Merkle-root substitution is test-only and
+does not claim that the synthetic transaction exists in historical TBC
+Testnet. Until the unspent/reserve-control gap, independent review and a real
+testnet proof pass are complete, the forward path remains the existing
+custodial learning flow and must not be described as production-trustless.
 
 ## 7. Evidence used
 

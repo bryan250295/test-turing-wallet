@@ -61,7 +61,7 @@ interface SolidityVerifiedTransition {
 	feeRaw: bigint;
 }
 
-const PHASE3D_GATEWAY = '0x1111111111111111111111111111111111111111' as const;
+export const PHASE3D_GATEWAY = '0x1111111111111111111111111111111111111111' as const;
 const PHASE3D_RELAY = '0x0000000000000000000000000000000000000301' as const;
 const PHASE3D_AUTHORIZATION = '0x0000000000000000000000000000000000000302' as const;
 const PHASE3D_PREFIX = '0x0000000000000000000000000000000000000303' as const;
@@ -102,11 +102,13 @@ function serializedTransaction(
 	]);
 }
 
-function phase3dEnvelopeVector() {
+export function phase3dEnvelopeVector(
+	destinationGateway: Hex = PHASE3D_GATEWAY,
+) {
 	const genesis = new tbc.Transaction(PINNED_MT_V3_GENESIS_RAW);
 	const amountRaw = 1_234n;
 	const intent = {
-		sourceContractId: genesis.hash, destinationChainId: 998n, destinationGateway: PHASE3D_GATEWAY,
+		sourceContractId: genesis.hash, destinationChainId: 998n, destinationGateway,
 		recipient: PHASE3D_RECIPIENT, amountRaw, depositNonce: 7n,
 		reserveControllerPubKeyHash: PHASE3D_RESERVE_PKH,
 	};
@@ -279,7 +281,7 @@ function phase3dEnvelopeVector() {
 	};
 }
 
-const RELAY_HEADERS = [
+export const RELAY_HEADERS = [
 	REAL_MT_DEPOSIT_BLOCK,
 	{
 		height: 839_166, hash: '0000000000000045f9d7756705e5099803897b6ae8ce99901a896ee98efec743',
@@ -1046,7 +1048,9 @@ async function main() {
 	console.log('No contract was deployed and no transaction or asset movement was submitted.');
 }
 
-main().catch((error: unknown) => {
-	console.error(error);
-	process.exitCode = 1;
-});
+if (require.main === module) {
+	main().catch((error: unknown) => {
+		console.error(error);
+		process.exitCode = 1;
+	});
+}

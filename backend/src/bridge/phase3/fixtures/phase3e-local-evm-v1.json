@@ -1,0 +1,52 @@
+{
+  "schema": "learningmaterials/phase3e-local-evm/v1",
+  "chainId": 998,
+  "hardfork": "cancun",
+  "engine": {
+    "name": "hardhat",
+    "version": "3.21.2"
+  },
+  "compiler": {
+    "version": "0.8.30+commit.73712a01.Emscripten.clang",
+    "buildInputSha256": "8eaa408bc687a979c80e59166c700721947185308254e22bafa1ce83549c2925"
+  },
+  "codeHashes": {
+    "authorizationRuntime": "0xbd25c07c5a57d79532cd829a650346ddc00863d92ba833cee49099916173d4c5",
+    "prefixRuntime": "0xdca851d9c2013789f5da598adc15136b0ca003de58a652be20e1fc0f6203fa49",
+    "relayRuntime": "0x8056986ffcc5d8f1fa018aee82fe5fc36e27bbd10d4f5141871768c43554ef03",
+    "gatewayCreation": "0x0a38b0cf8f3dbabc5825b26db35014153a35e58448e85aaebbd12b8fba69070e"
+  },
+  "deploymentOrder": [
+    {
+      "contract": "TbcAuthorizedTransitionVerifier",
+      "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "gasUsed": "4507405"
+    },
+    {
+      "contract": "TbcFtUnlockPrefixVerifierModule",
+      "address": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+      "gasUsed": "2725013"
+    },
+    {
+      "contract": "TbcProofMintGateway",
+      "address": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+      "gasUsed": "5580339"
+    }
+  ],
+  "gatewayChildren": {
+    "relay": "0x75537828f2ce51be7289709686a69cbfdbb714f1",
+    "token": "0xe451980132e65465d0a498c53f0b5227326dd73f"
+  },
+  "headerGasUsed": [
+    { "height": 839165, "gasUsed": "1110078" },
+    { "height": 839166, "gasUsed": "1113232" },
+    { "height": 839167, "gasUsed": "1069524" },
+    { "height": 839168, "gasUsed": "1054535" },
+    { "height": 839169, "gasUsed": "1041975" },
+    { "height": 839170, "gasUsed": "1052523" }
+  ],
+  "mintGasUsed": "2004400",
+  "replayRevertGasUsed": "248910",
+  "mintedRaw": "1234",
+  "negativeCases": 12
+}
