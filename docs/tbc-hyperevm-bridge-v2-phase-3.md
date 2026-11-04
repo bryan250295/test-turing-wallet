@@ -3,9 +3,9 @@
 Status: **Phase 3A consensus/Merkle primitives, Phase 3B authenticated
 bootstrap commitment, Phase 3C permissionless header-relay core and the Phase
 3D bounded TXID/Covenant/v3 output-envelope, parent/outpoint conservation and
-one-level FT ancestor-authentication and input-signature layers are complete
-for `tbcdev-testnet`; full FT Script execution, gateway and proof-backed token
-are not complete**
+one-level FT ancestor-authentication, input-signature and exact legacy-v3
+unlock-stack semantic layers are complete for `tbcdev-testnet`; gateway and
+proof-backed token are not complete**
 
 Implementation date: **2026-11-04 (Asia/Kuala_Lumpur)**
 
@@ -106,7 +106,7 @@ match the compressed key in the raw transaction; it cannot substitute another
 owner. The final native input must also use the exact two-push P2PKH unlock
 shape. Schnorr and other sighash modes fail closed for this frozen route.
 
-The next bounded semantic slice consumes the canonical legacy-v3
+The fifth bounded semantic slice consumes the canonical legacy-v3
 `getPreTxdata(parent, vout)` witness immediately after each FT public key. It
 checks the pushed version/locktime/input/output header, every parent
 outpoint/sequence, the aggregate parent input-script hashes, surrounding output
@@ -116,30 +116,44 @@ Tape bytes and the final input-script boundary. An inserted stable-coin
 therefore fails closed even though input scripts are not covered by the
 `ALL|FORKID` signature digest.
 
-These slices still do not validate the preceding `getCurrentTxdata` and
-`buildFtPrePreTxData` stack encodings or execute the complete pinned legacy-v3
-FT Script. They also do not provide an independent UTXO
-non-membership/unspent proof.
-Accordingly it is an owner-authorized structural legacy-FT transition verifier,
-not yet the full Phase 2 Script verifier and not a mint authorization gate.
+`TbcFtUnlockPrefixVerifier.sol` completes the bounded legacy-v3 unlock-stack
+semantics preceding each FT signature. It requires the exact SDK
+`getCurrentTxdata || buildFtPrePreTxData` byte sequence, including canonical
+push opcodes, output values/scripts, reverse Tape-slot ancestor ordering,
+pre-parent header/input/output commitments and the input-index opcode. It
+implements the TBC `OP_PARTIAL_HASH` SHA-256 compression state over exact
+64-byte blocks and cross-checks it against the pinned SDK instead of treating
+the supplied intermediate state as trusted data. The optimized fixed v3
+partial-state path additionally binds the actual 1,856-byte Code prefix to the
+pinned template before accepting its frozen compression state.
+
+Together, the structural, authorization/parent-tail and unlock-prefix gates
+cover the complete SDK-generated legacy-v3 `FT.getFTunlock(..., false)` input
+shape for this frozen route through bounded semantic checks. This is not a
+general-purpose TBC Script interpreter and does not support other FT versions,
+stable-coin flags, swap paths, Schnorr or other sighash modes. It also does not
+provide an independent UTXO non-membership/unspent proof and is not yet a mint
+authorization gate.
 
 `TbcBridgeDepositVerifierHarness.sol` now exposes only the structural, Merkle
 and finalized-inclusion test paths. `TbcAuthorizedTransitionHarness.sol`
-exposes only the complete authorization/parent-witness path. This is compiler
-and deployment isolation for test measurement; it does not remove any check
-from the authorization entry point or create a second trust decision.
+exposes only the authorization/parent-witness path, while
+`TbcFtUnlockPrefixHarness.sol` exposes the exact prefix-semantic path. This is
+compiler and deployment isolation required by the EVM code-size limit. A
+future gateway must require both Phase 3D gates over the same immutable route
+inputs; neither result is sufficient by itself.
 
 ## 2. Executed cross-language vectors
 
 The pinned Solidity 0.8.30 compiler targets Cancun, matching HyperEVM Testnet
 chain 998. The compiled primitive harness is 6,728 runtime bytes and the relay
 is 9,314 runtime bytes. Phase 3D is split into a 14,789-byte structural/Merkle
-harness and a 20,594-byte authorization/parent-witness harness, leaving 9,787
-and 3,982 bytes respectively below the EVM runtime limit. The split lets the
-compiler remove unrelated external paths. Parsed deposit and dynamically sized
-parent views are shared across conservation, native change, ancestor and input
-authorization checks, so each supplied parent is hashed and decoded only once.
-A read-only `eth_call`
+harness, a 20,594-byte authorization/parent-witness harness and a 12,517-byte
+unlock-prefix harness, leaving 9,787, 3,982 and 12,059 bytes respectively below
+the EVM runtime limit. The split lets the compiler remove unrelated external
+paths. Parsed deposit and dynamically sized parent views are shared across
+conservation, native change, ancestor and input authorization checks, so each
+supplied parent is hashed and decoded only once. A read-only `eth_call`
 injects that runtime temporarily through the RPC state-override parameter; it
 does not deploy code or submit a transaction.
 
@@ -215,11 +229,12 @@ real deployed-state benchmark.
 
 ### 2.2 Phase 3D bounded deposit-envelope gas
 
-The same read-only RPC suite builds a 3,275-byte signed version-10 transaction,
-2,113 bytes of bounded parent transactions and an 85-byte bound ancestor from
+The same read-only RPC suite builds a 3,441-byte signed version-10 transaction,
+2,154 bytes of bounded parent transactions and two 85-byte bound ancestors from
 the real pinned MT v3 Code/Tape artifact. The vector carries SDK-generated
-compressed-key ECDSA signatures for its FT and native inputs, but its synthetic
-provenance is not presented as a complete valid FT Script execution.
+compressed-key ECDSA signatures and the complete SDK-generated legacy-v3
+unlock stack for its FT and native inputs. Its transactions are synthetic test
+provenance rather than a claim about a historical on-chain transfer.
 Solidity and `tbc-lib-js` produced the same TXIDs, Covenant controller and
 logical deposit ID and accepted the same two `ALL|FORKID` signatures. Mutated
 amount, Code template, CompactSize, gateway,
@@ -228,20 +243,29 @@ ancestor, ancestor-group count, native ancestor, signature count/location/body
 and public-key point cases all reverted. Mutations that inserted an `isCoin`
 byte between the public key and parent witness, changed the committed parent
 header or appended stack data also reverted while leaving the signed
-outpoints/outputs unchanged.
+outpoints/outputs unchanged. The earlier authorization gate alone accepted
+same-length mutations to the unsigned current/pre-parent prefix, while the new
+semantic gate rejected changed current-output amounts, changed partial-SHA256
+state and changed pre-parent headers. Solidity and the SDK produced the same
+partial state for the same 256-byte script prefix. The parent has two non-zero
+Tape slots: proofs are supplied in ascending slot order while the exact SDK
+unlock prefix encodes the authenticated pre-parent transactions in reverse slot
+order; reversing the supplied proof group reverted in both gates.
 
 Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 
 | Operation | Calldata bytes | Direct transaction gas estimate |
 | --- | ---: | ---: |
-| Parse TXID + Covenant/v3 output envelope | 3,428 | 154,343 |
-| Same envelope + one-leaf Merkle reconstruction | 3,588 | 163,551 |
-| Envelope + 2 bound parents + FT/native conservation | 5,764 | 313,552 |
-| Same transition + exact one-level ancestor authentication | 6,116 | 387,032 |
-| Same transition + FT/native input authorization + exact parent witness | 6,372 | 593,191 |
+| Parse TXID + Covenant/v3 output envelope | 3,588 | 156,783 |
+| Same envelope + one-leaf Merkle reconstruction | 3,748 | 166,001 |
+| Envelope + 2 bound parents + FT/native conservation | 5,956 | 323,479 |
+| Same transition + exact one-level ancestor authentication | 6,468 | 430,270 |
+| Same transition + FT/native input authorization + exact parent witness | 6,724 | 642,958 |
+| Exact `getCurrentTxdata` + `buildFtPrePreTxData` prefix semantics | 6,532 | 1,232,956 |
 
-Before harness separation and parsed-view reuse, the final row cost 864,413 gas
-and the combined runtime was 23,224 bytes. The optimized authorization path is
+On the earlier one-ancestor benchmark, before harness separation and
+parsed-view reuse, the authorization path cost 864,413 gas and the combined
+runtime was 23,224 bytes. On that same vector, the optimized authorization path is
 271,222 gas (about 31.38%) lower, and its deployable runtime is 2,630 bytes
 smaller, without changing calldata or accepted proof semantics. Relative to the
 first split-harness result, sharing every parent view removes another 128,907
@@ -250,7 +274,8 @@ gas (about 17.85%) at a 207-byte authorization-runtime cost.
 The one-leaf vector has no sibling hashes and the second estimate does not call
 a deployed relay. The transition estimate parses two small synthetic parents;
 real parent/ancestor sizes can be materially larger. A real block branch, relay
-lookup, complete FT script proof, replay write and mint will cost more. These
+lookup, composition of both Phase 3D gates, replay write and mint will cost
+more. These
 measurements therefore cannot be used as a final per-deposit fee quote.
 
 ## 3. Authenticated bootstrap history
@@ -318,12 +343,9 @@ execution or FT Covenant semantics. Those remain separate gates.
 
 Phase 3 is not yet a proof-backed bridge. The next implementation slices are:
 
-1. complete the remaining Phase 2 legacy-FT input proof: verify the pinned-v3
-   FT Script semantics over the now-authenticated and owner-authorized bytes;
-   choose and review either a bounded semantic verifier or a proof-system
-   circuit before calling it trustless;
-2. add exact source-outpoint/logical-deposit replay protection;
-3. add a new proof-only `WrappedFTV2`/gateway pair with no owner, backend or
+1. add exact source-outpoint/logical-deposit replay protection;
+2. add a new proof-only `WrappedFTV2`/gateway pair that requires the immutable
+   relay, authorization and prefix-semantic gates with no owner, backend or
    minter proof bypass.
 
 Before any relay deployment, add a pinned local-EVM suite, fuzz malformed
@@ -346,14 +368,16 @@ then authenticates the exact one-level legacy-FT ancestor set committed by
 those parents and verifies the committed compressed-key `ALL|FORKID` signatures
 against each FT/native input owner. It also binds the complete canonical parent
 witness tail consumed after each FT signature/public key to those authenticated
-parent bytes.
+parent bytes. The separate prefix-semantic gate validates the complete
+`getCurrentTxdata` and `buildFtPrePreTxData` portion before each signature,
+including the SDK-compatible SHA-256 intermediate states. Together these gates
+cover the exact pinned legacy-v3 `FT.getFTunlock(..., false)` stack through a
+bounded semantic verifier rather than a general Script interpreter.
 It does **not** establish a live canonical TBC chain because the relay is not
-deployed or independently audited, and it does not execute or validate the
-complete legacy FT input Script program: current-transaction and pre-parent
-stack encodings remain outside the bounded semantic verifier. It cannot
-authorize minting. Until all
-remaining gates pass, the forward path remains the existing custodial learning
-flow and must not be described as trustless.
+deployed or independently audited. It also does not prove current UTXO
+unspentness, provide replay storage or authorize minting. Until all remaining
+gates pass, the forward path remains the existing custodial learning flow and
+must not be described as trustless.
 
 ## 7. Evidence used
 
