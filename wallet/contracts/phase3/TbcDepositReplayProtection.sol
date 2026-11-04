@@ -43,9 +43,20 @@ abstract contract TbcDepositReplayProtection {
     function _consumeVerifiedDeposit(
         TbcBridgeDepositVerifier.VerifiedDeposit memory verified
     ) internal returns (bytes32 sourceOutpoint) {
-        bytes32 depositId = verified.depositId;
-        if (processedDeposits[depositId]) revert DepositAlreadyProcessed(depositId);
+        sourceOutpoint = _requireUnprocessed(verified);
+        processedDeposits[verified.depositId] = true;
+        processedSourceOutpoints[sourceOutpoint] = true;
+        emit DepositConsumed(
+            verified.depositId, sourceOutpoint, verified.txid, SOURCE_VOUT
+        );
+    }
 
+    function _requireUnprocessed(
+        TbcBridgeDepositVerifier.VerifiedDeposit memory verified
+    ) internal view returns (bytes32 sourceOutpoint) {
+        if (processedDeposits[verified.depositId]) {
+            revert DepositAlreadyProcessed(verified.depositId);
+        }
         sourceOutpoint = sourceOutpointId(
             verified.intent.sourceContractId,
             verified.txid,
@@ -54,9 +65,5 @@ abstract contract TbcDepositReplayProtection {
         if (processedSourceOutpoints[sourceOutpoint]) {
             revert SourceOutpointAlreadyProcessed(sourceOutpoint);
         }
-
-        processedDeposits[depositId] = true;
-        processedSourceOutpoints[sourceOutpoint] = true;
-        emit DepositConsumed(depositId, sourceOutpoint, verified.txid, SOURCE_VOUT);
     }
 }

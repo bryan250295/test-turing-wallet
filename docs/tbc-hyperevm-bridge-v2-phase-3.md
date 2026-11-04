@@ -5,8 +5,9 @@ bootstrap commitment, Phase 3C permissionless header-relay core and the Phase
 3D bounded TXID/Covenant/v3 output-envelope, parent/outpoint conservation and
 one-level FT ancestor-authentication, input-signature and exact legacy-v3
 unlock-stack semantic layers, plus the dual-key replay-protection storage
-primitive, are complete for `tbcdev-testnet`; gateway and proof-backed token
-are not complete**
+primitive and proof-only Gateway/WrappedFTV2 composition, are implemented and
+cross-checked for the frozen `tbcdev-testnet` vector; nothing is deployed or
+independently audited**
 
 Implementation date: **2026-11-04 (Asia/Kuala_Lumpur)**
 
@@ -76,7 +77,7 @@ the fixed Bridge Covenant payload and controller, the pinned MT legacy-v3 Code
 template, the contract-controller field, and the pinned Tape metadata and
 committed amount. Its finalized entry point reconstructs the transaction Merkle
 root and requires the selected header to be finalized by a supplied Phase 3C
-relay. A future gateway must bind that relay address, gateway address and reserve
+relay. The proof Gateway binds that relay address, its own address and reserve
 controller as immutable route policy; allowing a proof submitter to choose them
 would not be secure.
 
@@ -134,28 +135,53 @@ shape for this frozen route through bounded semantic checks. This is not a
 general-purpose TBC Script interpreter and does not support other FT versions,
 stable-coin flags, swap paths, Schnorr or other sighash modes. It also does not
 provide an independent UTXO non-membership/unspent proof and is not yet a mint
-authorization gate.
+authorization gate by itself.
 
-`TbcDepositReplayProtection.sol` adds the stateful boundary required by a
-future proof-only gateway. After every proof gate succeeds, the gateway can
+`TbcDepositReplayProtection.sol` adds the stateful boundary used by the
+proof-only gateway. After every proof gate succeeds, the gateway can
 atomically consume both the complete logical deposit ID and a separately
 domain-separated physical source-outpoint ID binding the TBC Testnet domain,
 source FT contract, transaction ID and fixed FT output `vout=1`. Reusing either
 identity reverts before mint. The write is intentionally internal so an
 untrusted caller cannot pre-consume another user's proof through a standalone
-registry; a future gateway must inherit it and perform proof, replay write and
+registry; the gateway inherits it and performs proof, replay write and
 mint in one EVM transaction. Any later revert rolls both mapping writes back.
+
+`TbcAuthorizedTransitionVerifier.sol` and
+`TbcFtUnlockPrefixVerifierModule.sol` expose the two large stateless verifier
+paths as production modules. `TbcProofMintGateway.sol` pins their exact runtime
+codehashes. Its constructor directly deploys `TbcHeaderRelayV2` from the pinned
+creation code and checks the resulting runtime codehash, so a caller cannot
+supply exact relay runtime with pre-seeded fraudulent storage. The relay,
+module addresses, reserve controller and wrapped token are immutable. Its
+permissionless `mintFromProof` requires finalized Merkle inclusion, complete
+input authorization, exact unlock-prefix semantics, identical signature
+offsets across both modules, an identical parsed deposit result, and both replay
+keys before minting. It has no owner, operator, pause key or alternate mint
+entry point.
+
+The Gateway constructor deploys its own `WrappedFTV2`, removing any circular or
+mutable gateway/token configuration. The token is fixed to MT contract ID
+`ac54e83d476839a11bbb7d0a2495e50c9d0d23c9283f94e11222bad589259e6c`,
+one decimal, name `Proof Wrapped Mega Token` and symbol `pwMT`. Only the immutable
+Gateway can mint, and total supply cannot exceed the pinned MT genesis supply of
+10,000,000 raw units. There is no owner, admin, alternate minter or burn function;
+burn remains disabled until the Phase 4 release path is separately designed and
+reviewed.
 
 `TbcBridgeDepositVerifierHarness.sol` now exposes only the structural, Merkle
 and finalized-inclusion test paths. `TbcAuthorizedTransitionHarness.sol`
 exposes only the authorization/parent-witness path, while
 `TbcFtUnlockPrefixHarness.sol` exposes the exact prefix-semantic path. This is
-compiler and deployment isolation required by the EVM code-size limit. A
-future gateway must require both Phase 3D gates over the same immutable route
-inputs; neither result is sufficient by itself.
-`TbcDepositReplayHarness.sol` is a 2,279-byte stateful test harness with no mint
+compiler and deployment isolation required by the EVM code-size limit. The
+production Gateway requires both Phase 3D gates over the same immutable
+route inputs; neither result is sufficient by itself.
+`TbcDepositReplayHarness.sol` is a 2,306-byte stateful test harness with no mint
 authority. It cross-checks the source-outpoint key, both independent duplicate
-paths and EVM rollback behavior; it is not the future gateway.
+paths and EVM rollback behavior; it is not the production Gateway.
+`TbcProofMintIntegrationHarness.sol` is test-only scaffolding that observes the
+token balance and supply within the same read-only RPC simulation and retries
+the proof to confirm fail-closed replay handling.
 
 ## 2. Executed cross-language vectors
 
@@ -170,6 +196,14 @@ conservation, native change, ancestor and input authorization checks, so each
 supplied parent is hashed and decoded only once. A read-only `eth_call`
 injects that runtime temporarily through the RPC state-override parameter; it
 does not deploy code or submit a transaction.
+
+The production authorization and prefix modules are 20,594 and 12,356 runtime
+bytes. The composed Gateway is 12,642 bytes and the OpenZeppelin-based
+WrappedFTV2 is 2,390 bytes, leaving 11,934 and 22,186 bytes respectively below
+the EVM runtime limit. The Gateway creation bytecode also contains the token
+and relay creation code because both are deployed atomically by its constructor.
+That initcode is 26,391 bytes, 22,761 bytes below the Cancun/EIP-3860
+49,152-byte initcode limit.
 
 The executed assertions cover:
 
@@ -236,8 +270,8 @@ These are testnet observations, not fixed fees: the payable amount is always
 
 The six-header total is relay maintenance cost, normally paid across six
 relayer transactions; it is not automatically charged as one transaction to a
-bridge user. It also excludes the future Phase 3D FT/Covenant proof, replay
-write and mint transaction. Bootstrap calldata shrinks as the relay moves
+bridge user. It also excludes the combined Phase 3D FT/Covenant proof, replay
+write and mint transaction measured separately below. Bootstrap calldata shrinks as the relay moves
 forward, but production budgeting still requires longer-range profiles and a
 real deployed-state benchmark.
 
@@ -269,6 +303,16 @@ The same RPC state-override run produced the identical source-outpoint ID in
 TypeScript and Solidity, rejected reuse of either the logical deposit ID or the
 physical source outpoint while the other key changed, and confirmed that a
 later revert rolls both replay writes back.
+The composed Gateway vector additionally checked all pinned runtime hashes,
+rejected a constructor supplied with changed verifier code, rejected a direct
+non-Gateway token mint and a mint above the pinned source supply, rejected
+different signature offsets between the two modules, minted the exact raw
+amount to both recipient balance and total supply, then rejected the same proof
+on its second call. For this synthetic transaction,
+the read-only state override replaces the first retained header's Merkle root
+with the synthetic TXID while retaining the production relay runtime and a
+six-confirmation ancestry. It tests Gateway composition, not a claim that this
+synthetic transaction exists in that historical TBC block.
 
 Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 
@@ -280,7 +324,13 @@ Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 | Same transition + exact one-level ancestor authentication | 6,468 | 430,270 |
 | Same transition + FT/native input authorization + exact parent witness | 6,724 | 642,958 |
 | Exact `getCurrentTxdata` + `buildFtPrePreTxData` prefix semantics | 6,532 | 1,232,956 |
-| Atomic logical-deposit + source-outpoint replay write | 100 | 71,563 |
+| Atomic logical-deposit + source-outpoint replay write | 100 | 71,625 |
+| Finalized proof + both semantic modules + replay + exact token mint | 6,980 | 2,021,801 |
+
+The Gateway deployment, including creation of its checkpoint-initialized relay
+and immutable WrappedFTV2, estimated at 5,625,359 gas. This excludes deployment
+of the two stateless verifier modules, which are separately pinned by runtime
+codehash.
 
 On the earlier one-ancestor benchmark, before harness separation and
 parsed-view reuse, the authorization path cost 864,413 gas and the combined
@@ -290,12 +340,12 @@ smaller, without changing calldata or accepted proof semantics. Relative to the
 first split-harness result, sharing every parent view removes another 128,907
 gas (about 17.85%) at a 207-byte authorization-runtime cost.
 
-The one-leaf vector has no sibling hashes and the second estimate does not call
-a deployed relay. The transition estimate parses two small synthetic parents;
-real parent/ancestor sizes can be materially larger. A real block branch, relay
-lookup, composition of both Phase 3D gates, replay write and mint will cost
-more. These
-measurements therefore cannot be used as a final per-deposit fee quote.
+The one-leaf vector has no sibling hashes. The standalone Merkle estimate does
+not call a deployed relay; the combined Gateway estimate calls the production
+relay runtime against read-only injected state. The transition uses two small
+synthetic parents, so real parent/ancestor sizes and nontrivial Merkle branches
+can be materially larger. These measurements therefore cannot be used as a
+final per-deposit fee quote.
 
 ## 3. Authenticated bootstrap history
 
@@ -360,15 +410,15 @@ execution or FT Covenant semantics. Those remain separate gates.
 
 ## 5. Remaining Phase 3 work
 
-Phase 3 is not yet a proof-backed bridge. The next implementation slice is a
-new proof-only `WrappedFTV2`/gateway pair that requires the immutable relay,
-authorization and prefix-semantic gates, consumes the replay state atomically
-and exposes no owner, backend or minter proof bypass.
-
-Before any relay deployment, add a pinned local-EVM suite, fuzz malformed
-bootstrap witnesses and long competing branches, measure per-header gas, and
-obtain independent Solidity/consensus review. The current RPC vector executes
-real state transitions but is not a substitute for those gates.
+Phase 3 now contains the proof-only `WrappedFTV2`/Gateway implementation, but it
+is not yet an operational proof-backed bridge. Before any deployment, add a
+pinned local-EVM suite, fuzz malformed bootstrap witnesses, proof envelopes and
+long competing branches, benchmark real-size deposits and Merkle branches, and
+obtain independent Solidity, TBC Script and consensus review. Then rehearse the
+exact verifier-modules → Gateway/self-created relay and token → header-sync
+order, verify every runtime hash and run a real testnet deposit without moving
+existing custodial balances. The current RPC state-override vector is not a
+substitute for those gates.
 
 The existing `BridgeWrappedFT`, `LearningWrappedFT` and
 `LearningRedemptionEscrow` must remain separate learning/custodial artifacts.
@@ -393,12 +443,15 @@ bounded semantic verifier rather than a general Script interpreter.
 The replay module separately consumes the logical intent identity and physical
 source outpoint, rejects either form of reuse and relies on EVM transaction
 atomicity to roll its state back if minting later fails.
+The proof-only Gateway composes finalized inclusion, both exact semantic gates,
+dual replay consumption and WrappedFTV2 minting without an administrative mint
+path, and its constructor pins every external verifier runtime by codehash.
 It does **not** establish a live canonical TBC chain because the relay is not
 deployed or independently audited. It also does not prove current UTXO
-unspentness, and no deployed gateway currently invokes the replay module or
-authorizes proof-backed minting. Until the remaining gateway composition passes,
-the forward path remains the existing custodial learning flow and must not be
-described as trustless.
+unspentness, and the Gateway has only been executed against synthetic state in
+read-only RPC simulation. Until deployment rehearsal, independent review and a
+real testnet proof pass, the forward path remains the existing custodial
+learning flow and must not be described as production-trustless.
 
 ## 7. Evidence used
 

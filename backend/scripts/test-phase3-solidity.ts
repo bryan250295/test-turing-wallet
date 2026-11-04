@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import {
-	decodeFunctionResult, encodeAbiParameters, encodeFunctionData, formatEther, keccak256, toHex, type Abi, type Hex,
+	decodeFunctionResult, encodeAbiParameters, encodeDeployData, encodeFunctionData, formatEther,
+	keccak256, toHex, type Abi, type Hex,
 } from 'viem';
 import sdk from 'tbc-contract';
 import tbc from 'tbc-lib-js';
@@ -31,7 +32,13 @@ const CHECKPOINT_HASH = '0x000000000000023f252086d278485a61b6c225ad07213fff329ef
 const CHECKPOINT_MERKLE_ROOT = '0xd51c636b8a6959ecc9754595884cf7ce4cd79ffb7a2bee75f714a293310ccc50' as Hex;
 const CHECKPOINT_CHAIN_WORK = BigInt('0x14f15b416fbbd30a34db4b3');
 
-interface Artifact { abi: Abi; bytecode: Hex; deployedBytecode: Hex }
+interface Artifact {
+	abi: Abi;
+	bytecode: Hex;
+	deployedBytecode: Hex;
+	immutableReferences?: Record<string, Array<{ length: number; start: number }>>;
+	immutableNames?: Record<string, string>;
+}
 interface BootstrapManifest { commitmentRoot: Hex; checkpointProof: Hex[]; binaryFile: string }
 interface RpcResponse { result?: Hex; error?: { code: number; message: string; data?: unknown } }
 interface SolidityVerifiedDeposit {
@@ -55,6 +62,10 @@ interface SolidityVerifiedTransition {
 }
 
 const PHASE3D_GATEWAY = '0x1111111111111111111111111111111111111111' as const;
+const PHASE3D_RELAY = '0x0000000000000000000000000000000000000301' as const;
+const PHASE3D_AUTHORIZATION = '0x0000000000000000000000000000000000000302' as const;
+const PHASE3D_PREFIX = '0x0000000000000000000000000000000000000303' as const;
+const PHASE3D_TOKEN = '0x0000000000000000000000000000000000000304' as const;
 const PHASE3D_RECIPIENT = '0x8221fae04189f1f2f50268495ed95d1a9b220432' as const;
 const PHASE3D_RESERVE_PKH = '2222222222222222222222222222222222222222';
 const CompressedPrivateKey = tbc.PrivateKey as unknown as new (key: object) => tbc.PrivateKey;
@@ -340,6 +351,29 @@ function calldataGas(data: Hex) {
 	return gas;
 }
 
+function patchImmutables(artifact: Artifact, values: Record<string, Hex>): Hex {
+	const runtime = Buffer.from(artifact.deployedBytecode.slice(2), 'hex');
+	for (const [id, references] of Object.entries(artifact.immutableReferences ?? {})) {
+		const name = artifact.immutableNames?.[id];
+		assert.ok(name && values[name], `Missing immutable value for ${name ?? id}.`);
+		const encoded = Buffer.from(values[name].slice(2), 'hex');
+		assert.equal(encoded.length, 32, `Immutable ${name} is not one EVM word.`);
+		for (const reference of references) {
+			assert.equal(reference.length, 32);
+			encoded.copy(runtime, reference.start);
+		}
+	}
+	return `0x${runtime.toString('hex')}`;
+}
+
+function addressWord(value: Hex) {
+	return encodeAbiParameters([{ type: 'address' }], [value]);
+}
+
+function bytes20Word(value: Hex) {
+	return encodeAbiParameters([{ type: 'bytes20' }], [value]);
+}
+
 interface StoredHeader {
 	blockHash: Hex;
 	parentHash: Hex;
@@ -419,6 +453,21 @@ async function main() {
 	const replayArtifact = JSON.parse(await readFile(
 		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcDepositReplayHarness.json'), 'utf8',
 	)) as Artifact;
+	const productionAuthorizationArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcAuthorizedTransitionVerifier.json'), 'utf8',
+	)) as Artifact;
+	const productionPrefixArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcFtUnlockPrefixVerifierModule.json'), 'utf8',
+	)) as Artifact;
+	const gatewayArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcProofMintGateway.json'), 'utf8',
+	)) as Artifact;
+	const wrappedTokenArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/WrappedFTV2.json'), 'utf8',
+	)) as Artifact;
+	const mintIntegrationArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcProofMintIntegrationHarness.json'), 'utf8',
+	)) as Artifact;
 	const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 	const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), 'utf8')) as BootstrapManifest;
 	const bootstrapPoints = decodeTbcdevBootstrapContext(await readFile(resolve(fixtureRoot, manifest.binaryFile)));
@@ -481,6 +530,151 @@ async function main() {
 	assert.equal(await call(replayArtifact, 'exerciseRollback', [
 		`0x${depositVector.intent.sourceContractId}`, depositVector.txid, depositVector.depositId,
 	]), true);
+
+	assert.equal(
+		keccak256(relayArtifact.deployedBytecode),
+		'0x8056986ffcc5d8f1fa018aee82fe5fc36e27bbd10d4f5141871768c43554ef03',
+	);
+	assert.equal(
+		keccak256(productionAuthorizationArtifact.deployedBytecode),
+		'0xbd25c07c5a57d79532cd829a650346ddc00863d92ba833cee49099916173d4c5',
+	);
+	assert.equal(
+		keccak256(productionPrefixArtifact.deployedBytecode),
+		'0xdca851d9c2013789f5da598adc15136b0ca003de58a652be20e1fc0f6203fa49',
+	);
+
+	const gatewayRuntime = patchImmutables(gatewayArtifact, {
+		relay: addressWord(PHASE3D_RELAY),
+		authorizationVerifier: addressWord(PHASE3D_AUTHORIZATION),
+		prefixVerifier: addressWord(PHASE3D_PREFIX),
+		reserveController: bytes20Word(expectedReserve),
+		wrappedToken: addressWord(PHASE3D_TOKEN),
+	});
+	const wrappedTokenRuntime = patchImmutables(wrappedTokenArtifact, {
+		gateway: addressWord(PHASE3D_GATEWAY),
+	});
+	const depositBlockHash = `0x${RELAY_HEADERS[0].hash}` as Hex;
+	const proofRelayState = relayStorage(6);
+	const depositHeaderBase = BigInt(keccak256(encodeAbiParameters(
+		[{ type: 'bytes32' }, { type: 'uint256' }], [depositBlockHash, 0n],
+	)));
+	proofRelayState[toHex(depositHeaderBase + 1n, { size: 32 })] = depositVector.txid;
+	const gatewayProof = {
+		blockHash: depositBlockHash,
+		rawTransaction: depositVector.raw,
+		transactionIndex: 0,
+		transactionCount: 1,
+		displayedSiblings: [],
+		parentTransactions: depositVector.parents,
+		ancestorTransactions: depositVector.ancestors,
+		signatureWitnesses: depositVector.signatureWitnesses,
+		signaturePushOffsets: depositVector.signaturePushOffsets,
+	};
+	const gatewayOverrides = {
+		[PHASE3D_GATEWAY]: { code: gatewayRuntime },
+		[PHASE3D_RELAY]: { code: relayArtifact.deployedBytecode, stateDiff: proofRelayState },
+		[PHASE3D_AUTHORIZATION]: { code: productionAuthorizationArtifact.deployedBytecode },
+		[PHASE3D_PREFIX]: { code: productionPrefixArtifact.deployedBytecode },
+		[PHASE3D_TOKEN]: { code: wrappedTokenRuntime },
+	};
+	const integrationData = encodeFunctionData({
+		abi: mintIntegrationArtifact.abi,
+		functionName: 'executeAndRejectReplay',
+		args: [
+			PHASE3D_GATEWAY, gatewayProof, depositVector.depositId,
+			PHASE3D_RECIPIENT, depositVector.intent.amountRaw,
+		],
+	});
+	const integrationResponse = await rpc('eth_call', [
+		{ to: OVERRIDE_ADDRESS, data: integrationData }, 'latest',
+		{ ...gatewayOverrides, [OVERRIDE_ADDRESS]: { code: mintIntegrationArtifact.deployedBytecode } },
+	]);
+	if (integrationResponse.error || !integrationResponse.result) {
+		throw new Error(`Proof mint integration failed: ${JSON.stringify(integrationResponse.error)}`);
+	}
+	const integrationResult = decodeFunctionResult({
+		abi: mintIntegrationArtifact.abi,
+		functionName: 'executeAndRejectReplay',
+		data: integrationResponse.result,
+	}) as readonly [Hex, bigint, bigint, boolean];
+	assert.deepEqual(integrationResult, [
+		PHASE3D_TOKEN, depositVector.intent.amountRaw, depositVector.intent.amountRaw, true,
+	]);
+	const gatewayMintData = encodeFunctionData({
+		abi: gatewayArtifact.abi,
+		functionName: 'mintFromProof',
+		args: [gatewayProof],
+	});
+	const gatewayMintEstimateResponse = await rpc('eth_estimateGas', [
+		{ to: PHASE3D_GATEWAY, data: gatewayMintData }, 'latest', gatewayOverrides,
+	]);
+	if (gatewayMintEstimateResponse.error || !gatewayMintEstimateResponse.result) {
+		throw new Error(`Proof mint gas estimation failed: ${JSON.stringify(gatewayMintEstimateResponse.error)}`);
+	}
+	const gatewayMintGasEstimate = BigInt(gatewayMintEstimateResponse.result);
+	const mismatchedOffsetProof = {
+		...gatewayProof,
+		signaturePushOffsets: [
+			gatewayProof.signaturePushOffsets[0] + 1,
+			...gatewayProof.signaturePushOffsets.slice(1),
+		],
+	};
+	const mismatchedOffsetData = encodeFunctionData({
+		abi: gatewayArtifact.abi,
+		functionName: 'mintFromProof',
+		args: [mismatchedOffsetProof],
+	});
+	const mismatchedOffsetResponse = await rpc('eth_call', [
+		{ to: PHASE3D_GATEWAY, data: mismatchedOffsetData }, 'latest', gatewayOverrides,
+	]);
+	assert.ok(mismatchedOffsetResponse.error, 'Gateway accepted mismatched module offsets.');
+	const unauthorizedTokenMint = encodeFunctionData({
+		abi: wrappedTokenArtifact.abi,
+		functionName: 'mintFromProof',
+		args: [PHASE3D_RECIPIENT, depositVector.intent.amountRaw],
+	});
+	const unauthorizedTokenResponse = await rpc('eth_call', [
+		{ to: PHASE3D_TOKEN, data: unauthorizedTokenMint }, 'latest',
+		{ [PHASE3D_TOKEN]: { code: wrappedTokenRuntime } },
+	]);
+	assert.ok(unauthorizedTokenResponse.error, 'WrappedFTV2 accepted a non-gateway mint.');
+	const overMaximumSupplyMint = encodeFunctionData({
+		abi: wrappedTokenArtifact.abi,
+		functionName: 'mintFromProof',
+		args: [PHASE3D_RECIPIENT, 10_000_001n],
+	});
+	const overMaximumSupplyResponse = await rpc('eth_call', [
+		{ from: PHASE3D_GATEWAY, to: PHASE3D_TOKEN, data: overMaximumSupplyMint },
+		'latest', { [PHASE3D_TOKEN]: { code: wrappedTokenRuntime } },
+	]);
+	assert.ok(overMaximumSupplyResponse.error, 'WrappedFTV2 exceeded the pinned source supply.');
+
+	const gatewayDeploymentData = encodeDeployData({
+		abi: gatewayArtifact.abi,
+		bytecode: gatewayArtifact.bytecode,
+		args: [PHASE3D_AUTHORIZATION, PHASE3D_PREFIX, expectedReserve],
+	});
+	const gatewayDeploymentOverrides = {
+		[PHASE3D_AUTHORIZATION]: { code: productionAuthorizationArtifact.deployedBytecode },
+		[PHASE3D_PREFIX]: { code: productionPrefixArtifact.deployedBytecode },
+	};
+	const gatewayDeploymentEstimate = await rpc('eth_estimateGas', [
+		{ data: gatewayDeploymentData }, 'latest', gatewayDeploymentOverrides,
+	]);
+	if (gatewayDeploymentEstimate.error || !gatewayDeploymentEstimate.result) {
+		throw new Error(`Gateway deployment estimation failed: ${JSON.stringify(gatewayDeploymentEstimate.error)}`);
+	}
+	const proofGatewayDeploymentGasEstimate = BigInt(gatewayDeploymentEstimate.result);
+	const mutatedPrefixRuntime = `${productionPrefixArtifact.deployedBytecode.slice(0, -2)}00` as Hex;
+	const mismatchedModuleEstimate = await rpc('eth_estimateGas', [
+		{ data: gatewayDeploymentData }, 'latest',
+		{
+			...gatewayDeploymentOverrides,
+			[PHASE3D_PREFIX]: { code: mutatedPrefixRuntime },
+		},
+	]);
+	assert.ok(mismatchedModuleEstimate.error, 'Gateway accepted a mismatched verifier codehash.');
 
 	const mutatedAmount = Buffer.from(depositVector.raw.slice(2), 'hex');
 	const magicOffset = mutatedAmount.indexOf(Buffer.from('LMBV2DEP', 'ascii'));
@@ -779,6 +973,11 @@ async function main() {
 			replayWriteCalldataBytes: (depositReplayData.length - 2) / 2,
 			replayWriteTransactionGasEstimate: depositReplayGas,
 		},
+		proofMintGateway: {
+			deploymentGasEstimate: proofGatewayDeploymentGasEstimate,
+			mintCalldataBytes: (gatewayMintData.length - 2) / 2,
+			mintTransactionGasEstimate: gatewayMintGasEstimate,
+		},
 		inHarnessDeploymentExecutionGas: profile[0],
 		submissions: submissionProfile,
 		indicativeSixHeaderTransactionGas: submissionProfile.reduce(
@@ -843,7 +1042,7 @@ async function main() {
 		'0x1a3f798f541c6dca88f46d1ee59041cf2a1336c4bde89b598248ca12dc49c372',
 	]]);
 
-	console.log('Phase 3 Solidity, Phase 3D envelope/transition/input-authorization/full unlock-prefix/replay and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
+	console.log('Phase 3 Solidity, Phase 3D envelope/transition/input-authorization/full unlock-prefix/replay/proof-mint gateway and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
 	console.log('No contract was deployed and no transaction or asset movement was submitted.');
 }
 

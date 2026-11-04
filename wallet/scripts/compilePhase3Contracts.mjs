@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import solc from 'solc';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const dependencyRoot = resolve(root, 'node_modules/@openzeppelin/contracts');
 const sourceNames = [
     'contracts/phase3/TbcProofVerifier.sol',
     'contracts/phase3/TbcDifficultyVerifier.sol',
@@ -18,10 +20,15 @@ const sourceNames = [
     'contracts/phase3/TbcPartialSha256.sol',
     'contracts/phase3/TbcFtUnlockPrefixVerifier.sol',
     'contracts/phase3/TbcDepositReplayProtection.sol',
+    'contracts/phase3/TbcAuthorizedTransitionVerifier.sol',
+    'contracts/phase3/TbcFtUnlockPrefixVerifierModule.sol',
+    'contracts/phase3/WrappedFTV2.sol',
+    'contracts/phase3/TbcProofMintGateway.sol',
     'contracts/phase3/TbcBridgeDepositVerifierHarness.sol',
     'contracts/phase3/TbcAuthorizedTransitionHarness.sol',
     'contracts/phase3/TbcFtUnlockPrefixHarness.sol',
     'contracts/phase3/TbcDepositReplayHarness.sol',
+    'contracts/phase3/TbcProofMintIntegrationHarness.sol',
 ];
 const sources = Object.fromEntries(await Promise.all(sourceNames.map(async (sourceName) => [
     sourceName,
@@ -29,6 +36,8 @@ const sources = Object.fromEntries(await Promise.all(sourceNames.map(async (sour
 ])));
 
 if (!solc.version().startsWith('0.8.30+')) throw new Error('Install the pinned Solidity compiler 0.8.30.');
+const openzeppelin = JSON.parse(await readFile(resolve(dependencyRoot, 'package.json'), 'utf8'));
+if (openzeppelin.version !== '5.4.0') throw new Error('Install the pinned OpenZeppelin Contracts 5.4.0.');
 
 const input = {
     language: 'Solidity',
@@ -37,17 +46,49 @@ const input = {
         evmVersion: 'cancun',
         optimizer: { enabled: true, runs: 200 },
         outputSelection: {
-            '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'metadata'] },
+            '*': {
+                '': ['ast'],
+                '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'evm.deployedBytecode.immutableReferences', 'metadata'],
+            },
         },
     },
 };
-const output = JSON.parse(solc.compile(JSON.stringify(input)));
+function readImport(path) {
+    if (!path.startsWith('@openzeppelin/contracts/')) return { error: `Unsupported import: ${path}` };
+    const resolved = resolve(root, 'node_modules', path);
+    if (!resolved.startsWith(`${dependencyRoot}${sep}`)) return { error: `Import outside dependency: ${path}` };
+    try {
+        const content = readFileSync(resolved, 'utf8');
+        sources[path] = { content };
+        return { contents: content };
+    } catch {
+        return { error: `Cannot read import: ${path}` };
+    }
+}
+
+const output = JSON.parse(solc.compile(JSON.stringify(input), { import: readImport }));
 for (const diagnostic of output.errors ?? []) console.error(diagnostic.formattedMessage);
 if ((output.errors ?? []).some((entry) => entry.severity === 'error')) {
     throw new Error('Phase 3 contract compilation failed; no artifacts were written.');
 }
 
-const buildInputSha256 = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+const buildInput = { ...input, sources };
+const buildInputSha256 = createHash('sha256').update(JSON.stringify(buildInput)).digest('hex');
+function immutableNames(sourceName) {
+    const names = {};
+    function visit(value) {
+        if (!value || typeof value !== 'object') return;
+        if (value.nodeType === 'VariableDeclaration' && value.mutability === 'immutable') {
+            names[value.id] = value.name;
+        }
+        for (const nested of Object.values(value)) {
+            if (Array.isArray(nested)) nested.forEach(visit);
+            else visit(nested);
+        }
+    }
+    visit(output.sources?.[sourceName]?.ast);
+    return names;
+}
 const artifactRoot = resolve(root, 'artifacts/phase3');
 await mkdir(artifactRoot, { recursive: true });
 for (const sourceName of sourceNames) {
@@ -66,8 +107,10 @@ for (const sourceName of sourceNames) {
             abi: compiled.abi,
             bytecode: `0x${bytecode}`,
             deployedBytecode: `0x${deployedBytecode}`,
+            immutableReferences: compiled.evm?.deployedBytecode?.immutableReferences ?? {},
+            immutableNames: immutableNames(sourceName),
             metadata: JSON.parse(compiled.metadata),
-            buildInput: input,
+            buildInput,
         };
         await writeFile(resolve(artifactRoot, `${contractName}.json`), `${JSON.stringify(artifact, null, 2)}\n`);
         console.log(`Compiled ${contractName} (${deployedByteLength} runtime bytes).`);
