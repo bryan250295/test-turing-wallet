@@ -133,12 +133,13 @@ from the authorization entry point or create a second trust decision.
 
 The pinned Solidity 0.8.30 compiler targets Cancun, matching HyperEVM Testnet
 chain 998. The compiled primitive harness is 6,728 runtime bytes and the relay
-is 9,314 runtime bytes. Phase 3D is split into a 14,483-byte structural/Merkle
-harness and a 20,387-byte authorization/parent-witness harness, leaving 10,093
-and 4,189 bytes respectively below the EVM runtime limit. The split lets the
-compiler remove unrelated external paths, while parsed deposit and FT-parent
-views are reused inside the authorization path to avoid repeated hashing and
-decoding. A read-only `eth_call`
+is 9,314 runtime bytes. Phase 3D is split into a 14,789-byte structural/Merkle
+harness and a 20,594-byte authorization/parent-witness harness, leaving 9,787
+and 3,982 bytes respectively below the EVM runtime limit. The split lets the
+compiler remove unrelated external paths. Parsed deposit and dynamically sized
+parent views are shared across conservation, native change, ancestor and input
+authorization checks, so each supplied parent is hashed and decoded only once.
+A read-only `eth_call`
 injects that runtime temporarily through the RPC state-override parameter; it
 does not deploy code or submit a transaction.
 
@@ -235,14 +236,16 @@ Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 | --- | ---: | ---: |
 | Parse TXID + Covenant/v3 output envelope | 3,428 | 154,343 |
 | Same envelope + one-leaf Merkle reconstruction | 3,588 | 163,551 |
-| Envelope + 2 bound parents + FT/native conservation | 5,764 | 331,599 |
-| Same transition + exact one-level ancestor authentication | 6,116 | 446,233 |
-| Same transition + FT/native input authorization + exact parent witness | 6,372 | 722,098 |
+| Envelope + 2 bound parents + FT/native conservation | 5,764 | 313,552 |
+| Same transition + exact one-level ancestor authentication | 6,116 | 387,032 |
+| Same transition + FT/native input authorization + exact parent witness | 6,372 | 593,191 |
 
 Before harness separation and parsed-view reuse, the final row cost 864,413 gas
 and the combined runtime was 23,224 bytes. The optimized authorization path is
-142,315 gas (about 16.46%) lower, and its deployable runtime is 2,837 bytes
-smaller, without changing calldata or accepted proof semantics.
+271,222 gas (about 31.38%) lower, and its deployable runtime is 2,630 bytes
+smaller, without changing calldata or accepted proof semantics. Relative to the
+first split-harness result, sharing every parent view removes another 128,907
+gas (about 17.85%) at a 207-byte authorization-runtime cost.
 
 The one-leaf vector has no sibling hashes and the second estimate does not call
 a deployed relay. The transition estimate parses two small synthetic parents;

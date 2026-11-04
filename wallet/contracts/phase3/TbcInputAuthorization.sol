@@ -66,25 +66,35 @@ library TbcInputAuthorization {
         address expectedGateway,
         bytes20 expectedReserveController
     ) internal pure returns (TbcBridgeDepositVerifier.VerifiedTransition memory result) {
-        TbcBoundedTransaction.TransactionView memory transaction;
-        (result, transaction) = TbcBridgeDepositVerifier.verifyAuthenticatedTransitionWithView(
+        TbcBridgeDepositVerifier.AuthenticatedViews memory views;
+        (result, views) = TbcBridgeDepositVerifier.verifyAuthenticatedTransitionWithViews(
             rawTransaction,
             parentTransactions,
             ancestorTransactions,
             expectedGateway,
             expectedReserveController
         );
-        if (signatureWitnesses.length != transaction.inputCount) {
+        _verifyAllInputs(rawTransaction, parentTransactions, signatureWitnesses, views);
+    }
+
+    function _verifyAllInputs(
+        bytes calldata rawTransaction,
+        bytes[] calldata parentTransactions,
+        SignatureWitness[] calldata signatureWitnesses,
+        TbcBridgeDepositVerifier.AuthenticatedViews memory views
+    ) private pure {
+        if (signatureWitnesses.length != views.deposit.inputCount) {
             revert SignatureWitnessCountMismatch(
-                signatureWitnesses.length, transaction.inputCount
+                signatureWitnesses.length, views.deposit.inputCount
             );
         }
-        uint256 nativeVin = transaction.inputCount - 1;
-        for (uint256 vin; vin < transaction.inputCount; ++vin) {
+        uint256 nativeVin = views.deposit.inputCount - 1;
+        for (uint256 vin; vin < views.deposit.inputCount; ++vin) {
             _verifyVin(
                 rawTransaction,
-                transaction,
+                views.deposit,
                 parentTransactions[vin],
+                views.parents[vin],
                 signatureWitnesses[vin],
                 vin,
                 vin == nativeVin
@@ -96,6 +106,7 @@ library TbcInputAuthorization {
         bytes calldata rawTransaction,
         TbcBoundedTransaction.TransactionView memory transaction,
         bytes calldata parentTransaction,
+        TbcBoundedTransaction.TransactionView memory parent,
         SignatureWitness calldata witness,
         uint256 vin,
         bool nativeInput
@@ -105,6 +116,7 @@ library TbcInputAuthorization {
                 rawTransaction,
                 transaction,
                 parentTransaction,
+                parent,
                 witness,
                 vin,
                 nativeInput
@@ -124,6 +136,7 @@ library TbcInputAuthorization {
         bytes calldata rawTransaction,
         TbcBoundedTransaction.TransactionView memory transaction,
         bytes calldata parentTransaction,
+        TbcBoundedTransaction.TransactionView memory parent,
         SignatureWitness calldata witness,
         uint256 vin,
         bool nativeInput
@@ -131,8 +144,6 @@ library TbcInputAuthorization {
         AuthorizationTarget memory target,
         LocatedSignature memory located
     ) {
-        TbcBoundedTransaction.TransactionView memory parent =
-            TbcBoundedTransaction.inspectParent(parentTransaction);
         uint32 parentVout = transaction.inputs[vin].outputIndex;
         TbcBoundedTransaction.InputView memory input = transaction.inputs[vin];
         located = _locateSignature(

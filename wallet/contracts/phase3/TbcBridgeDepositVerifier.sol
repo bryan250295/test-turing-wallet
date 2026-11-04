@@ -82,6 +82,11 @@ library TbcBridgeDepositVerifier {
         uint64[6] balances;
     }
 
+    struct AuthenticatedViews {
+        TbcBoundedTransaction.TransactionView deposit;
+        TbcBoundedTransaction.TransactionView[] parents;
+    }
+
     error InvalidCovenantValue(uint64 supplied);
     error InvalidCovenantScript();
     error InvalidCovenantDomain();
@@ -196,12 +201,16 @@ library TbcBridgeDepositVerifier {
         address expectedGateway,
         bytes20 expectedReserveController
     ) internal pure returns (VerifiedTransition memory result) {
-        TbcBoundedTransaction.TransactionView memory depositTransaction =
-            TbcBoundedTransaction.inspect(rawTransaction);
+        AuthenticatedViews memory views;
+        views.deposit = TbcBoundedTransaction.inspect(rawTransaction);
+        views.parents = new TbcBoundedTransaction.TransactionView[](
+            views.deposit.inputCount
+        );
         return _verifyTransition(
             rawTransaction,
-            depositTransaction,
+            views.deposit,
             parentTransactions,
+            views.parents,
             expectedGateway,
             expectedReserveController
         );
@@ -211,58 +220,76 @@ library TbcBridgeDepositVerifier {
         bytes calldata rawTransaction,
         TbcBoundedTransaction.TransactionView memory depositTransaction,
         bytes[] calldata parentTransactions,
+        TbcBoundedTransaction.TransactionView[] memory parentViews,
         address expectedGateway,
         bytes20 expectedReserveController
     ) private pure returns (VerifiedTransition memory result) {
         result.deposit = _verifyEnvelope(
             rawTransaction, depositTransaction, expectedGateway, expectedReserveController
         );
-        TransitionState memory state = _verifyInputs(depositTransaction, parentTransactions);
-        if (state.ftInputTotal < result.deposit.intent.amountRaw) {
-            revert InsufficientFtInput(state.ftInputTotal, result.deposit.intent.amountRaw);
+        TransitionState memory state =
+            _verifyInputs(depositTransaction, parentTransactions, parentViews);
+        uint256 nextOutput = _verifyFtOutputs(
+            rawTransaction,
+            depositTransaction,
+            state,
+            result.deposit.intent.amountRaw
+        );
+        result.ftInputTotal = state.ftInputTotal;
+        result.feeRaw = _verifyNativeOutputsAndFee(
+            rawTransaction,
+            depositTransaction,
+            parentTransactions,
+            parentViews,
+            nextOutput,
+            state.nativeInputTotal
+        );
+    }
+
+    function _verifyFtOutputs(
+        bytes calldata rawTransaction,
+        TbcBoundedTransaction.TransactionView memory depositTransaction,
+        TransitionState memory state,
+        uint256 depositAmount
+    ) private pure returns (uint256 nextOutput) {
+        if (state.ftInputTotal < depositAmount) {
+            revert InsufficientFtInput(state.ftInputTotal, depositAmount);
         }
         _verifyTapeAllocation(
             rawTransaction,
             depositTransaction.outputs[2],
             state.balances,
             depositTransaction.inputCount - 1,
-            result.deposit.intent.amountRaw,
+            depositAmount,
             false
         );
 
-        uint256 nextOutput = 3;
-        if (state.ftInputTotal > result.deposit.intent.amountRaw) {
+        nextOutput = 3;
+        if (state.ftInputTotal > depositAmount) {
             if (depositTransaction.outputCount < 5) revert InvalidFtChange();
             bytes20 changeController = _ftController(
                 rawTransaction, depositTransaction.outputs[3], false
             );
             if (changeController != state.inputController) revert InvalidFtChange();
-            uint256 change = state.ftInputTotal - result.deposit.intent.amountRaw;
+            uint256 change = state.ftInputTotal - depositAmount;
             _verifyFtTape(rawTransaction, depositTransaction.outputs[4], change);
             _verifyTapeAllocation(
                 rawTransaction,
                 depositTransaction.outputs[4],
                 state.balances,
                 depositTransaction.inputCount - 1,
-                result.deposit.intent.amountRaw,
+                depositAmount,
                 true
             );
             nextOutput = 5;
         }
-        result.ftInputTotal = state.ftInputTotal;
-        result.feeRaw = _verifyNativeOutputsAndFee(
-            rawTransaction,
-            depositTransaction,
-            parentTransactions,
-            nextOutput,
-            state.nativeInputTotal
-        );
     }
 
     function _verifyNativeOutputsAndFee(
         bytes calldata rawTransaction,
         TbcBoundedTransaction.TransactionView memory depositTransaction,
         bytes[] calldata parentTransactions,
+        TbcBoundedTransaction.TransactionView[] memory parentViews,
         uint256 nextOutput,
         uint256 nativeInputTotal
     ) private pure returns (uint256 feeRaw) {
@@ -272,15 +299,13 @@ library TbcBridgeDepositVerifier {
         ) revert InvalidOutputShape(depositTransaction.outputCount, nextOutput);
         if (depositTransaction.outputCount == nextOutput + 1) {
             uint256 nativeVin = depositTransaction.inputCount - 1;
-            TbcBoundedTransaction.TransactionView memory nativeParent =
-                TbcBoundedTransaction.inspectParent(parentTransactions[nativeVin]);
             uint32 nativeVout = depositTransaction.inputs[nativeVin].outputIndex;
             if (
                 !_sameScript(
                     rawTransaction,
                     depositTransaction.outputs[nextOutput],
                     parentTransactions[nativeVin],
-                    nativeParent.outputs[nativeVout]
+                    parentViews[nativeVin].outputs[nativeVout]
                 )
             ) revert InvalidNativeChange();
         }
@@ -308,7 +333,7 @@ library TbcBridgeDepositVerifier {
         address expectedGateway,
         bytes20 expectedReserveController
     ) internal pure returns (VerifiedTransition memory result) {
-        (result,) = verifyAuthenticatedTransitionWithView(
+        (result,) = verifyAuthenticatedTransitionWithViews(
             rawTransaction,
             parentTransactions,
             ancestorTransactions,
@@ -317,9 +342,9 @@ library TbcBridgeDepositVerifier {
         );
     }
 
-    /// @dev Lets the authorization layer reuse the already parsed deposit view
-    ///      instead of hashing and decoding the same transaction a third time.
-    function verifyAuthenticatedTransitionWithView(
+    /// @dev Lets the authorization layer reuse the already parsed deposit and
+    ///      parent views instead of hashing and decoding those transactions again.
+    function verifyAuthenticatedTransitionWithViews(
         bytes calldata rawTransaction,
         bytes[] calldata parentTransactions,
         bytes[][] calldata ancestorTransactions,
@@ -327,17 +352,23 @@ library TbcBridgeDepositVerifier {
         bytes20 expectedReserveController
     ) internal pure returns (
         VerifiedTransition memory result,
-        TbcBoundedTransaction.TransactionView memory deposit
+        AuthenticatedViews memory views
     ) {
-        deposit = TbcBoundedTransaction.inspect(rawTransaction);
+        views.deposit = TbcBoundedTransaction.inspect(rawTransaction);
+        views.parents = new TbcBoundedTransaction.TransactionView[](
+            views.deposit.inputCount
+        );
         result = _verifyTransition(
             rawTransaction,
-            deposit,
+            views.deposit,
             parentTransactions,
+            views.parents,
             expectedGateway,
             expectedReserveController
         );
-        _verifyAncestors(deposit, parentTransactions, ancestorTransactions);
+        _verifyAncestors(
+            views.deposit, parentTransactions, ancestorTransactions, views.parents
+        );
     }
 
     function verifyFinalizedInclusion(
@@ -414,7 +445,8 @@ library TbcBridgeDepositVerifier {
 
     function _verifyInputs(
         TbcBoundedTransaction.TransactionView memory deposit,
-        bytes[] calldata parents
+        bytes[] calldata parents,
+        TbcBoundedTransaction.TransactionView[] memory parentViews
     ) private pure returns (TransitionState memory state) {
         if (parents.length != deposit.inputCount) {
             revert ParentCountMismatch(parents.length, deposit.inputCount);
@@ -429,8 +461,8 @@ library TbcBridgeDepositVerifier {
                         && seen.outputIndex == input.outputIndex
                 ) revert DuplicateInputOutpoint(vin);
             }
-            TbcBoundedTransaction.TransactionView memory parent =
-                TbcBoundedTransaction.inspectParent(parents[vin]);
+            parentViews[vin] = TbcBoundedTransaction.inspectParent(parents[vin]);
+            TbcBoundedTransaction.TransactionView memory parent = parentViews[vin];
             if (parent.txid != input.previousTxid) {
                 revert ParentTxidMismatch(vin, parent.txid, input.previousTxid);
             }
@@ -457,7 +489,8 @@ library TbcBridgeDepositVerifier {
     function _verifyAncestors(
         TbcBoundedTransaction.TransactionView memory deposit,
         bytes[] calldata parents,
-        bytes[][] calldata ancestorGroups
+        bytes[][] calldata ancestorGroups,
+        TbcBoundedTransaction.TransactionView[] memory parentViews
     ) private pure {
         if (ancestorGroups.length != deposit.inputCount) {
             revert AncestorGroupCountMismatch(ancestorGroups.length, deposit.inputCount);
@@ -467,8 +500,7 @@ library TbcBridgeDepositVerifier {
             revert NativeAncestorsNotEmpty(ancestorGroups[nativeVin].length);
         }
         for (uint256 vin; vin < nativeVin; ++vin) {
-            TbcBoundedTransaction.TransactionView memory parent =
-                TbcBoundedTransaction.inspectParent(parents[vin]);
+            TbcBoundedTransaction.TransactionView memory parent = parentViews[vin];
             uint32 parentVout = deposit.inputs[vin].outputIndex;
             if (parentVout + 1 >= parent.outputCount) revert InvalidFtInput(vin);
             TbcBoundedTransaction.OutputView memory tape = parent.outputs[parentVout + 1];
