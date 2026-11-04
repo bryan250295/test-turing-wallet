@@ -106,8 +106,20 @@ match the compressed key in the raw transaction; it cannot substitute another
 owner. The final native input must also use the exact two-push P2PKH unlock
 shape. Schnorr and other sighash modes fail closed for this frozen route.
 
-This slice still does not execute the complete pinned legacy-v3 FT Script. It
-also does not provide an independent UTXO non-membership/unspent proof.
+The next bounded semantic slice consumes the canonical legacy-v3
+`getPreTxdata(parent, vout)` witness immediately after each FT public key. It
+checks the pushed version/locktime/input/output header, every parent
+outpoint/sequence, the aggregate parent input-script hashes, surrounding output
+value/script-hash commitments, the pinned Code suffix and partial hash, exact
+Tape bytes and the final input-script boundary. An inserted stable-coin
+`isCoin` flag, changed parent header, non-canonical push or trailing stack data
+therefore fails closed even though input scripts are not covered by the
+`ALL|FORKID` signature digest.
+
+These slices still do not validate the preceding `getCurrentTxdata` and
+`buildFtPrePreTxData` stack encodings or execute the complete pinned legacy-v3
+FT Script. They also do not provide an independent UTXO
+non-membership/unspent proof.
 Accordingly it is an owner-authorized structural legacy-FT transition verifier,
 not yet the full Phase 2 Script verifier and not a mint authorization gate.
 
@@ -115,7 +127,8 @@ not yet the full Phase 2 Script verifier and not a mint authorization gate.
 
 The pinned Solidity 0.8.30 compiler targets Cancun, matching HyperEVM Testnet
 chain 998. The compiled primitive harness is 6,728 runtime bytes, the relay is
-9,314 runtime bytes and the Phase 3D deposit harness is 20,066 runtime bytes. A read-only `eth_call`
+9,314 runtime bytes and the Phase 3D deposit harness is 23,224 runtime bytes,
+leaving 1,352 bytes below the EVM runtime limit. A read-only `eth_call`
 injects that runtime temporarily through the RPC state-override parameter; it
 does not deploy code or submit a transaction.
 
@@ -201,7 +214,10 @@ logical deposit ID and accepted the same two `ALL|FORKID` signatures. Mutated
 amount, Code template, CompactSize, gateway,
 Merkle-root, parent ordering, Tape allocation, native change, missing/mutated
 ancestor, ancestor-group count, native ancestor, signature count/location/body
-and public-key point cases all reverted.
+and public-key point cases all reverted. Mutations that inserted an `isCoin`
+byte between the public key and parent witness, changed the committed parent
+header or appended stack data also reverted while leaving the signed
+outpoints/outputs unchanged.
 
 Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 
@@ -211,7 +227,7 @@ Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 | Same envelope + one-leaf Merkle reconstruction | 3,588 | 163,574 |
 | Envelope + 2 bound parents + FT/native conservation | 5,764 | 331,174 |
 | Same transition + exact one-level ancestor authentication | 6,116 | 496,870 |
-| Same transition + FT/native input authorization | 6,372 | 800,860 |
+| Same transition + FT/native input authorization + exact parent witness | 6,372 | 864,413 |
 
 The one-leaf vector has no sibling hashes and the second estimate does not call
 a deployed relay. The transition estimate parses two small synthetic parents;
@@ -310,10 +326,14 @@ the version-10 TXID, validates the pinned Covenant/v3 output envelope and binds
 the deposit inputs to parent outpoints with structural FT/native conservation,
 then authenticates the exact one-level legacy-FT ancestor set committed by
 those parents and verifies the committed compressed-key `ALL|FORKID` signatures
-against each FT/native input owner.
+against each FT/native input owner. It also binds the complete canonical parent
+witness tail consumed after each FT signature/public key to those authenticated
+parent bytes.
 It does **not** establish a live canonical TBC chain because the relay is not
 deployed or independently audited, and it does not execute or validate the
-complete legacy FT input Script program. It cannot authorize minting. Until all
+complete legacy FT input Script program: current-transaction and pre-parent
+stack encodings remain outside the bounded semantic verifier. It cannot
+authorize minting. Until all
 remaining gates pass, the forward path remains the existing custodial learning
 flow and must not be described as trustless.
 

@@ -171,6 +171,33 @@ function phase3dEnvelopeVector() {
 			publicKeyY: `0x${point.y.padStart(64, '0')}` as Hex,
 		};
 	};
+	const signatureWitnesses = [
+		signatureWitness(0, Buffer.from(ftSignature, 'hex')),
+		signatureWitness(1, nativeSignature),
+	];
+	const ftInputScript = parsed.inputs[0].script.toBuffer();
+	const replaceFtInputScript = (nextScript: Buffer) => {
+		const scriptOffset = raw.indexOf(ftInputScript);
+		assert.ok(scriptOffset >= 0, 'Missing serialized FT input script.');
+		const lengthPrefix = compactSize(ftInputScript.length);
+		const prefixOffset = scriptOffset - lengthPrefix.length;
+		assert.deepEqual(raw.subarray(prefixOffset, scriptOffset), lengthPrefix);
+		return Buffer.concat([
+			raw.subarray(0, prefixOffset), compactSize(nextScript.length), nextScript,
+			raw.subarray(scriptOffset + ftInputScript.length),
+		]);
+	};
+	const ftPairEnd = signatureWitnesses[0].signaturePushOffset
+		+ 1 + Buffer.from(ftSignature, 'hex').length + 1 + compressedPublicKey.length;
+	const withCoinFlag = replaceFtInputScript(Buffer.concat([
+		ftInputScript.subarray(0, ftPairEnd), Buffer.from([0]), ftInputScript.subarray(ftPairEnd),
+	]));
+	const withTrailingStackData = replaceFtInputScript(Buffer.concat([
+		ftInputScript, Buffer.from([0]),
+	]));
+	const wrongParentHeaderScript = Buffer.from(ftInputScript);
+	wrongParentHeaderScript[ftPairEnd + 1] ^= 1;
+	const withWrongParentHeader = replaceFtInputScript(wrongParentHeaderScript);
 	return {
 		raw: `0x${raw.toString('hex')}` as Hex,
 		txid: `0x${parsed.hash}` as Hex,
@@ -182,10 +209,12 @@ function phase3dEnvelopeVector() {
 		],
 		ancestors: [[`0x${ancestorRaw.toString('hex')}` as Hex], []] as Hex[][],
 		signatureHexes: [ftSignature, nativeSignature.toString('hex')],
-		signatureWitnesses: [
-			signatureWitness(0, Buffer.from(ftSignature, 'hex')),
-			signatureWitness(1, nativeSignature),
-		],
+		signatureWitnesses,
+		witnessLayoutMutations: {
+			withCoinFlag: `0x${withCoinFlag.toString('hex')}` as Hex,
+			withTrailingStackData: `0x${withTrailingStackData.toString('hex')}` as Hex,
+			withWrongParentHeader: `0x${withWrongParentHeader.toString('hex')}` as Hex,
+		},
 		feeRaw: 1_900n,
 		nativeScriptHex: nativeScript.toString('hex'),
 		intent,
@@ -455,6 +484,12 @@ async function main() {
 		],
 		PHASE3D_GATEWAY, expectedReserve,
 	]);
+	for (const mutatedWitness of Object.values(depositVector.witnessLayoutMutations)) {
+		await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+			mutatedWitness, depositVector.parents, depositVector.ancestors,
+			depositVector.signatureWitnesses, PHASE3D_GATEWAY, expectedReserve,
+		]);
+	}
 	const invalidSignature = Buffer.from(depositVector.raw.slice(2), 'hex');
 	const ftSignatureOffset = invalidSignature.indexOf(
 		Buffer.from(depositVector.signatureHexes[0], 'hex'),
@@ -693,7 +728,7 @@ async function main() {
 		'0x1a3f798f541c6dca88f46d1ee59041cf2a1336c4bde89b598248ca12dc49c372',
 	]]);
 
-	console.log('Phase 3 Solidity, Phase 3D envelope/transition/input-authorization and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
+	console.log('Phase 3 Solidity, Phase 3D envelope/transition/input-authorization/parent-witness and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
 	console.log('No contract was deployed and no transaction or asset movement was submitted.');
 }
 

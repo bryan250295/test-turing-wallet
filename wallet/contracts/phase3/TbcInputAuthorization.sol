@@ -7,8 +7,11 @@ import {TbcBridgeDepositVerifier} from "./TbcBridgeDepositVerifier.sol";
 
 /// @notice Bounded ALL|FORKID ECDSA authorization for the Phase 3D route.
 /// @dev This verifies the exact signature/public-key pair committed inside each
-///      input script, its owner hash and its BIP143-style TBC sighash. It is not
-///      a general TBC Script interpreter and does not claim the remaining FT
+///      input script, its owner hash and its BIP143-style TBC sighash. For FT
+///      inputs it also requires the exact legacy-v3 SDK parent witness after the
+///      public key, including canonical pushes, parent header/input commitments,
+///      Code partial hash, Tape and surrounding output hashes. It is not a
+///      general TBC Script interpreter and does not claim the remaining FT
 ///      Covenant stack program succeeded.
 library TbcInputAuthorization {
     uint256 internal constant SECP256K1_N =
@@ -16,6 +19,11 @@ library TbcInputAuthorization {
     uint256 internal constant SECP256K1_HALF_N =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
     uint256 internal constant FT_V3_CONTROLLER_OFFSET = 1_857;
+    uint256 internal constant FT_V3_PARTIAL_OFFSET = 1_856;
+    uint256 internal constant FT_V3_CODE_BYTES = 1_884;
+    uint256 internal constant FT_V3_TAPE_BYTES = 73;
+    bytes32 internal constant FT_V3_CODE_PARTIAL_HASH =
+        0x197cfcf91f9a14217df24cf36f567b8d0ff784a638d4d9b7c2add2d888687f9b;
     uint8 internal constant SIGHASH_ALL_FORKID = 0x41;
 
     struct SignatureWitness {
@@ -40,6 +48,9 @@ library TbcInputAuthorization {
         TbcBoundedTransaction.OutputView sourceOutput;
         bytes20 owner;
         bool exactP2pkhUnlock;
+        uint8 parentInputCount;
+        uint8 parentOutputCount;
+        uint32 parentVout;
     }
 
     error SignatureWitnessCountMismatch(uint256 supplied, uint256 expected);
@@ -49,6 +60,7 @@ library TbcInputAuthorization {
     error InvalidPublicKey(uint256 vin);
     error InputOwnerMismatch(uint256 vin, bytes20 supplied, bytes20 expected);
     error InvalidInputSignature(uint256 vin);
+    error InvalidFtWitnessLayout(uint256 vin);
 
     function verifyAuthorizedTransition(
         bytes calldata rawTransaction,
@@ -95,15 +107,19 @@ library TbcInputAuthorization {
     ) private pure {
         TbcBoundedTransaction.TransactionView memory parent =
             TbcBoundedTransaction.inspectParent(parentTransaction);
+        uint32 parentVout = transaction.inputs[vin].outputIndex;
         TbcBoundedTransaction.OutputView memory sourceOutput =
-            parent.outputs[transaction.inputs[vin].outputIndex];
+            parent.outputs[parentVout];
         AuthorizationTarget memory target = AuthorizationTarget({
             sourceOutput: sourceOutput,
             owner: _readBytes20(
                 parentTransaction,
                 sourceOutput.scriptOffset + (nativeInput ? 3 : FT_V3_CONTROLLER_OFFSET)
             ),
-            exactP2pkhUnlock: nativeInput
+            exactP2pkhUnlock: nativeInput,
+            parentInputCount: parent.inputCount,
+            parentOutputCount: parent.outputCount,
+            parentVout: parentVout
         });
         _verifyInputSignature(
             rawTransaction,
@@ -146,6 +162,16 @@ library TbcInputAuthorization {
             target.exactP2pkhUnlock,
             vin
         );
+        if (!target.exactP2pkhUnlock) {
+            _verifyFtParentWitness(
+                rawTransaction,
+                input,
+                parentTransaction,
+                target,
+                located.publicKeyOffset + 33,
+                vin
+            );
+        }
         address expectedPublicKey = _verifyPublicKey(
             rawTransaction, located.publicKeyOffset, witness, target.owner, vin
         );
@@ -160,6 +186,201 @@ library TbcInputAuthorization {
         if (recovered27 != expectedPublicKey && recovered28 != expectedPublicKey) {
             revert InvalidInputSignature(vin);
         }
+    }
+
+    /// @dev `FT.getFTunlock(..., false)` places getPreTxdata(parent, vout)
+    ///      immediately after the compressed public key and nowhere else. By
+    ///      consuming that complete encoding to the input-script boundary this
+    ///      also rejects the stable-coin `isCoin` flag and trailing stack data.
+    function _verifyFtParentWitness(
+        bytes calldata rawTransaction,
+        TbcBoundedTransaction.InputView memory input,
+        bytes calldata parentTransaction,
+        AuthorizationTarget memory target,
+        uint256 cursor,
+        uint256 vin
+    ) private pure {
+        uint256 end = uint256(input.scriptOffset) + input.scriptLength;
+        if (cursor >= end || target.parentVout + 1 >= target.parentOutputCount) {
+            revert InvalidFtWitnessLayout(vin);
+        }
+
+        cursor = _consumePush(rawTransaction, cursor, end, 16, vin);
+        if (
+            _readUint32LE(rawTransaction, cursor) != 10
+                || _readUint32LE(rawTransaction, cursor + 4)
+                    != _readUint32LE(parentTransaction, parentTransaction.length - 4)
+                || _readUint32LE(rawTransaction, cursor + 8) != target.parentInputCount
+                || _readUint32LE(rawTransaction, cursor + 12) != target.parentOutputCount
+        ) revert InvalidFtWitnessLayout(vin);
+        cursor += 16;
+
+        uint256 inputDataLength = uint256(target.parentInputCount) * 40;
+        cursor = _consumePush(rawTransaction, cursor, end, inputDataLength, vin);
+        TbcBoundedTransaction.TransactionView memory parent =
+            TbcBoundedTransaction.inspectParent(parentTransaction);
+        for (uint256 index; index < target.parentInputCount; ++index) {
+            TbcBoundedTransaction.InputView memory parentInput = parent.inputs[index];
+            if (
+                _readBytes32(rawTransaction, cursor)
+                    != TbcProofVerifier.reverseBytes32(parentInput.previousTxid)
+                    || _readUint32LE(rawTransaction, cursor + 32) != parentInput.outputIndex
+                    || _readUint32LE(rawTransaction, cursor + 36) != parentInput.sequence
+            ) revert InvalidFtWitnessLayout(vin);
+            cursor += 40;
+        }
+
+        cursor = _consumePush(rawTransaction, cursor, end, 32, vin);
+        if (_readBytes32(rawTransaction, cursor) != _parentScriptHashes(parentTransaction, parent)) {
+            revert InvalidFtWitnessLayout(vin);
+        }
+        cursor += 32;
+
+        cursor = _verifyOutputCommitments(
+            rawTransaction, cursor, end, parentTransaction, parent, 0, target.parentVout, vin
+        );
+        cursor = _verifyCodeTapeAndTrailingOutputs(
+            rawTransaction, cursor, end, parentTransaction, parent, target.parentVout, vin
+        );
+        if (cursor != end) revert InvalidFtWitnessLayout(vin);
+    }
+
+    function _verifyCodeTapeAndTrailingOutputs(
+        bytes calldata rawTransaction,
+        uint256 cursor,
+        uint256 end,
+        bytes calldata parentTransaction,
+        TbcBoundedTransaction.TransactionView memory parent,
+        uint32 parentVout,
+        uint256 vin
+    ) private pure returns (uint256) {
+        TbcBoundedTransaction.OutputView memory code = parent.outputs[parentVout];
+        cursor = _consumePush(rawTransaction, cursor, end, 8, vin);
+        if (_readUint64LE(rawTransaction, cursor) != code.satoshis) {
+            revert InvalidFtWitnessLayout(vin);
+        }
+        cursor += 8;
+        cursor = _consumePush(
+            rawTransaction, cursor, end, FT_V3_CODE_BYTES - FT_V3_PARTIAL_OFFSET, vin
+        );
+        if (
+            keccak256(rawTransaction[cursor:cursor + FT_V3_CODE_BYTES - FT_V3_PARTIAL_OFFSET])
+                != keccak256(
+                    parentTransaction[
+                        code.scriptOffset + FT_V3_PARTIAL_OFFSET:
+                            code.scriptOffset + FT_V3_CODE_BYTES
+                    ]
+                )
+        ) revert InvalidFtWitnessLayout(vin);
+        cursor += FT_V3_CODE_BYTES - FT_V3_PARTIAL_OFFSET;
+        cursor = _consumePush(rawTransaction, cursor, end, 32, vin);
+        if (_readBytes32(rawTransaction, cursor) != FT_V3_CODE_PARTIAL_HASH) {
+            revert InvalidFtWitnessLayout(vin);
+        }
+        cursor += 32;
+        cursor = _consumePush(rawTransaction, cursor, end, 2, vin);
+        if (uint8(rawTransaction[cursor]) != 0x5c || uint8(rawTransaction[cursor + 1]) != 0x07) {
+            revert InvalidFtWitnessLayout(vin);
+        }
+        cursor += 2;
+
+        TbcBoundedTransaction.OutputView memory tape = parent.outputs[parentVout + 1];
+        cursor = _consumePush(rawTransaction, cursor, end, 8, vin);
+        if (_readUint64LE(rawTransaction, cursor) != tape.satoshis) {
+            revert InvalidFtWitnessLayout(vin);
+        }
+        cursor += 8;
+        cursor = _consumePush(rawTransaction, cursor, end, FT_V3_TAPE_BYTES, vin);
+        if (
+            keccak256(rawTransaction[cursor:cursor + FT_V3_TAPE_BYTES])
+                != keccak256(
+                    parentTransaction[tape.scriptOffset:tape.scriptOffset + FT_V3_TAPE_BYTES]
+                )
+        ) revert InvalidFtWitnessLayout(vin);
+        cursor += FT_V3_TAPE_BYTES;
+
+        return _verifyOutputCommitments(
+            rawTransaction,
+            cursor,
+            end,
+            parentTransaction,
+            parent,
+            parentVout + 2,
+            parent.outputCount,
+            vin
+        );
+    }
+
+    function _verifyOutputCommitments(
+        bytes calldata rawTransaction,
+        uint256 cursor,
+        uint256 end,
+        bytes calldata parentTransaction,
+        TbcBoundedTransaction.TransactionView memory parent,
+        uint256 first,
+        uint256 limit,
+        uint256 vin
+    ) private pure returns (uint256) {
+        uint256 count = limit - first;
+        if (count == 0) {
+            return _consumePush(rawTransaction, cursor, end, 0, vin);
+        }
+        cursor = _consumePush(rawTransaction, cursor, end, count * 40, vin);
+        for (uint256 index = first; index < limit; ++index) {
+            TbcBoundedTransaction.OutputView memory output = parent.outputs[index];
+            if (
+                _readUint64LE(rawTransaction, cursor) != output.satoshis
+                    || _readBytes32(rawTransaction, cursor + 8)
+                        != sha256(
+                            parentTransaction[
+                                output.scriptOffset:output.scriptOffset + output.scriptLength
+                            ]
+                        )
+            ) revert InvalidFtWitnessLayout(vin);
+            cursor += 40;
+        }
+        return cursor;
+    }
+
+    function _parentScriptHashes(
+        bytes calldata parentTransaction,
+        TbcBoundedTransaction.TransactionView memory parent
+    ) private pure returns (bytes32) {
+        bytes memory hashes = new bytes(uint256(parent.inputCount) * 32);
+        for (uint256 index; index < parent.inputCount; ++index) {
+            TbcBoundedTransaction.InputView memory input = parent.inputs[index];
+            bytes32 scriptHash = sha256(
+                parentTransaction[input.scriptOffset:input.scriptOffset + input.scriptLength]
+            );
+            assembly ("memory-safe") {
+                mstore(add(add(hashes, 32), mul(index, 32)), scriptHash)
+            }
+        }
+        return sha256(hashes);
+    }
+
+    function _consumePush(
+        bytes calldata raw,
+        uint256 cursor,
+        uint256 end,
+        uint256 length,
+        uint256 vin
+    ) private pure returns (uint256 dataOffset) {
+        uint256 prefixLength = length < 76 ? 1 : length < 256 ? 2 : 3;
+        if (cursor > end || prefixLength + length > end - cursor) {
+            revert InvalidFtWitnessLayout(vin);
+        }
+        if (length < 76) {
+            if (uint8(raw[cursor]) != length) revert InvalidFtWitnessLayout(vin);
+        } else if (length < 256) {
+            if (uint8(raw[cursor]) != 0x4c || uint8(raw[cursor + 1]) != length) {
+                revert InvalidFtWitnessLayout(vin);
+            }
+        } else if (
+            uint8(raw[cursor]) != 0x4d || uint8(raw[cursor + 1]) != uint8(length)
+                || uint8(raw[cursor + 2]) != uint8(length >> 8)
+        ) revert InvalidFtWitnessLayout(vin);
+        return cursor + prefixLength;
     }
 
     function _locateSignature(
@@ -441,6 +662,27 @@ library TbcInputAuthorization {
     {
         assembly ("memory-safe") {
             result := calldataload(add(value.offset, offset))
+        }
+    }
+
+    function _readUint32LE(bytes calldata value, uint256 offset)
+        private
+        pure
+        returns (uint32 result)
+    {
+        result = uint32(uint8(value[offset]))
+            | (uint32(uint8(value[offset + 1])) << 8)
+            | (uint32(uint8(value[offset + 2])) << 16)
+            | (uint32(uint8(value[offset + 3])) << 24);
+    }
+
+    function _readUint64LE(bytes calldata value, uint256 offset)
+        private
+        pure
+        returns (uint64 result)
+    {
+        for (uint256 index; index < 8; ++index) {
+            result |= uint64(uint8(value[offset + index])) << uint64(8 * index);
         }
     }
 
