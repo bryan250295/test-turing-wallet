@@ -12,7 +12,7 @@ import { serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
 import { REAL_MT_DAA_POINTS, REAL_MT_DEPOSIT_BLOCK } from '../src/bridge/phase1/tbc-test-vectors';
 import type { TbcBlockRecord } from '../src/bridge/phase1/tbc-proof.types';
 import {
-	bridgeCovenantFtController, buildBridgeCovenantScript, logicalDepositId,
+	bridgeCovenantFtController, buildBridgeCovenantScript, logicalDepositId, sourceOutpointId,
 } from '../src/bridge/phase2/bridge-covenant';
 import { PINNED_MT_V3_GENESIS_RAW } from '../src/bridge/phase2/pinned-mt-v3.vector';
 import {
@@ -416,6 +416,9 @@ async function main() {
 	const prefixArtifact = JSON.parse(await readFile(
 		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcFtUnlockPrefixHarness.json'), 'utf8',
 	)) as Artifact;
+	const replayArtifact = JSON.parse(await readFile(
+		resolve(process.cwd(), '../wallet/artifacts/phase3/TbcDepositReplayHarness.json'), 'utf8',
+	)) as Artifact;
 	const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 	const manifest = JSON.parse(await readFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), 'utf8')) as BootstrapManifest;
 	const bootstrapPoints = decodeTbcdevBootstrapContext(await readFile(resolve(fixtureRoot, manifest.binaryFile)));
@@ -463,6 +466,20 @@ async function main() {
 	assert.equal(await call(prefixArtifact, 'verifyFtUnlockPrefixes', [
 		depositVector.raw, depositVector.parents, depositVector.ancestors,
 		depositVector.signaturePushOffsets,
+	]), true);
+	const expectedSourceOutpoint = sourceOutpointId(depositVector.intent.sourceContractId, {
+		sourceTxid: depositVector.txid, sourceVout: 1,
+	});
+	assert.equal(await call(replayArtifact, 'sourceOutpointId', [
+		`0x${depositVector.intent.sourceContractId}`, depositVector.txid, 1,
+	]), expectedSourceOutpoint);
+	const replayExercise = await call(replayArtifact, 'exerciseReplayProtection', [
+		`0x${depositVector.intent.sourceContractId}`, depositVector.txid, depositVector.depositId,
+		`0x${'33'.repeat(32)}`, `0x${'44'.repeat(32)}`,
+	]) as readonly [Hex, boolean];
+	assert.deepEqual(replayExercise, [expectedSourceOutpoint, true]);
+	assert.equal(await call(replayArtifact, 'exerciseRollback', [
+		`0x${depositVector.intent.sourceContractId}`, depositVector.txid, depositVector.depositId,
 	]), true);
 
 	const mutatedAmount = Buffer.from(depositVector.raw.slice(2), 'hex');
@@ -621,6 +638,12 @@ async function main() {
 			depositVector.signaturePushOffsets,
 		],
 	});
+	const depositReplayData = encodeFunctionData({
+		abi: replayArtifact.abi, functionName: 'consume',
+		args: [
+			`0x${depositVector.intent.sourceContractId}`, depositVector.txid, depositVector.depositId,
+		],
+	});
 	const estimateDepositGas = async (data: Hex, artifact = depositArtifact) => {
 		const response = await rpc('eth_estimateGas', [
 			{ to: OVERRIDE_ADDRESS, data }, 'latest',
@@ -633,12 +656,13 @@ async function main() {
 	};
 	const [depositInspectGas, depositMerkleGas, depositTransitionGas,
 		depositAuthenticatedTransitionGas, depositAuthorizedTransitionGas,
-		depositPrefixGas] = await Promise.all([
+		depositPrefixGas, depositReplayGas] = await Promise.all([
 		estimateDepositGas(depositInspectData), estimateDepositGas(depositMerkleData),
 		estimateDepositGas(depositTransitionData),
 		estimateDepositGas(depositAuthenticatedTransitionData),
 		estimateDepositGas(depositAuthorizedTransitionData, authorizationArtifact),
 		estimateDepositGas(depositPrefixData, prefixArtifact),
+		estimateDepositGas(depositReplayData, replayArtifact),
 	]);
 	const compact = await call(artifact, 'compactRoundTrip', [0x1d00ffff]) as readonly unknown[];
 	assert.deepEqual(compact, [decodeCompactTarget(0x1d00ffff).target, 0x1d00ffff, false, false]);
@@ -752,6 +776,8 @@ async function main() {
 			authorizedTransitionTransactionGasEstimate: depositAuthorizedTransitionGas,
 			unlockPrefixCalldataBytes: (depositPrefixData.length - 2) / 2,
 			unlockPrefixTransactionGasEstimate: depositPrefixGas,
+			replayWriteCalldataBytes: (depositReplayData.length - 2) / 2,
+			replayWriteTransactionGasEstimate: depositReplayGas,
 		},
 		inHarnessDeploymentExecutionGas: profile[0],
 		submissions: submissionProfile,
@@ -817,7 +843,7 @@ async function main() {
 		'0x1a3f798f541c6dca88f46d1ee59041cf2a1336c4bde89b598248ca12dc49c372',
 	]]);
 
-	console.log('Phase 3 Solidity, Phase 3D envelope/transition/input-authorization/full unlock-prefix and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
+	console.log('Phase 3 Solidity, Phase 3D envelope/transition/input-authorization/full unlock-prefix/replay and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
 	console.log('No contract was deployed and no transaction or asset movement was submitted.');
 }
 

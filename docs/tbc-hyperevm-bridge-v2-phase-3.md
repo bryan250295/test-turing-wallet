@@ -4,8 +4,9 @@ Status: **Phase 3A consensus/Merkle primitives, Phase 3B authenticated
 bootstrap commitment, Phase 3C permissionless header-relay core and the Phase
 3D bounded TXID/Covenant/v3 output-envelope, parent/outpoint conservation and
 one-level FT ancestor-authentication, input-signature and exact legacy-v3
-unlock-stack semantic layers are complete for `tbcdev-testnet`; gateway and
-proof-backed token are not complete**
+unlock-stack semantic layers, plus the dual-key replay-protection storage
+primitive, are complete for `tbcdev-testnet`; gateway and proof-backed token
+are not complete**
 
 Implementation date: **2026-11-04 (Asia/Kuala_Lumpur)**
 
@@ -135,6 +136,16 @@ stable-coin flags, swap paths, Schnorr or other sighash modes. It also does not
 provide an independent UTXO non-membership/unspent proof and is not yet a mint
 authorization gate.
 
+`TbcDepositReplayProtection.sol` adds the stateful boundary required by a
+future proof-only gateway. After every proof gate succeeds, the gateway can
+atomically consume both the complete logical deposit ID and a separately
+domain-separated physical source-outpoint ID binding the TBC Testnet domain,
+source FT contract, transaction ID and fixed FT output `vout=1`. Reusing either
+identity reverts before mint. The write is intentionally internal so an
+untrusted caller cannot pre-consume another user's proof through a standalone
+registry; a future gateway must inherit it and perform proof, replay write and
+mint in one EVM transaction. Any later revert rolls both mapping writes back.
+
 `TbcBridgeDepositVerifierHarness.sol` now exposes only the structural, Merkle
 and finalized-inclusion test paths. `TbcAuthorizedTransitionHarness.sol`
 exposes only the authorization/parent-witness path, while
@@ -142,6 +153,9 @@ exposes only the authorization/parent-witness path, while
 compiler and deployment isolation required by the EVM code-size limit. A
 future gateway must require both Phase 3D gates over the same immutable route
 inputs; neither result is sufficient by itself.
+`TbcDepositReplayHarness.sol` is a 2,279-byte stateful test harness with no mint
+authority. It cross-checks the source-outpoint key, both independent duplicate
+paths and EVM rollback behavior; it is not the future gateway.
 
 ## 2. Executed cross-language vectors
 
@@ -223,7 +237,7 @@ These are testnet observations, not fixed fees: the payable amount is always
 The six-header total is relay maintenance cost, normally paid across six
 relayer transactions; it is not automatically charged as one transaction to a
 bridge user. It also excludes the future Phase 3D FT/Covenant proof, replay
-protection and mint transaction. Bootstrap calldata shrinks as the relay moves
+write and mint transaction. Bootstrap calldata shrinks as the relay moves
 forward, but production budgeting still requires longer-range profiles and a
 real deployed-state benchmark.
 
@@ -251,6 +265,10 @@ partial state for the same 256-byte script prefix. The parent has two non-zero
 Tape slots: proofs are supplied in ascending slot order while the exact SDK
 unlock prefix encodes the authenticated pre-parent transactions in reverse slot
 order; reversing the supplied proof group reverted in both gates.
+The same RPC state-override run produced the identical source-outpoint ID in
+TypeScript and Solidity, rejected reuse of either the logical deposit ID or the
+physical source outpoint while the other key changed, and confirmed that a
+later revert rolls both replay writes back.
 
 Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 
@@ -262,6 +280,7 @@ Observed direct transaction estimates on HyperEVM Testnet on 2026-11-04:
 | Same transition + exact one-level ancestor authentication | 6,468 | 430,270 |
 | Same transition + FT/native input authorization + exact parent witness | 6,724 | 642,958 |
 | Exact `getCurrentTxdata` + `buildFtPrePreTxData` prefix semantics | 6,532 | 1,232,956 |
+| Atomic logical-deposit + source-outpoint replay write | 100 | 71,563 |
 
 On the earlier one-ancestor benchmark, before harness separation and
 parsed-view reuse, the authorization path cost 864,413 gas and the combined
@@ -341,12 +360,10 @@ execution or FT Covenant semantics. Those remain separate gates.
 
 ## 5. Remaining Phase 3 work
 
-Phase 3 is not yet a proof-backed bridge. The next implementation slices are:
-
-1. add exact source-outpoint/logical-deposit replay protection;
-2. add a new proof-only `WrappedFTV2`/gateway pair that requires the immutable
-   relay, authorization and prefix-semantic gates with no owner, backend or
-   minter proof bypass.
+Phase 3 is not yet a proof-backed bridge. The next implementation slice is a
+new proof-only `WrappedFTV2`/gateway pair that requires the immutable relay,
+authorization and prefix-semantic gates, consumes the replay state atomically
+and exposes no owner, backend or minter proof bypass.
 
 Before any relay deployment, add a pinned local-EVM suite, fuzz malformed
 bootstrap witnesses and long competing branches, measure per-header gas, and
@@ -373,11 +390,15 @@ parent bytes. The separate prefix-semantic gate validates the complete
 including the SDK-compatible SHA-256 intermediate states. Together these gates
 cover the exact pinned legacy-v3 `FT.getFTunlock(..., false)` stack through a
 bounded semantic verifier rather than a general Script interpreter.
+The replay module separately consumes the logical intent identity and physical
+source outpoint, rejects either form of reuse and relies on EVM transaction
+atomicity to roll its state back if minting later fails.
 It does **not** establish a live canonical TBC chain because the relay is not
 deployed or independently audited. It also does not prove current UTXO
-unspentness, provide replay storage or authorize minting. Until all remaining
-gates pass, the forward path remains the existing custodial learning flow and
-must not be described as trustless.
+unspentness, and no deployed gateway currently invokes the replay module or
+authorizes proof-backed minting. Until the remaining gateway composition passes,
+the forward path remains the existing custodial learning flow and must not be
+described as trustless.
 
 ## 7. Evidence used
 

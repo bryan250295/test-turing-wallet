@@ -153,3 +153,14 @@ export function logicalDepositId(intentValue: BridgeCovenantIntent, outpoint: Lo
 			outpoint.sourceVout, intent.destinationChainId, intent.destinationGateway, intent.recipient, intent.amountRaw, intent.depositNonce],
 	));
 }
+
+/** Domain-separated physical source-outpoint identity used by the v2 replay guard. */
+export function sourceOutpointId(sourceContractIdValue: string, outpoint: LogicalDepositOutpoint): Hex {
+	const sourceContractId = normalizedHex(sourceContractIdValue, 32, 'sourceContractId');
+	const sourceTxid = normalizedHex(outpoint.sourceTxid, 32, 'sourceTxid');
+	if (!Number.isSafeInteger(outpoint.sourceVout) || outpoint.sourceVout < 0 || outpoint.sourceVout > 0xffffffff) throw new Error('sourceVout is outside uint32 range.');
+	return keccak256(encodeAbiParameters(
+		parseAbiParameters('bytes32, bytes32, bytes32, uint32'),
+		[TBC_V2_SOURCE_DOMAIN_HASH, `0x${sourceContractId}`, `0x${sourceTxid}`, outpoint.sourceVout],
+	));
+}

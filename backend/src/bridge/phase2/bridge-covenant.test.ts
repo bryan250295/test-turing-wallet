@@ -4,7 +4,8 @@ import tbc from 'tbc-lib-js';
 import {
 	BRIDGE_COVENANT_PAYLOAD_BYTES, TBC_V2_DEPOSIT_DOMAIN_HASH, TBC_V2_SOURCE_DOMAIN_HASH,
 	bridgeCovenantFtController, buildBridgeCovenantScript, decodeBridgeCovenantPayload,
-	encodeBridgeCovenantPayload, logicalDepositId, parseBridgeCovenantScript, type BridgeCovenantIntent,
+	encodeBridgeCovenantPayload, logicalDepositId, parseBridgeCovenantScript, sourceOutpointId,
+	type BridgeCovenantIntent,
 } from './bridge-covenant';
 
 const intent: BridgeCovenantIntent = Object.freeze({
@@ -38,6 +39,13 @@ test('freezes the Solidity-compatible logical deposit identifier', () => {
 		sourceTxid: '3bae1fe926e1ac620ad5c0697c6352af7f0b7d26a459122cbb1a8376e1032b1d',
 		sourceVout: 1,
 	}), '0x994f3874ca78fb6a00712a3a0c6004d1c2bc4685d7db7399ce7bed3a20ddc524');
+});
+
+test('freezes the Solidity-compatible source-outpoint replay identifier', () => {
+	assert.equal(sourceOutpointId(intent.sourceContractId, {
+		sourceTxid: '3bae1fe926e1ac620ad5c0697c6352af7f0b7d26a459122cbb1a8376e1032b1d',
+		sourceVout: 1,
+	}), '0x777ccca6ab2f6277077e8ffb89a12a4947bb91bf2b351eaa5ae22156872becd3');
 });
 
 test('rejects payload, controller, script-shape and uint mutations', () => {
