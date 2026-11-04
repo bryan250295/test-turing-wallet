@@ -35,14 +35,15 @@ the offline [Phase 2 Covenant and legacy-FT proof](docs/tbc-hyperevm-bridge-v2-p
 for the `tbcdev` route. [Phase 3A–D Solidity verification work](docs/tbc-hyperevm-bridge-v2-phase-3.md)
 now reproduces the real header, PoW, DAA, Merkle and frozen 8,065-point bootstrap
 commitment vectors, plus the bounded version-10 TXID and pinned v3 Covenant
-output envelope, bound parents and exact one-level FT ancestor set through
-read-only HyperEVM Testnet EVM calls. The executable
+output envelope, bound parents, exact one-level FT ancestor set and committed
+`ALL|FORKID` FT/native input signatures through read-only HyperEVM Testnet EVM
+calls. The executable
 route is hard-locked to Testnet and contains no Mainnet provider path. The
 permissionless header-relay core is implemented but not deployed or audited;
-legacy FT input-script/signature execution, replay protection and the
-proof-backed mint gateway remain incomplete. The bounded parent/outpoint,
-FT/native conservation and ancestor-authentication layers are implemented but
-are not a substitute for script execution.
+complete legacy FT Script execution, replay protection and the proof-backed
+mint gateway remain incomplete. The bounded parent/outpoint, FT/native
+conservation, ancestor-authentication and owner-signature layers are
+implemented but are not a substitute for Script execution.
 This work does not install TBCNODE or modify the running custodial Learning Bridge.
 
 `STUDY2.md` is teacher-provided, read-only source material.

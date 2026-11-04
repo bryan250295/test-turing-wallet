@@ -51,6 +51,10 @@ interface SolidityVerifiedTransition {
 const PHASE3D_GATEWAY = '0x1111111111111111111111111111111111111111' as const;
 const PHASE3D_RECIPIENT = '0x8221fae04189f1f2f50268495ed95d1a9b220432' as const;
 const PHASE3D_RESERVE_PKH = '2222222222222222222222222222222222222222';
+const CompressedPrivateKey = tbc.PrivateKey as unknown as new (key: object) => tbc.PrivateKey;
+const PHASE3D_SIGNER_KEY = new CompressedPrivateKey({
+	bn: new tbc.crypto.BN('11'.repeat(32), 16), network: tbc.Networks.testnet, compressed: true,
+});
 
 function compactSize(value: number) {
 	assert.ok(Number.isSafeInteger(value) && value >= 0);
@@ -94,7 +98,13 @@ function phase3dEnvelopeVector() {
 	const code = sdk.FT.buildFTtransferCode(genesis.outputs[0].script.toHex(), covenantController).toBuffer();
 	const { amountHex } = sdk.FT.buildTapeAmount(amountRaw, [amountRaw]);
 	const tape = sdk.FT.buildFTtransferTape(genesis.outputs[1].script.toHex(), amountHex).toBuffer();
-	const ownerCode = genesis.outputs[0].script.toBuffer();
+	const signer = PHASE3D_SIGNER_KEY.toAddress().toString();
+	const signerPublicKey = PHASE3D_SIGNER_KEY.toPublicKey();
+	const compressedPublicKey = signerPublicKey.toBuffer();
+	const point = signerPublicKey.toObject() as { x: string; y: string };
+	const ownerCode = sdk.FT.buildFTtransferCode(
+		genesis.outputs[0].script.toHex(), signer,
+	).toBuffer();
 	const ancestorScript = Buffer.from(`76a914${'44'.repeat(20)}88ac`, 'hex');
 	const ancestorRaw = serializedTransaction(
 		[{ txid: 'aa'.repeat(32), vout: 0 }], [{ satoshis: 900n, script: ancestorScript }],
@@ -105,22 +115,62 @@ function phase3dEnvelopeVector() {
 		[{ satoshis: 500n, script: ownerCode }, { satoshis: 0n, script: tape }],
 	);
 	const ftParent = new tbc.Transaction(ftParentRaw.toString('hex'));
-	const nativeScript = Buffer.from(`76a914${'33'.repeat(20)}88ac`, 'hex');
+	const nativeScript = tbc.Script.buildPublicKeyHashOut(signer).toBuffer();
 	const nativeParentRaw = serializedTransaction(
 		[{ txid: 'bb'.repeat(32), vout: 0 }], [{ satoshis: 100_000n, script: nativeScript }],
 	);
 	const nativeParent = new tbc.Transaction(nativeParentRaw.toString('hex'));
-	const raw = serializedTransaction(
-		[{ txid: ftParent.hash, vout: 0 }, { txid: nativeParent.hash, vout: 0 }],
-		[
-			{ satoshis: 100n, script: covenant.toBuffer() },
-			{ satoshis: 500n, script: code },
-			{ satoshis: 0n, script: tape },
-			{ satoshis: 98_000n, script: nativeScript },
-		],
-	);
-	const parsed = new tbc.Transaction(raw.toString('hex'));
-	assert.equal(parsed.toBuffer().toString('hex'), raw.toString('hex'));
+	const ancestorData = sdk.buildFtPrePreTxData(ftParent, 0, [ancestor]);
+	let ftSignature = '';
+	const parsed = new tbc.Transaction()
+		.from({
+			txId: ftParent.hash, outputIndex: 0, script: ownerCode.toString('hex'),
+			satoshis: 500, ftBalance: amountRaw,
+		})
+		.from({
+			txId: nativeParent.hash, outputIndex: 0, script: nativeScript.toString('hex'),
+			satoshis: 100_000,
+		})
+		.addOutput(new tbc.Transaction.Output({ script: covenant, satoshis: 100 }))
+		.addOutput(new tbc.Transaction.Output({ script: new tbc.Script(code), satoshis: 500 }))
+		.addOutput(new tbc.Transaction.Output({ script: new tbc.Script(tape), satoshis: 0 }))
+		.fee(1_900)
+		.change(signer);
+	parsed.setInputScript({ inputIndex: 0 }, (current) => {
+		const signature = current.getSignature(0, PHASE3D_SIGNER_KEY);
+		if (typeof signature !== 'string') throw new Error('Expected one FT signature.');
+		ftSignature = signature;
+		return sdk.FT.getFTunlock(
+			ftSignature, signerPublicKey.toHex(), current, ftParent, ancestorData, 0, 0, false,
+		);
+	});
+	parsed.sign(PHASE3D_SIGNER_KEY).seal();
+	const nativeSignature = parsed.inputs[1].script.chunks[0].buf!;
+	const verifySignature = (vin: number, signature: Buffer, script: Buffer, satoshis: number) => {
+		const parsedSignature = tbc.crypto.Signature.fromTxFormat(signature);
+		assert.equal(parsedSignature.nhashtype, 0x41);
+		assert.equal(parsed.verifySignature(
+			parsedSignature, signerPublicKey, vin, new tbc.Script(script),
+			new tbc.crypto.BN(satoshis), tbc.Script.Interpreter.SCRIPT_ENABLE_SIGHASH_FORKID,
+		), true);
+	};
+	verifySignature(0, Buffer.from(ftSignature, 'hex'), ownerCode, 500);
+	verifySignature(1, nativeSignature, nativeScript, 100_000);
+	const raw = parsed.toBuffer();
+	const signatureWitness = (vin: number, signature: Buffer) => {
+		const script = parsed.inputs[vin].script.toBuffer();
+		const needle = Buffer.concat([
+			Buffer.from([signature.length]), signature,
+			Buffer.from([compressedPublicKey.length]), compressedPublicKey,
+		]);
+		const signaturePushOffset = script.indexOf(needle);
+		assert.ok(signaturePushOffset >= 0, `Missing signature/public-key pair at vin ${vin}.`);
+		return {
+			signaturePushOffset,
+			publicKeyX: `0x${point.x.padStart(64, '0')}` as Hex,
+			publicKeyY: `0x${point.y.padStart(64, '0')}` as Hex,
+		};
+	};
 	return {
 		raw: `0x${raw.toString('hex')}` as Hex,
 		txid: `0x${parsed.hash}` as Hex,
@@ -131,7 +181,13 @@ function phase3dEnvelopeVector() {
 			`0x${nativeParentRaw.toString('hex')}` as Hex,
 		],
 		ancestors: [[`0x${ancestorRaw.toString('hex')}` as Hex], []] as Hex[][],
+		signatureHexes: [ftSignature, nativeSignature.toString('hex')],
+		signatureWitnesses: [
+			signatureWitness(0, Buffer.from(ftSignature, 'hex')),
+			signatureWitness(1, nativeSignature),
+		],
 		feeRaw: 1_900n,
+		nativeScriptHex: nativeScript.toString('hex'),
 		intent,
 	};
 }
@@ -312,6 +368,13 @@ async function main() {
 		PHASE3D_GATEWAY, expectedReserve,
 	]) as SolidityVerifiedTransition;
 	assert.deepEqual(authenticatedTransition, verifiedTransition);
+	const authorizedTransition = await call(depositArtifact, 'verifyAuthorizedTransition', [
+		// The witness offset is relative to the serialized input script and points
+		// to the canonical one-byte signature push opcode.
+		depositVector.raw, depositVector.parents, depositVector.ancestors,
+		depositVector.signatureWitnesses, PHASE3D_GATEWAY, expectedReserve,
+	]) as SolidityVerifiedTransition;
+	assert.deepEqual(authorizedTransition, authenticatedTransition);
 
 	const mutatedAmount = Buffer.from(depositVector.raw.slice(2), 'hex');
 	const magicOffset = mutatedAmount.indexOf(Buffer.from('LMBV2DEP', 'ascii'));
@@ -344,7 +407,7 @@ async function main() {
 		depositVector.raw, [...depositVector.parents].reverse(), PHASE3D_GATEWAY, expectedReserve,
 	]);
 	const invalidAllocation = Buffer.from(depositVector.raw.slice(2), 'hex');
-	const tapeOffset = invalidAllocation.indexOf(Buffer.from('006a30d204', 'hex'));
+	const tapeOffset = invalidAllocation.lastIndexOf(Buffer.from('006a30d204', 'hex'));
 	assert.ok(tapeOffset >= 0);
 	invalidAllocation[tapeOffset + 3] = 0xd1;
 	invalidAllocation[tapeOffset + 11] = 0x01;
@@ -353,8 +416,8 @@ async function main() {
 		PHASE3D_GATEWAY, expectedReserve,
 	]);
 	const invalidNativeChange = Buffer.from(depositVector.raw.slice(2), 'hex');
-	const nativeChangeOffset = invalidNativeChange.indexOf(
-		Buffer.from(`76a914${'33'.repeat(20)}88ac`, 'hex'),
+	const nativeChangeOffset = invalidNativeChange.lastIndexOf(
+		Buffer.from(depositVector.nativeScriptHex, 'hex'),
 	);
 	assert.ok(nativeChangeOffset >= 0);
 	invalidNativeChange[nativeChangeOffset + 3] ^= 1;
@@ -379,6 +442,39 @@ async function main() {
 		depositVector.raw, depositVector.parents,
 		[[`0x${mismatchedAncestor.toString('hex')}`], []], PHASE3D_GATEWAY, expectedReserve,
 	]);
+	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+		depositVector.raw, depositVector.parents, depositVector.ancestors,
+		depositVector.signatureWitnesses.slice(0, 1), PHASE3D_GATEWAY, expectedReserve,
+	]);
+	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+		depositVector.raw, depositVector.parents, depositVector.ancestors,
+		[
+			{ ...depositVector.signatureWitnesses[0], signaturePushOffset:
+				depositVector.signatureWitnesses[0].signaturePushOffset + 1 },
+			depositVector.signatureWitnesses[1],
+		],
+		PHASE3D_GATEWAY, expectedReserve,
+	]);
+	const invalidSignature = Buffer.from(depositVector.raw.slice(2), 'hex');
+	const ftSignatureOffset = invalidSignature.indexOf(
+		Buffer.from(depositVector.signatureHexes[0], 'hex'),
+	);
+	assert.ok(ftSignatureOffset >= 0);
+	invalidSignature[ftSignatureOffset + 10] ^= 1;
+	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+		`0x${invalidSignature.toString('hex')}`, depositVector.parents,
+		depositVector.ancestors, depositVector.signatureWitnesses,
+		PHASE3D_GATEWAY, expectedReserve,
+	]);
+	await expectRevert(depositArtifact, 'verifyAuthorizedTransition', [
+		depositVector.raw, depositVector.parents, depositVector.ancestors,
+		[
+			{ ...depositVector.signatureWitnesses[0], publicKeyY:
+				`0x${'00'.repeat(31)}01` },
+			depositVector.signatureWitnesses[1],
+		],
+		PHASE3D_GATEWAY, expectedReserve,
+	]);
 	const depositInspectData = encodeFunctionData({
 		abi: depositArtifact.abi, functionName: 'inspectDeposit',
 		args: [depositVector.raw, PHASE3D_GATEWAY, expectedReserve],
@@ -398,6 +494,13 @@ async function main() {
 			PHASE3D_GATEWAY, expectedReserve,
 		],
 	});
+	const depositAuthorizedTransitionData = encodeFunctionData({
+		abi: depositArtifact.abi, functionName: 'verifyAuthorizedTransition',
+		args: [
+			depositVector.raw, depositVector.parents, depositVector.ancestors,
+			depositVector.signatureWitnesses, PHASE3D_GATEWAY, expectedReserve,
+		],
+	});
 	const estimateDepositGas = async (data: Hex) => {
 		const response = await rpc('eth_estimateGas', [
 			{ to: OVERRIDE_ADDRESS, data }, 'latest',
@@ -409,10 +512,11 @@ async function main() {
 		return BigInt(response.result);
 	};
 	const [depositInspectGas, depositMerkleGas, depositTransitionGas,
-		depositAuthenticatedTransitionGas] = await Promise.all([
+		depositAuthenticatedTransitionGas, depositAuthorizedTransitionGas] = await Promise.all([
 		estimateDepositGas(depositInspectData), estimateDepositGas(depositMerkleData),
 		estimateDepositGas(depositTransitionData),
 		estimateDepositGas(depositAuthenticatedTransitionData),
+		estimateDepositGas(depositAuthorizedTransitionData),
 	]);
 	const compact = await call(artifact, 'compactRoundTrip', [0x1d00ffff]) as readonly unknown[];
 	assert.deepEqual(compact, [decodeCompactTarget(0x1d00ffff).target, 0x1d00ffff, false, false]);
@@ -522,6 +626,8 @@ async function main() {
 			authenticatedTransitionCalldataBytes:
 				(depositAuthenticatedTransitionData.length - 2) / 2,
 			authenticatedTransitionTransactionGasEstimate: depositAuthenticatedTransitionGas,
+			authorizedTransitionCalldataBytes: (depositAuthorizedTransitionData.length - 2) / 2,
+			authorizedTransitionTransactionGasEstimate: depositAuthorizedTransitionGas,
 		},
 		inHarnessDeploymentExecutionGas: profile[0],
 		submissions: submissionProfile,
@@ -587,7 +693,7 @@ async function main() {
 		'0x1a3f798f541c6dca88f46d1ee59041cf2a1336c4bde89b598248ca12dc49c372',
 	]]);
 
-	console.log('Phase 3 Solidity, Phase 3D envelope/transition and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
+	console.log('Phase 3 Solidity, Phase 3D envelope/transition/input-authorization and six-header relay vectors passed through read-only HyperEVM Testnet eth_call.');
 	console.log('No contract was deployed and no transaction or asset movement was submitted.');
 }
 
