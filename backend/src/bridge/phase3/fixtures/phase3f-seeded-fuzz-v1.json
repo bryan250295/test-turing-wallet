@@ -1,0 +1,16 @@
+{
+  "schema": "learningmaterials/phase3f-seeded-fuzz/v1",
+  "parentManifest": "phase3e-local-evm-v1.json",
+  "seed": "0x5eed3f01",
+  "proofEnvelopeCases": 64,
+  "relayWitnessRejectCases": 24,
+  "relayWitnessPermutationCases": 6,
+  "invariants": [
+    "all mutated proof envelopes revert",
+    "malformed relay witness sets revert",
+    "relay witness ordering is permutation invariant",
+    "fuzz calls do not consume either replay key",
+    "fuzz calls do not change wrapped supply or recipient balance",
+    "canonical proof still mints after the fuzz corpus"
+  ]
+}

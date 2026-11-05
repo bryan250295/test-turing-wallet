@@ -8,10 +8,11 @@ unlock-stack semantic layers, plus the dual-key replay-protection storage
 primitive and proof-only Gateway/WrappedFTV2 composition, are implemented and
 cross-checked for the frozen `tbcdev-testnet` vector; Phase 3E also executes the
 same production composition through persistent transactions on a disposable,
-pinned local Cancun EVM; nothing is deployed to a public network or
-independently audited**
+pinned local Cancun EVM; Phase 3F adds deterministic malformed-proof and
+relay-witness property vectors around that rehearsal; nothing is deployed to a
+public network or independently audited**
 
-Implementation date: **2026-11-04 (Asia/Kuala_Lumpur)**
+Implementation date: **2026-11-05 (Asia/Kuala_Lumpur)**
 
 Nothing in this phase has been deployed. No transaction, mint, burn, release or
 asset movement was submitted. The existing custodial Learning Bridge contracts
@@ -387,6 +388,31 @@ Observed persistent local transaction gas on 2026-11-04:
 These numbers are a deterministic regression baseline, not a public-network
 fee quote. No public RPC transaction, token mint or asset movement occurs.
 
+### 2.4 Phase 3F deterministic proof and witness fuzzing
+
+The persistent local-EVM rehearsal now runs a reproducible seeded fuzz corpus
+before its canonical mint. Seed `0x5eed3f01` generates 64 ABI-valid proof
+envelopes across eight mutation classes: unknown block hash, raw transaction
+bit flip, invalid transaction index, inconsistent transaction count/Merkle
+branch, parent transaction bit flip, FT ancestor transaction bit flip,
+signature public-key bit flip and signature push-offset displacement. Every
+mutated proof must revert.
+
+Each of the six relay transitions also tests four malformed bootstrap-witness
+sets: one required witness removed, one witness duplicated, one authenticated
+point changed and one Merkle sibling changed. All 24 cases must revert. The
+same six witness sets are additionally submitted in reverse order through
+read-only calls and must succeed. This is intentional: the relay resolves
+witnesses by authenticated height, so their container has set semantics rather
+than an order-dependent consensus meaning.
+
+After all fuzz calls, the suite proves that wrapped supply and recipient
+balance remain zero and that neither the logical-deposit nor source-outpoint
+replay key was consumed. The unmodified canonical proof must then still mint
+successfully. Counts, seed and invariants are frozen in
+`backend/src/bridge/phase3/fixtures/phase3f-seeded-fuzz-v1.json`; Phase 3E's
+deployment and gas manifest remains unchanged.
+
 ## 3. Authenticated bootstrap history
 
 The accepted checkpoint at height `839164` authenticates one header and its
@@ -452,12 +478,12 @@ execution or FT Covenant semantics. Those remain separate gates.
 
 Phase 3 now contains the proof-only `WrappedFTV2`/Gateway implementation, but it
 is not yet an operational proof-backed bridge. The pinned local-EVM deployment,
-header-sync, mint and replay rehearsal is complete. Before any public-network
-deployment, remaining work includes randomized/property fuzzing of malformed
-bootstrap witnesses and proof envelopes, long competing-branch tests,
-real-size deposit/Merkle-branch benchmarks and independent Solidity, TBC Script
-and consensus review. A real testnet deposit must then pass through newly
-deployed contracts without moving existing custodial balances.
+header-sync, mint and replay rehearsal and its fixed-seed malformed-input corpus
+are complete. Before any public-network deployment, remaining work includes
+larger multi-seed fuzz campaigns, long competing-branch and reorganization
+tests, real-size deposit/Merkle-branch benchmarks and independent Solidity, TBC
+Script and consensus review. A real testnet deposit must then pass through
+newly deployed contracts without moving existing custodial balances.
 
 The main protocol blocker is unchanged: finalized transaction inclusion does
 not prove that the minted source FT outpoint remains unspent. An API or TBCScan

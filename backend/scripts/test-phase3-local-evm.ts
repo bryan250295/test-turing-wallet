@@ -98,6 +98,32 @@ async function expectCallRevert(call: () => Promise<unknown>, label: string) {
 	await assert.rejects(call, `${label} unexpectedly succeeded.`);
 }
 
+function seededRandom(seed: number) {
+	let state = seed >>> 0;
+	return () => {
+		state ^= state << 13;
+		state ^= state >>> 17;
+		state ^= state << 5;
+		return state >>> 0;
+	};
+}
+
+function flipRandomBit(value: Hex, random: () => number) {
+	const bytes = Buffer.from(value.slice(2), 'hex');
+	assert.ok(bytes.length > 0, 'Cannot mutate empty bytes.');
+	const index = random() % bytes.length;
+	bytes[index] ^= 1 << (random() % 8);
+	return `0x${bytes.toString('hex')}` as Hex;
+}
+
+function randomHash(random: () => number) {
+	const bytes = Buffer.alloc(32);
+	for (let index = 0; index < bytes.length; index += 4) {
+		bytes.writeUInt32BE(random(), index);
+	}
+	return `0x${bytes.toString('hex')}` as Hex;
+}
+
 async function main() {
 	const port = await reservePort();
 	const rpcUrl = `http://127.0.0.1:${port}`;
@@ -233,7 +259,51 @@ async function main() {
 		});
 
 		const headerGas: bigint[] = [];
+		let relayWitnessFuzzCases = 0;
+		let relayWitnessPermutationCases = 0;
 		for (const [index, header] of RELAY_HEADERS.entries()) {
+			const canonicalWitnesses = relayWitnesses[index];
+			const firstWitness = canonicalWitnesses[0];
+			assert.ok(firstWitness && firstWitness.siblings.length > 0);
+			const malformedWitnesses = [
+				canonicalWitnesses.slice(0, -1),
+				[...canonicalWitnesses, firstWitness],
+				[
+					{ ...firstWitness, point: { ...firstWitness.point, bits: firstWitness.point.bits ^ 1 } },
+					...canonicalWitnesses.slice(1),
+				],
+				[
+					{
+						...firstWitness,
+						siblings: [
+							flipRandomBit(firstWitness.siblings[0], seededRandom(header.height)),
+							...firstWitness.siblings.slice(1),
+						],
+					},
+					...canonicalWitnesses.slice(1),
+				],
+			];
+			const permutedWitnessData = encodeFunctionData({
+				abi: relayArtifact.abi,
+				functionName: 'submitHeader',
+				args: [
+					`0x${serializeBlockHeader(header).toString('hex')}`,
+					[...canonicalWitnesses].reverse(),
+				],
+			});
+			await publicClient.call({ to: relay, data: permutedWitnessData });
+			relayWitnessPermutationCases += 1;
+			for (const [mutationIndex, witnesses] of malformedWitnesses.entries()) {
+				const data = encodeFunctionData({
+					abi: relayArtifact.abi,
+					functionName: 'submitHeader',
+					args: [`0x${serializeBlockHeader(header).toString('hex')}`, witnesses],
+				});
+				await expectCallRevert(() => publicClient.call({
+					to: relay, data,
+				}), `Header ${header.height} witness mutation ${mutationIndex}`);
+				relayWitnessFuzzCases += 1;
+			}
 			const hash = await walletClient.writeContract({
 				account: proofSubmitter,
 				address: relay,
@@ -292,6 +362,92 @@ async function main() {
 			signatureWitnesses: depositVector.signatureWitnesses,
 			signaturePushOffsets: depositVector.signaturePushOffsets,
 		};
+		const recipient = depositVector.intent.recipient as Address;
+		const sourceOutpoint = await publicClient.readContract({
+			address: gateway.address,
+			abi: gatewayArtifact.abi,
+			functionName: 'sourceOutpointId',
+			args: [`0x${depositVector.intent.sourceContractId}`, depositVector.txid, 1],
+		}) as Hex;
+		const fuzzSeed = 0x5eed3f01;
+		const random = seededRandom(fuzzSeed);
+		const proofFuzzCases = 64;
+		for (let caseIndex = 0; caseIndex < proofFuzzCases; caseIndex += 1) {
+			const mutated = {
+				...proof,
+				displayedSiblings: [...proof.displayedSiblings],
+				parentTransactions: [...proof.parentTransactions],
+				ancestorTransactions: proof.ancestorTransactions.map((group) => [...group]),
+				signatureWitnesses: proof.signatureWitnesses.map((witness) => ({ ...witness })),
+				signaturePushOffsets: [...proof.signaturePushOffsets],
+			};
+			switch (caseIndex % 8) {
+				case 0:
+					mutated.blockHash = randomHash(random);
+					break;
+				case 1:
+					mutated.rawTransaction = flipRandomBit(mutated.rawTransaction, random);
+					break;
+				case 2:
+					mutated.transactionIndex = 1;
+					break;
+				case 3:
+					mutated.transactionCount = 2;
+					mutated.displayedSiblings = [randomHash(random)];
+					break;
+				case 4: {
+					const parentIndex = random() % mutated.parentTransactions.length;
+					mutated.parentTransactions[parentIndex] = flipRandomBit(
+						mutated.parentTransactions[parentIndex], random,
+					);
+					break;
+				}
+				case 5: {
+					const nonEmptyGroups = mutated.ancestorTransactions
+						.map((group, groupIndex) => ({ group, groupIndex }))
+						.filter(({ group }) => group.length > 0);
+					const selected = nonEmptyGroups[random() % nonEmptyGroups.length];
+					const ancestorIndex = random() % selected.group.length;
+					mutated.ancestorTransactions[selected.groupIndex][ancestorIndex] = flipRandomBit(
+						selected.group[ancestorIndex], random,
+					);
+					break;
+				}
+				case 6: {
+					const witnessIndex = random() % mutated.signatureWitnesses.length;
+					mutated.signatureWitnesses[witnessIndex].publicKeyX = flipRandomBit(
+						mutated.signatureWitnesses[witnessIndex].publicKeyX, random,
+					);
+					break;
+				}
+				default: {
+					const offsetIndex = random() % mutated.signaturePushOffsets.length;
+					mutated.signaturePushOffsets[offsetIndex] += 1 + (random() % 31);
+				}
+			}
+			const data = encodeFunctionData({
+				abi: gatewayArtifact.abi,
+				functionName: 'mintFromProof',
+				args: [mutated],
+			});
+			await expectCallRevert(() => publicClient.call({
+				to: gateway.address, data,
+			}), `Seed ${fuzzSeed.toString(16)} proof mutation ${caseIndex}`);
+		}
+		assert.equal(await publicClient.readContract({
+			address: token, abi: tokenArtifact.abi, functionName: 'totalSupply',
+		}), 0n, 'Proof fuzz changed total supply.');
+		assert.equal(await publicClient.readContract({
+			address: token, abi: tokenArtifact.abi, functionName: 'balanceOf', args: [recipient],
+		}), 0n, 'Proof fuzz changed recipient balance.');
+		assert.equal(await publicClient.readContract({
+			address: gateway.address, abi: gatewayArtifact.abi,
+			functionName: 'processedDeposits', args: [depositVector.depositId],
+		}), false, 'Proof fuzz consumed the logical deposit ID.');
+		assert.equal(await publicClient.readContract({
+			address: gateway.address, abi: gatewayArtifact.abi,
+			functionName: 'processedSourceOutpoints', args: [sourceOutpoint],
+		}), false, 'Proof fuzz consumed the source outpoint.');
 		const mintData = encodeFunctionData({
 			abi: gatewayArtifact.abi,
 			functionName: 'mintFromProof',
@@ -318,7 +474,6 @@ async function main() {
 		const depositConsumed = decodedGatewayEvents.find((event) => event.eventName === 'DepositConsumed');
 		assert.ok(proofMinted, 'ProofMinted event was not emitted.');
 		assert.ok(depositConsumed, 'DepositConsumed event was not emitted.');
-		const recipient = depositVector.intent.recipient as Address;
 		const proofMintedArgs = proofMinted.args as unknown as {
 			depositId: Hex; sourceTxid: Hex; recipient: Address; amountRaw: bigint; blockHash: Hex;
 		};
@@ -339,12 +494,6 @@ async function main() {
 			functionName: 'processedDeposits',
 			args: [depositVector.depositId],
 		}), true);
-		const sourceOutpoint = await publicClient.readContract({
-			address: gateway.address,
-			abi: gatewayArtifact.abi,
-			functionName: 'sourceOutpointId',
-			args: [`0x${depositVector.intent.sourceContractId}`, depositVector.txid, 1],
-		}) as Hex;
 		const depositConsumedArgs = depositConsumed.args as unknown as {
 			depositId: Hex; sourceOutpoint: Hex; sourceTxid: Hex; sourceVout: number;
 		};
@@ -495,8 +644,29 @@ async function main() {
 			resolve(fixtureRoot, 'phase3e-local-evm-v1.json'), 'utf8',
 		));
 		assert.deepEqual(localResult, expectedLocalResult, 'Phase 3E local manifest changed.');
-		console.log(JSON.stringify(localResult, null, 2));
+		const fuzzResult = {
+			schema: 'learningmaterials/phase3f-seeded-fuzz/v1',
+			parentManifest: 'phase3e-local-evm-v1.json',
+			seed: `0x${fuzzSeed.toString(16)}`,
+			proofEnvelopeCases: proofFuzzCases,
+			relayWitnessRejectCases: relayWitnessFuzzCases,
+			relayWitnessPermutationCases,
+			invariants: [
+				'all mutated proof envelopes revert',
+				'malformed relay witness sets revert',
+				'relay witness ordering is permutation invariant',
+				'fuzz calls do not consume either replay key',
+				'fuzz calls do not change wrapped supply or recipient balance',
+				'canonical proof still mints after the fuzz corpus',
+			],
+		};
+		const expectedFuzzResult = JSON.parse(await readFile(
+			resolve(fixtureRoot, 'phase3f-seeded-fuzz-v1.json'), 'utf8',
+		));
+		assert.deepEqual(fuzzResult, expectedFuzzResult, 'Phase 3F fuzz manifest changed.');
+		console.log(JSON.stringify({ ...localResult, fuzz: fuzzResult }, null, 2));
 		console.log('Phase 3E local persistent-state deployment, relay, proof mint and replay vectors passed.');
+		console.log('Phase 3F seeded proof-envelope and relay-witness fuzz vectors passed.');
 		console.log('The synthetic deposit Merkle root existed only in this disposable local EVM.');
 	} finally {
 		node.kill('SIGTERM');
