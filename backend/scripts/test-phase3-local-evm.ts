@@ -20,6 +20,7 @@ import {
 
 const CHAIN_ID = 998;
 const RESERVE_CONTROLLER = `0x${'22'.repeat(20)}` as Hex;
+const ZERO_HASH = `0x${'00'.repeat(32)}` as Hex;
 
 interface Artifact {
 	abi: Abi;
@@ -37,6 +38,17 @@ interface BootstrapManifest {
 interface JsonRpcResponse<T = unknown> {
 	result?: T;
 	error?: { code: number; message: string; data?: unknown };
+}
+
+interface SyntheticRelayHeader {
+	blockHash: Hex;
+	parentHash: Hex;
+	merkleRoot: Hex;
+	skipHash: Hex;
+	chainWork: bigint;
+	height: number;
+	time: number;
+	bits: number;
 }
 
 function localChain(rpcUrl: string) {
@@ -81,7 +93,7 @@ async function waitForLocalEvm(
 	node: { exitCode: number | null },
 	output: () => string,
 ) {
-	for (let attempt = 0; attempt < 100; attempt += 1) {
+	for (let attempt = 0; attempt < 300; attempt += 1) {
 		if (node.exitCode !== null) throw new Error(`Hardhat exited early.\n${output()}`);
 		try {
 			const chainId = await jsonRpc<string>(rpcUrl, 'eth_chainId');
@@ -122,6 +134,95 @@ function randomHash(random: () => number) {
 		bytes.writeUInt32BE(random(), index);
 	}
 	return `0x${bytes.toString('hex')}` as Hex;
+}
+
+function invertLowestOne(value: number) {
+	return value === 0 ? 0 : (value & (value - 1)) >>> 0;
+}
+
+function relaySkipHeight(height: number) {
+	if (height < 2) return 0;
+	return (height & 1) === 1
+		? invertLowestOne(invertLowestOne(height - 1)) + 1
+		: invertLowestOne(height);
+}
+
+function syntheticRelayBranch(
+	label: string,
+	length: number,
+	checkpoint: SyntheticRelayHeader,
+	workPerHeader: bigint,
+) {
+	const labelHash = keccak256(toHex(label));
+	const hashesByHeight = new Map<number, Hex>([[checkpoint.height, checkpoint.blockHash]]);
+	const branch: SyntheticRelayHeader[] = [];
+	let parentHash = checkpoint.blockHash;
+	for (let offset = 1; offset <= length; offset += 1) {
+		const height = checkpoint.height + offset;
+		const blockHash = keccak256(encodeAbiParameters(
+			[{ type: 'bytes32' }, { type: 'uint32' }], [labelHash, height],
+		));
+		const skipHeight = relaySkipHeight(height);
+		const skipHash = skipHeight < checkpoint.height
+			? ZERO_HASH
+			: hashesByHeight.get(skipHeight);
+		assert.ok(skipHash, `Missing synthetic ${label} skip ancestor ${skipHeight}.`);
+		branch.push({
+			blockHash,
+			parentHash,
+			merkleRoot: keccak256(encodeAbiParameters(
+				[{ type: 'bytes32' }, { type: 'bytes32' }], [labelHash, blockHash],
+			)),
+			skipHash,
+			chainWork: checkpoint.chainWork + workPerHeader * BigInt(offset),
+			height,
+			time: checkpoint.time + offset * 60,
+			bits: checkpoint.bits,
+		});
+		hashesByHeight.set(height, blockHash);
+		parentHash = blockHash;
+	}
+	return branch;
+}
+
+async function injectSyntheticRelayHeader(
+	rpcUrl: string,
+	relay: Address,
+	header: SyntheticRelayHeader,
+) {
+	const base = BigInt(keccak256(encodeAbiParameters(
+		[{ type: 'bytes32' }, { type: 'uint256' }], [header.blockHash, 0n],
+	)));
+	const slot = (offset: bigint) => toHex(base + offset, { size: 32 });
+	const packed = BigInt(header.height) | (BigInt(header.time) << 32n)
+		| (BigInt(header.bits) << 64n) | (1n << 96n);
+	const values = [
+		header.parentHash,
+		header.merkleRoot,
+		header.skipHash,
+		toHex(header.chainWork, { size: 32 }),
+		toHex(packed, { size: 32 }),
+	] as const;
+	for (const [index, value] of values.entries()) {
+		await jsonRpc(rpcUrl, 'hardhat_setStorageAt', [relay, slot(BigInt(index)), value]);
+	}
+}
+
+async function setSyntheticBestChain(
+	rpcUrl: string,
+	relay: Address,
+	tip: SyntheticRelayHeader,
+	bestWorkTie: boolean,
+) {
+	const storageSlot = (value: bigint) => toHex(value, { size: 32 });
+	await jsonRpc(rpcUrl, 'hardhat_setStorageAt', [relay, storageSlot(1n), tip.blockHash]);
+	await jsonRpc(rpcUrl, 'hardhat_setStorageAt', [
+		relay, storageSlot(2n), toHex(tip.chainWork, { size: 32 }),
+	]);
+	await jsonRpc(rpcUrl, 'hardhat_setStorageAt', [
+		relay, storageSlot(3n), toHex(bestWorkTie ? 1n : 0n, { size: 32 }),
+	]);
+	await jsonRpc(rpcUrl, 'evm_mine');
 }
 
 async function main() {
@@ -664,9 +765,136 @@ async function main() {
 			resolve(fixtureRoot, 'phase3f-seeded-fuzz-v1.json'), 'utf8',
 		));
 		assert.deepEqual(fuzzResult, expectedFuzzResult, 'Phase 3F fuzz manifest changed.');
-		console.log(JSON.stringify({ ...localResult, fuzz: fuzzResult }, null, 2));
+
+		// Phase 3G injects already-retained header nodes into this disposable chain.
+		// It deliberately does not claim to reproduce submitHeader: mining 68 headers
+		// at the frozen testnet target would make this regression test impractical.
+		const checkpointPoint = bootstrapPoints.at(-1)!;
+		const checkpoint: SyntheticRelayHeader = {
+			blockHash: `0x${checkpointPoint.blockHash}`,
+			parentHash: ZERO_HASH,
+			merkleRoot: ZERO_HASH,
+			skipHash: ZERO_HASH,
+			chainWork: checkpointPoint.chainWork,
+			height: checkpointPoint.height,
+			time: checkpointPoint.time,
+			bits: checkpointPoint.bits,
+		};
+		const branchLength = 34;
+		const syntheticWorkPerHeader = blockWork(checkpoint.bits);
+		const branchA = syntheticRelayBranch(
+			'phase3g-branch-a', branchLength, checkpoint, syntheticWorkPerHeader,
+		);
+		const branchB = syntheticRelayBranch(
+			'phase3g-branch-b', branchLength, checkpoint, syntheticWorkPerHeader,
+		);
+		for (const header of [...branchA, ...branchB]) {
+			await injectSyntheticRelayHeader(rpcUrl, relay, header);
+		}
+		const isFinalized = (blockHash: Hex) => publicClient.readContract({
+			address: relay, abi: relayArtifact.abi, functionName: 'isFinalized', args: [blockHash],
+		}) as Promise<boolean>;
+		const isCanonical = (blockHash: Hex) => publicClient.readContract({
+			address: relay,
+			abi: relayArtifact.abi,
+			functionName: 'isCanonical',
+			args: [blockHash, 6],
+		}) as Promise<boolean>;
+		const assertBestState = async (tip: SyntheticRelayHeader, tie: boolean) => {
+			assert.equal(await publicClient.readContract({
+				address: relay, abi: relayArtifact.abi, functionName: 'bestTip',
+			}), tip.blockHash);
+			assert.equal(await publicClient.readContract({
+				address: relay, abi: relayArtifact.abi, functionName: 'bestChainWork',
+			}), tip.chainWork);
+			assert.equal(await publicClient.readContract({
+				address: relay, abi: relayArtifact.abi, functionName: 'bestWorkTie',
+			}), tie);
+		};
+
+		await setSyntheticBestChain(rpcUrl, relay, branchA[31], false);
+		await assertBestState(branchA[31], false);
+		assert.equal(await isFinalized(branchA[0].blockHash), true);
+		assert.equal(await isFinalized(branchB[0].blockHash), false);
+
+		assert.equal(branchA[31].chainWork, branchB[31].chainWork);
+		await setSyntheticBestChain(rpcUrl, relay, branchA[31], true);
+		await assertBestState(branchA[31], true);
+		assert.equal(await isFinalized(branchA[0].blockHash), false);
+		assert.equal(await isFinalized(branchB[0].blockHash), false);
+
+		await setSyntheticBestChain(rpcUrl, relay, branchB[32], false);
+		await assertBestState(branchB[32], false);
+		assert.equal(await isFinalized(branchB[0].blockHash), true);
+		assert.equal(await isFinalized(branchA[0].blockHash), false);
+		assert.equal(await isCanonical(branchB[27].blockHash), true);
+		assert.equal(await isCanonical(branchB[28].blockHash), false);
+		assert.equal(await publicClient.readContract({
+			address: relay,
+			abi: relayArtifact.abi,
+			functionName: 'ancestor',
+			args: [branchB[32].blockHash, checkpoint.height + 16],
+		}), branchB[15].blockHash);
+
+		assert.equal(branchA[32].chainWork, branchB[32].chainWork);
+		await setSyntheticBestChain(rpcUrl, relay, branchB[32], true);
+		await assertBestState(branchB[32], true);
+		assert.equal(await isFinalized(branchA[0].blockHash), false);
+		assert.equal(await isFinalized(branchB[0].blockHash), false);
+
+		await setSyntheticBestChain(rpcUrl, relay, branchA[33], false);
+		await assertBestState(branchA[33], false);
+		assert.equal(await isFinalized(branchA[0].blockHash), true);
+		assert.equal(await isFinalized(branchB[0].blockHash), false);
+		assert.equal(await isCanonical(branchA[28].blockHash), true);
+		assert.equal(await isCanonical(branchA[29].blockHash), false);
+		assert.equal(await isFinalized(depositBlockHash), false);
+		assert.equal(await publicClient.readContract({
+			address: token, abi: tokenArtifact.abi, functionName: 'balanceOf', args: [recipient],
+		}), depositVector.intent.amountRaw, 'Source reorg changed an already-minted EVM balance.');
+		assert.equal(await publicClient.readContract({
+			address: gateway.address,
+			abi: gatewayArtifact.abi,
+			functionName: 'processedDeposits',
+			args: [depositVector.depositId],
+		}), true, 'Source reorg cleared a consumed logical deposit ID.');
+		assert.equal(await publicClient.readContract({
+			address: gateway.address,
+			abi: gatewayArtifact.abi,
+			functionName: 'processedSourceOutpoints',
+			args: [sourceOutpoint],
+		}), true, 'Source reorg cleared a consumed source outpoint.');
+
+		const reorgResult = {
+			schema: 'learningmaterials/phase3g-reorg/v1',
+			parentManifest: 'phase3f-seeded-fuzz-v1.json',
+			setup: 'hardhat retained-header storage injection',
+			forkHeight: checkpoint.height,
+			branchLength,
+			syntheticWorkPerHeader: syntheticWorkPerHeader.toString(),
+			minimumConfirmations: 6,
+			winnerSequence: [
+				'branch-a@32', 'equal-work-tie@32', 'branch-b@33',
+				'equal-work-tie@33', 'branch-a@34',
+			],
+			deepestReplacedBranchLength: 33,
+			invariants: [
+				'equal-work ties fail closed for both branches',
+				'only the unique greatest-work branch is canonical',
+				'six confirmations include the queried block',
+				'ancestor queries follow the selected deep branch',
+				'a source-chain reorg cannot roll back an existing EVM mint',
+				'replay keys remain consumed after a source-chain reorg',
+			],
+		};
+		const expectedReorgResult = JSON.parse(await readFile(
+			resolve(fixtureRoot, 'phase3g-reorg-v1.json'), 'utf8',
+		));
+		assert.deepEqual(reorgResult, expectedReorgResult, 'Phase 3G reorg manifest changed.');
+		console.log(JSON.stringify({ ...localResult, fuzz: fuzzResult, reorg: reorgResult }, null, 2));
 		console.log('Phase 3E local persistent-state deployment, relay, proof mint and replay vectors passed.');
 		console.log('Phase 3F seeded proof-envelope and relay-witness fuzz vectors passed.');
+		console.log('Phase 3G deep competing-branch, tie and source-reorg vectors passed.');
 		console.log('The synthetic deposit Merkle root existed only in this disposable local EVM.');
 	} finally {
 		node.kill('SIGTERM');

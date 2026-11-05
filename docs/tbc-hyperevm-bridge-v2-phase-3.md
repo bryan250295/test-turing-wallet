@@ -9,8 +9,9 @@ primitive and proof-only Gateway/WrappedFTV2 composition, are implemented and
 cross-checked for the frozen `tbcdev-testnet` vector; Phase 3E also executes the
 same production composition through persistent transactions on a disposable,
 pinned local Cancun EVM; Phase 3F adds deterministic malformed-proof and
-relay-witness property vectors around that rehearsal; nothing is deployed to a
-public network or independently audited**
+relay-witness property vectors around that rehearsal; Phase 3G exercises deep
+retained competing branches, equal-work fail-closed behavior and source-reorg
+effects; nothing is deployed to a public network or independently audited**
 
 Implementation date: **2026-11-05 (Asia/Kuala_Lumpur)**
 
@@ -413,6 +414,43 @@ successfully. Counts, seed and invariants are frozen in
 `backend/src/bridge/phase3/fixtures/phase3f-seeded-fuzz-v1.json`; Phase 3E's
 deployment and gas manifest remains unchanged.
 
+### 2.5 Phase 3G deep competing branches and source reorganization
+
+The disposable local chain now installs two deterministic retained-header
+branches of 34 blocks each, both forking at checkpoint `839164`. It moves the
+production relay through this state sequence:
+
+```text
+branch A wins at depth 32
+equal-work tie at depth 32
+branch B wins at depth 33
+equal-work tie at depth 33
+branch A wins at depth 34
+```
+
+At every tie, canonical and finalized queries for both branches fail closed.
+After each greater-work transition, only the winning branch is canonical. The
+test also checks deep ancestor traversal and the exact six-confirmation
+boundary: a block at six confirmations passes, while the next block with only
+five does not.
+
+This vector injects already-retained `HeaderNode` storage through Hardhat's
+test-only state method. It does not modify the production relay bytecode or add
+a bypass method, but its setup bypasses `submitHeader` and therefore does not
+claim that the synthetic headers passed header validation. Mining the 68
+synthetic headers would require roughly 4.1 million expected hashes per header
+at the frozen checkpoint target and is unsuitable for a deterministic CI test.
+The six official sequential headers remain the real `submitHeader` vectors.
+
+The test intentionally performs the fork after the Phase 3E mint. Once the
+source deposit block leaves the greatest-work branch, the relay correctly
+reports it as non-canonical, but the EVM mint and both consumed replay keys
+remain unchanged. A source-chain reorganization cannot roll back a completed
+destination-chain transaction. Six confirmations are therefore a risk
+parameter, not absolute finality; production must justify this threshold
+against TBC chainwork and reorganization risk. The frozen vector is stored in
+`backend/src/bridge/phase3/fixtures/phase3g-reorg-v1.json`.
+
 ## 3. Authenticated bootstrap history
 
 The accepted checkpoint at height `839164` authenticates one header and its
@@ -479,11 +517,13 @@ execution or FT Covenant semantics. Those remain separate gates.
 Phase 3 now contains the proof-only `WrappedFTV2`/Gateway implementation, but it
 is not yet an operational proof-backed bridge. The pinned local-EVM deployment,
 header-sync, mint and replay rehearsal and its fixed-seed malformed-input corpus
-are complete. Before any public-network deployment, remaining work includes
-larger multi-seed fuzz campaigns, long competing-branch and reorganization
-tests, real-size deposit/Merkle-branch benchmarks and independent Solidity, TBC
-Script and consensus review. A real testnet deposit must then pass through
-newly deployed contracts without moving existing custodial balances.
+are complete, together with deep retained-branch/reorganization state vectors.
+Before any public-network deployment, remaining work includes larger multi-seed
+fuzz campaigns, valid mined/submitted competing-branch vectors if such testnet
+data can be obtained, real-size deposit/Merkle-branch benchmarks, a defensible
+confirmation-depth policy and independent Solidity, TBC Script and consensus
+review. A real testnet deposit must then pass through newly deployed contracts
+without moving existing custodial balances.
 
 The main protocol blocker is unchanged: finalized transaction inclusion does
 not prove that the minted source FT outpoint remains unspent. An API or TBCScan
@@ -527,6 +567,10 @@ does not claim that the synthetic transaction exists in historical TBC
 Testnet. Until the unspent/reserve-control gap, independent review and a real
 testnet proof pass are complete, the forward path remains the existing
 custodial learning flow and must not be described as production-trustless.
+Phase 3G additionally confirms that a later TBC reorganization can make the
+source block non-canonical without reversing a completed HyperEVM mint. The
+fixed six-confirmation rule must therefore not be presented as deterministic
+cross-chain finality.
 
 ## 7. Evidence used
 

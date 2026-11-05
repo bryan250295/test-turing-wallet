@@ -1,0 +1,25 @@
+{
+  "schema": "learningmaterials/phase3g-reorg/v1",
+  "parentManifest": "phase3f-seeded-fuzz-v1.json",
+  "setup": "hardhat retained-header storage injection",
+  "forkHeight": 839164,
+  "branchLength": 34,
+  "syntheticWorkPerHeader": "17483511843103564",
+  "minimumConfirmations": 6,
+  "winnerSequence": [
+    "branch-a@32",
+    "equal-work-tie@32",
+    "branch-b@33",
+    "equal-work-tie@33",
+    "branch-a@34"
+  ],
+  "deepestReplacedBranchLength": 33,
+  "invariants": [
+    "equal-work ties fail closed for both branches",
+    "only the unique greatest-work branch is canonical",
+    "six confirmations include the queried block",
+    "ancestor queries follow the selected deep branch",
+    "a source-chain reorg cannot roll back an existing EVM mint",
+    "replay keys remain consumed after a source-chain reorg"
+  ]
+}
