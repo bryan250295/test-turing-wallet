@@ -21,7 +21,10 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 	const [state, setState] = useState<{ context: string; value: BridgeSettlement | null; loading: boolean; error: string }>({ context: '', value: null, loading: false, error: '' });
 	const [action, setAction] = useState(''); const working = useRef(false); const request = useRef<AbortController | null>(null);
 	const [revision, setRevision] = useState(0);
+	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'connected' | 'reconnecting'>('off');
 	const [tokenImport, setTokenImport] = useState<TokenImportState>({ context: '', status: 'idle', message: '' });
+	const reportedStatus = useRef(order.settlementStatus);
+	const changedCallback = useRef(onChanged); changedCallback.current = onChanged;
 	const live = () => enabled && current.current.context === context && current.current.epoch === epoch;
 	useEffect(() => {
 		const controller = new AbortController();
@@ -43,6 +46,20 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 		return () => { controller.abort(); };
 	}, [context, revision, enabled]);
 	useEffect(() => () => { request.current?.abort(); }, [context]);
+	useEffect(() => {
+		if (!enabled) { setRealtime('off'); return; }
+		setRealtime('connecting');
+		const source = new EventSource(`/api/bridge/orders/${order.id}/settlement/events`, { withCredentials: true });
+		const invalidate = () => { if (live() && !working.current) setRevision((old) => old + 1); };
+		const connected = () => { if (live()) setRealtime('connected'); };
+		const heartbeat = () => { connected(); invalidate(); };
+		source.onopen = connected;
+		source.onerror = () => { if (live()) setRealtime('reconnecting'); };
+		source.addEventListener('ready', connected);
+		source.addEventListener('heartbeat', heartbeat);
+		source.addEventListener('progress', invalidate);
+		return () => { source.close(); setRealtime('off'); };
+	}, [context, enabled, order.id]);
 	async function run(label: string, operation: (signal: AbortSignal) => Promise<unknown>, notify = false) {
 		if (!live() || working.current) return;
 		working.current = true; setAction(label); setState((old) => ({ ...old, error: '' }));
@@ -68,6 +85,11 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 		finally { working.current = false; request.current = null; setAction(''); }
 	}
 	const value = state.context === context ? state.value : null;
+	useEffect(() => {
+		if (!value || reportedStatus.current === value.status) return;
+		reportedStatus.current = value.status;
+		changedCallback.current();
+	}, [value?.status]);
 	const visibleImport = tokenImport.context === context ? tokenImport : { status: 'idle' as const, message: '' };
 	async function importToken() {
 		if (!live() || working.current || value?.status !== 'completed' || visibleImport.status === 'added') return;
@@ -93,7 +115,7 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 				: evmWalletError(cause) });
 		} finally { working.current = false; setAction(''); }
 	}
-	return { value, context, enabled, action, loading: state.context === context && state.loading, error: state.context === context ? state.error : '',
+	return { value, context, enabled, realtime, action, loading: state.context === context && state.loading, error: state.context === context ? state.error : '',
 		tokenImport: visibleImport,
 		refresh: () => { if (!working.current) setRevision((old) => old + 1); },
 		open: () => run('open', (signal) => openPayment(order, signal), true),

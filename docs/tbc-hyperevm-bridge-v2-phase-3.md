@@ -598,6 +598,24 @@ and estimated `1,118,700` gas. The planner emitted `broadcast: false`; it has no
 private key and does not submit a transaction. Run it with
 `npm run phase3:testnet-relay-plan -- --relay=<address> --from=<address>`.
 
+### 4.2 Background progress automation
+
+The existing Testnet learning flow now persists the Turing Wallet-returned
+source TXID before its first proof check. A backend worker resumes from that
+record after browser or backend restarts, checks TBC source state at most once
+per minute, and checks already-submitted HyperEVM receipts about every twelve
+seconds. PostgreSQL remains the source of truth. An authenticated server-sent
+event stream only invalidates the browser snapshot; reconnecting clients reload
+and validate the saved REST response instead of trusting notification data.
+
+This automation is deliberately limited to observation and reconciliation. It
+never signs, retries or broadcasts a TBC or HyperEVM transaction. The current
+custodial wrapped-token deployment still assigns its admin/minter role to a
+MetaMask account, so the corresponding wallet action remains explicit. Fully
+automated proof-backed minting requires the separately funded operator relayer
+and completed Testnet-v2 gateway route; moving a private wallet key into this
+worker would change the trust and gas-payer model and is not implied here.
+
 ## 5. Remaining Phase 3 work
 
 Phase 3 now contains the proof-only `WrappedFTV2`/Gateway implementation, but it

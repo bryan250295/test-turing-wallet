@@ -30,6 +30,11 @@ export class BridgeSettlementRepository {
 		if (!row) throw new NotFoundException('Order not found for this signed-in TBC wallet.');
 		return row;
 	}
+	async find(id: string): Promise<SettlementOrder> {
+		const row = await this.db.bridgeOrder.findUnique({ where: { id }, include });
+		if (!row) throw new NotFoundException('Bridge order no longer exists.');
+		return row;
+	}
 	async open(order: SettlementOrder) {
 		await this.db.$transaction(async (tx) => {
 			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`bridge-orders:${order.identityId}`}, 0))`;
@@ -54,7 +59,7 @@ export class BridgeSettlementRepository {
 			const sent = current.attempts.some((row) => row.kind === 'mint' && ['awaiting_wallet', 'submitted', 'confirming', 'verified'].includes(row.status));
 			const changed = !!current.deposit?.blockHash && current.deposit.blockHash !== observation.blockHash;
 			const status = sent ? (!enough || changed ? 'needs_review' : current.status) : enough ? 'ready_to_mint' : 'confirming';
-			await tx.bridgeSettlement.update({ where: { orderId: order.id }, data: { status, checkedAt: observation.checkedAt, lastError: status === 'needs_review' ? 'Source confirmation or block changed after a mint request. Reconcile before any further transaction.' : null } });
+			await tx.bridgeSettlement.update({ where: { orderId: order.id }, data: { sourceTxid: observation.txid, status, checkedAt: observation.checkedAt, lastError: status === 'needs_review' ? 'Source confirmation or block changed after a mint request. Reconcile before any further transaction.' : null } });
 			if (!current.deposit || current.status !== status) await tx.auditEvent.create({ data: { identityId: order.identityId, action: 'bridge.deposit.checked', data: { orderId: order.id, txid: observation.txid, vout: observation.vout, confirmations: observation.confirmations, status } } });
 		});
 	}

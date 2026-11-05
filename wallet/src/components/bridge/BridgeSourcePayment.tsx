@@ -5,8 +5,6 @@ import { DEVNET_DOMAIN } from '../../config/constants';
 import { beginSourcePayment, cancelSourcePayment, loadSourcePayment, pendingSourcePayment, rememberSourcePayment, submitSourcePayment, walletTokenAmount } from '../../services/bridgeSourcePayment';
 import { formatRawAmount } from '../../utils/tokenAmounts';
 import { getErrorMessage } from '../../utils/errors';
-import useConfirmationPolling from '../../hooks/useConfirmationPolling';
-import ConfirmationUpdates from './ConfirmationUpdates';
 
 interface Props { order: BridgeOrder; settlement: BridgeSettlement; session: WalletSession; enabled: boolean; busy: boolean; error: string; verify: (txid: string) => Promise<unknown> }
 export default function BridgeSourcePayment({ order, settlement, session, enabled, busy, error: verificationError, verify }: Props) {
@@ -42,8 +40,6 @@ export default function BridgeSourcePayment({ order, settlement, session, enable
   verifiedTxid.current = receipt.txid;
   void verify(receipt.txid);
  }, [receipt?.txid, busy, action, verificationError, visible.error, enabled]);
- const updates = useConfirmationPolling({ context, enabled, waiting: !!receipt?.txid, busy: busy || !!action, error: visible.error || verificationError,
-  check: () => receipt?.txid ? verify(receipt.txid) : Promise.resolve() });
  async function verifyWallet() {
   const [network, addresses] = await Promise.all([session.wallet.getNetwork(), session.wallet.getAddress()]);
   const address = addresses as WalletAddresses | undefined;
@@ -92,7 +88,7 @@ export default function BridgeSourcePayment({ order, settlement, session, enable
    <p role="status">{action === 'pay' ? 'Open Turing Wallet and approve or reject the payment. Keep this page open.' : 'A payment request was started. Check Turing Wallet history and recover its TXID below if it was sent. Do not pay again.'}</p>
    {!action && <details><summary>No payment was sent?</summary><label className="bridge-role-choice"><input type="checkbox" checked={notSent} disabled={busy} onChange={event => setNotSent(event.target.checked)} /> I checked Turing Wallet and confirmed the request was rejected or never sent.</label><button type="button" className="history-secondary" disabled={!notSent || busy || !!pendingSourcePayment(order)} onClick={() => { void discard(); }}>Clear unsent payment request</button></details>}
   </>}
-  {receipt?.txid && <><p role="status">Payment submitted. Checking the source transaction—do not pay again.</p><p className="history-note">TBC TXID: <code>{receipt.txid}</code></p><ConfirmationUpdates automatic={updates.automatic} onChange={updates.setAutomatic} paused={updates.paused} /><button type="button" className="history-secondary" disabled={busy || !!action} onClick={() => { if (receipt.txid) void verify(receipt.txid); }}>Check payment now</button></>}
+  {receipt?.txid && <><p role="status">Payment submitted. The backend checks it about once per minute—do not pay again.</p><p className="history-note">TBC TXID: <code>{receipt.txid}</code></p></>}
   {visible.error && <p className="result error" role="alert">{visible.error}</p>}
   {!action && <button type="button" className="history-secondary" disabled={busy} onClick={() => setRevision(value => value + 1)}>Refresh payment status</button>}
  </div>;

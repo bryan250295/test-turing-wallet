@@ -9,8 +9,6 @@ import { formatDateTime } from '../../utils/dateTime';
 import BridgeSourcePayment from './BridgeSourcePayment';
 import RedemptionEscrowPreview from './RedemptionEscrowPreview';
 import { BridgeSteps, AttemptHistory, bridgeStatus } from './BridgeFlow';
-import ConfirmationUpdates from './ConfirmationUpdates';
-import useConfirmationPolling from '../../hooks/useConfirmationPolling';
 
 interface Props { order: BridgeOrder; session: WalletSession; evm: ReturnType<typeof useHyperEvmWallet>; active: boolean; onChanged: () => void; returnOnly: boolean; onReturn: () => void }
 const labels = { awaiting_payment: 'Awaiting token payment', confirming: 'Confirming source deposit', ready_to_mint: 'Deposit verified · ready for wallet settlement', mint_pending: 'Mint wallet transaction pending', completed: 'Completed · wrapped tokens received', needs_review: 'Reconciliation required' };
@@ -43,10 +41,6 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
     const walletReadBusy = evm.loading || !!evm.pending;
     const showWalletRecovery = !flow.loading && !flow.action && !session.busy && !evm.pending && !evm.loading && (!evm.address || !evm.networkIsTestnet || !!evm.error);
 	const activeCall = value?.attempts.some((row) => ['quoted', 'awaiting_wallet', 'submitted', 'confirming'].includes(row.status));
-	const pending = value?.attempts.find((row) => row.txHash && ['submitted', 'confirming'].includes(row.status));
-	const waiting = !!pending || value?.status === 'confirming' && !!value.deposit;
-	const updates = useConfirmationPolling({ context: flow.context, enabled: active && flow.enabled, waiting, busy, error: flow.error || value?.lastError || '',
-		check: () => pending ? flow.check(pending) : flow.deposit() });
 	function callTitle(row: BridgeCallAttempt) { return row.kind === 'unpause' ? 'Activate token' : `Receive ${order.wrappedSymbol}`; }
 	if (returnOnly) return <section aria-label="Return wrapped tokens">
 		{flow.loading && <p role="status">Loading your return…</p>}
@@ -54,9 +48,9 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 		{value?.status === 'completed' && <RedemptionEscrowPreview order={order} session={session} evm={evm} active={active} />}
 	</section>;
 	return <section className="htlc-section" aria-label="Order payment and mint" aria-busy={busy}>
-		<header className="history-titlebar"><h4>{value ? labels[value.status] : 'Payment and mint'}</h4><button type="button" className="history-secondary" disabled={!flow.enabled || busy} onClick={flow.refresh}>Refresh saved progress</button></header>
+		<header className="history-titlebar"><div><h4>{value ? labels[value.status] : 'Payment and mint'}</h4><p className="history-note">Background progress · {flow.realtime === 'connected' ? 'live' : flow.realtime === 'off' ? 'offline' : 'reconnecting…'}</p></div><button type="button" className="history-secondary" disabled={!flow.enabled || busy} onClick={flow.refresh}>Refresh saved progress</button></header>
 		<BridgeSteps steps={[`Pay ${order.symbol}`, 'Wait for deposit', 'Confirm mint', `Receive ${order.wrappedSymbol}`]} current={!value?.deposit ? 0 : value.status === 'confirming' ? 1 : value.status === 'completed' ? 3 : 2} complete={value?.status === 'completed'} />
-		{waiting && <ConfirmationUpdates automatic={updates.automatic} onChange={updates.setAutomatic} paused={updates.paused} />}
+		{value && value.status !== 'completed' && <p className="history-note">The backend checks TBC about once per minute and submitted HyperEVM transactions about every 12 seconds. You may close this page; saved progress resumes after restart.</p>}
 		{flow.loading && <p role="status">Loading saved progress…</p>}
 		{!value && !flow.loading && !flow.error && <>
 			<p>Open payment details, then send the exact source token amount to the address shown. Funds are held by the bridge until settlement; there is no automatic refund.</p>
@@ -86,7 +80,7 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 				<p>Source transaction: <code>{value.deposit.txid}</code></p>
 				<p>Source confirmations: <strong>{value.deposit.confirmations} / {order.sourceConfirmationsRequired} required</strong> · Checked {formatDateTime(value.deposit.checkedAt)} MYT</p>
 				<p>Actual source network fee: {formatRawAmount(value.deposit.feeRaw, 6)} TBC</p>
-				{value.status !== 'completed' && <button type="button" className="history-secondary" disabled={busy} onClick={() => { void flow.deposit(); }}>Check now</button>}
+				{value.status !== 'completed' && <p role="status">Waiting for the background verifier. Manual refresh is available above.</p>}
 			</>}
 			{value.status === 'ready_to_mint' && !activeCall && <div className="htlc-section">
 				<p>Click Prepare next wallet step, review the fee and confirm in MetaMask.</p>
@@ -116,7 +110,7 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 				</>}
 				{row.txHash && <>
 					<p>HyperEVM transaction: <code>{row.txHash}</code></p><p>Confirmations: {row.confirmations} / {order.destinationConfirmationsRequired} required{row.actualFeeWei !== null ? ` · Actual fee ${formatHypeBalance(row.actualFeeWei)} HYPE` : ''}</p>
-					<button type="button" className="history-secondary" disabled={busy || value.status === 'completed'} onClick={() => { void flow.check(row); }}>Check now</button>
+					{value.status !== 'completed' && <p role="status">Receipt and destination confirmations are checked automatically.</p>}
 				</>}
 				{row.lastError && <p className="result error" role="alert">{row.lastError}</p>}
 			</article>} />}

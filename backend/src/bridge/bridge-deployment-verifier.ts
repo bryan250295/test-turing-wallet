@@ -12,12 +12,12 @@ const readAbi = parseAbi([
 	'function TARGET_CHAIN_ID() view returns (uint256)',
 ]);
 
-export async function withDeploymentRpc<T>(response: Response, operation: (client: ReturnType<typeof deploymentClient>, signal: AbortSignal) => Promise<T>): Promise<T> {
+export async function withDeploymentRpc<T>(response: Response | undefined, operation: (client: ReturnType<typeof deploymentClient>, signal: AbortSignal) => Promise<T>): Promise<T> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), 40_000);
 	timer.unref();
-	const cancel = () => { if (!response.writableEnded) controller.abort(); };
-	response.once('close', cancel);
+	const cancel = () => { if (response && !response.writableEnded) controller.abort(); };
+	response?.once('close', cancel);
 	try {
 		const client = deploymentClient(controller.signal);
 		if (await client.getChainId() !== network.chainId) throw new ServiceUnavailableException('The configured RPC is not on HyperEVM Testnet 998.');
@@ -29,7 +29,7 @@ export async function withDeploymentRpc<T>(response: Response, operation: (clien
 		if (cause instanceof HttpException) throw cause;
 		throw new ServiceUnavailableException('The HyperEVM check is unavailable. The saved transaction was retained; refresh its status later.');
 	} finally {
-		controller.abort(); clearTimeout(timer); response.removeListener('close', cancel);
+		controller.abort(); clearTimeout(timer); response?.removeListener('close', cancel);
 	}
 }
 function deploymentClient(signal: AbortSignal) { return createPublicClient({ transport: http(network.rpcUrl, { retryCount: 0, timeout: 12_000, fetchOptions: { signal } }) }); }

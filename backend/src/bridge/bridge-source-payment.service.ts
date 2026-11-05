@@ -4,12 +4,13 @@ import type { Prisma } from '../../generated/prisma/client';
 import { AuthService, type Principal } from '../auth/auth.service';
 import { PrismaService } from '../database/prisma.service';
 import type { BridgeSourcePayment } from '../../../shared/src/types/learningBridge';
+import { BridgeProgressService } from './bridge-progress.service';
 
 const action = 'bridge.source.payment';
 /** Append-only payment request journal. No keys, signatures, raw transactions or broadcast methods. */
 @Injectable()
 export class BridgeSourcePaymentService {
-	constructor(@Inject(AuthService) private readonly auth: AuthService, @Inject(PrismaService) private readonly db: PrismaService) {}
+	constructor(@Inject(AuthService) private readonly auth: AuthService, @Inject(PrismaService) private readonly db: PrismaService, @Inject(BridgeProgressService) private readonly progress: BridgeProgressService) {}
 	private async owned(tx: Prisma.TransactionClient, orderId: string, principal: Principal) {
 		this.auth.requireTbc(principal);
 		const order = await tx.bridgeOrder.findFirst({ where: { id: orderId, identityId: principal.id }, select: { id: true, status: true, sender: true, contractId: true, decimals: true, amountRaw: true, custody: { select: { address: true } }, settlement: { select: { status: true, deposit: { select: { txid: true } } } } } });
@@ -25,7 +26,7 @@ export class BridgeSourcePaymentService {
 	}
 	async change(orderId: string, principal: Principal, operation: 'begin' | 'submit' | 'cancel', attemptId?: string, txid?: string) {
 		this.auth.requireTbc(principal);
-		return this.db.$transaction(async tx => {
+		const value = await this.db.$transaction(async tx => {
 			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`bridge-orders:${principal.id}`}, 0))`;
 			const order = await this.owned(tx, orderId, principal);
 			const prior = await this.latest(tx, orderId, principal.id);
@@ -38,9 +39,13 @@ export class BridgeSourcePaymentService {
 				if (!prior || prior.value.attemptId !== attemptId) throw new ConflictException('The payment request changed. Refresh saved progress.');
 				if (operation === 'submit') {
 					if (!txid || !/^(?!0{64}$)[0-9a-f]{64}$/.test(txid)) throw new BadRequestException('Use a single valid TBC transaction ID.');
-					if (prior.value.status === 'submitted' && prior.value.txid === txid) return prior.value;
+					if (prior.value.status === 'submitted' && prior.value.txid === txid) {
+						await tx.bridgeSettlement.update({ where: { orderId }, data: { sourceTxid: txid } });
+						return prior.value;
+					}
 					if (prior.value.status !== 'awaiting_wallet') throw new ConflictException('This payment request already has a result. Keep its original TXID.');
 					value = { ...prior.value, status: 'submitted', txid };
+					await tx.bridgeSettlement.update({ where: { orderId }, data: { sourceTxid: txid, checkedAt: null, lastError: null } });
 				} else {
 					if (prior.value.status === 'cancelled') return prior.value;
 					if (order.settlement?.deposit || prior.value.status !== 'awaiting_wallet') throw new ConflictException('A payment transaction is already saved. Check its status; do not pay again.');
@@ -52,5 +57,7 @@ export class BridgeSourcePaymentService {
 			await tx.auditEvent.create({ data: { identityId: principal.id, action, createdAt, data: value as unknown as Prisma.InputJsonValue } });
 			return value;
 		});
+		this.progress.publish(principal.id, orderId, `source-payment-${operation}`);
+		return value;
 	}
 }

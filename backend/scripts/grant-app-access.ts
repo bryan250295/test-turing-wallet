@@ -30,7 +30,7 @@ async function main() {
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_custody" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_settlements", "bridge_call_attempts" TO "${user}"`);
 			await tx.$executeRawUnsafe(`REVOKE UPDATE ON "bridge_settlements", "bridge_call_attempts" FROM "${user}"`);
-			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "checkedAt", "lastError", "updatedAt") ON "bridge_settlements" TO "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT UPDATE ("sourceTxid", "status", "checkedAt", "lastError", "updatedAt") ON "bridge_settlements" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "txHash", "confirmations", "receiptBlockHash", "receiptBlockNumber", "actualFeeWei", "lastError", "updatedAt") ON "bridge_call_attempts" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_deposits" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT UPDATE ("confirmations", "blockHash", "blockHeight", "checkedAt") ON "bridge_deposits" TO "${user}"`);

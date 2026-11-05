@@ -59,7 +59,7 @@ export class BridgeCallVerifier {
 				nonce: BigInt(nonce), gasLimit: gas, gasPriceWei: gasPrice.toString(), estimatedFeeWei: (estimate * gasPrice).toString(), budgetWei: (gas * gasPrice).toString(), expiresAt: new Date(Date.now() + 60_000) };
 		});
 	}
-	async receipt(order: SettlementOrder, attempt: BridgeCallAttempt, response: Response): Promise<Prisma.BridgeCallAttemptUpdateManyMutationInput> {
+	async receipt(order: SettlementOrder, attempt: BridgeCallAttempt, response?: Response): Promise<Prisma.BridgeCallAttemptUpdateManyMutationInput> {
 		if (!attempt.txHash) throw new BadRequestException('Attach the hash from MetaMask Activity first.');
 		return withDeploymentRpc(response, async (client) => {
 			let tx;

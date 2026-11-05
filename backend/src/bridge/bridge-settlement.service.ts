@@ -10,6 +10,7 @@ import { BridgeDepositVerifier } from './bridge-deposit.verifier';
 import { PrismaService } from '../database/prisma.service';
 import { BridgeCallVerifier } from './bridge-call.verifier';
 import type { BridgeCallKind } from '../../../shared/src/types/learningBridge';
+import { BridgeProgressService } from './bridge-progress.service';
 
 @Injectable()
 export class BridgeSettlementService {
@@ -23,6 +24,7 @@ export class BridgeSettlementService {
 		@Inject(BridgeAssetVerifier) private readonly asset: BridgeAssetVerifier,
 		@Inject(BridgeDepositVerifier) private readonly deposits: BridgeDepositVerifier,
 		@Inject(BridgeCallVerifier) private readonly calls: BridgeCallVerifier,
+		@Inject(BridgeProgressService) private readonly progress: BridgeProgressService,
 	) {}
 	private async job<T>(id: string, principal: Principal, response: Response, operation: (order: SettlementOrder, signal: AbortSignal) => Promise<T>): Promise<T> {
 		this.auth.requireTbc(principal);
@@ -30,7 +32,12 @@ export class BridgeSettlementService {
 		this.running.add(id);
 		const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 110_000); timer.unref();
 		const close = () => { if (!response.writableEnded) controller.abort(); }; response.once('close', close);
-		try { return await operation(await this.repository.owned(id, principal.id), controller.signal); }
+		try {
+			const order = await this.repository.owned(id, principal.id);
+			const result = await operation(order, controller.signal);
+			this.progress.publish(order.identityId, order.id, 'settlement-updated');
+			return result;
+		}
 		catch (cause) {
 			if (controller.signal.aborted) throw new GatewayTimeoutException('The order check timed out or was cancelled. Refresh saved progress; do not repeat a payment or wallet transaction.');
 			if (cause && typeof cause === 'object' && 'code' in cause && cause.code === 'P2002') throw new ConflictException('This source output or wallet call is already reserved. Refresh saved progress before continuing.');

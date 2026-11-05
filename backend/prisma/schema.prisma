@@ -256,6 +256,9 @@ model BridgeSettlement {
 	orderId         String @id @db.Uuid
 	order           BridgeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
 	status          String @default("awaiting_payment") @db.VarChar(32)
+	// Persist the wallet-returned TXID before the first expensive proof check so
+	// the background observer can resume after a browser/backend restart.
+	sourceTxid      String? @db.Char(64)
 	paymentOpenedAt DateTime @default(now()) @db.Timestamptz(3)
 	checkedAt       DateTime? @db.Timestamptz(3)
 	lastError       String?
