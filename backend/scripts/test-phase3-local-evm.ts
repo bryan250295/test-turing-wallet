@@ -10,7 +10,10 @@ import {
 	toHex, type Abi, type Address, type Hex,
 } from 'viem';
 import { blockWork } from '../src/bridge/phase1/tbc-consensus';
-import { serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
+import { merkleRootFromBranch, serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
+import {
+	REAL_MT_DEPOSIT_BLOCK, REAL_MT_DEPOSIT_MERKLE_BRANCH, REAL_MT_DEPOSIT_TXID,
+} from '../src/bridge/phase1/tbc-test-vectors';
 import {
 	buildTbcdevBootstrapCommitment, decodeTbcdevBootstrapContext, tbcdevBootstrapProof,
 } from '../src/bridge/phase3/bootstrap-history';
@@ -134,6 +137,24 @@ function randomHash(random: () => number) {
 		bytes.writeUInt32BE(random(), index);
 	}
 	return `0x${bytes.toString('hex')}` as Hex;
+}
+
+function syntheticMerkleProof(displayedTxid: Hex, depth: number) {
+	assert.ok(Number.isSafeInteger(depth) && depth >= 0 && depth <= 12);
+	const transactionCount = 2 ** depth;
+	const transactionIndex = depth === 0 ? 0 : Math.floor(transactionCount / 3);
+	const steps = Array.from({ length: depth }, (_, level) => ({
+		hash: keccak256(encodeAbiParameters(
+			[{ type: 'bytes32' }, { type: 'uint32' }], [displayedTxid, level],
+		)).slice(2),
+		side: ((transactionIndex >>> level) & 1) === 1 ? 'left' as const : 'right' as const,
+	}));
+	return {
+		transactionIndex,
+		transactionCount,
+		displayedSiblings: steps.map(({ hash }) => `0x${hash}` as Hex),
+		merkleRoot: `0x${merkleRootFromBranch(displayedTxid.slice(2), steps)}` as Hex,
+	};
 }
 
 function invertLowestOne(value: number) {
@@ -266,12 +287,13 @@ async function main() {
 			resolve(artifactRoot, `${name}.json`), 'utf8',
 		)) as Artifact;
 		const [authorizationArtifact, prefixArtifact, gatewayArtifact, relayArtifact,
-			tokenArtifact] = await Promise.all([
+			tokenArtifact, verifierArtifact] = await Promise.all([
 			loadArtifact('TbcAuthorizedTransitionVerifier'),
 			loadArtifact('TbcFtUnlockPrefixVerifierModule'),
 			loadArtifact('TbcProofMintGateway'),
 			loadArtifact('TbcHeaderRelayV2'),
 			loadArtifact('WrappedFTV2'),
+			loadArtifact('TbcVerifierHarness'),
 		]);
 
 		const deploy = async (artifact: Artifact, args: readonly unknown[] = []) => {
@@ -293,6 +315,7 @@ async function main() {
 			authorization.address, prefix.address, RESERVE_CONTROLLER,
 		]);
 		assert.equal(gateway.address.toLowerCase(), predictedGateway.toLowerCase());
+		const verifierHarness = await deploy(verifierArtifact);
 
 		const [relay, token, configuredAuthorization, configuredPrefix, configuredReserve] =
 			await Promise.all([
@@ -324,6 +347,36 @@ async function main() {
 			address: token, abi: tokenArtifact.abi, functionName: 'gateway',
 		}) as Address;
 		assert.equal(tokenGateway.toLowerCase(), gateway.address.toLowerCase());
+
+		const realMerkleSiblings = REAL_MT_DEPOSIT_MERKLE_BRANCH.siblings.map(
+			(sibling) => `0x${sibling}` as Hex,
+		);
+		const realMerkleData = encodeFunctionData({
+			abi: verifierArtifact.abi,
+			functionName: 'reconstructMerkleRoot',
+			args: [
+				`0x${REAL_MT_DEPOSIT_TXID}`,
+				REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionIndex,
+				REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionCount,
+				realMerkleSiblings,
+			],
+		});
+		assert.equal(await publicClient.readContract({
+			address: verifierHarness.address,
+			abi: verifierArtifact.abi,
+			functionName: 'reconstructMerkleRoot',
+			args: [
+				`0x${REAL_MT_DEPOSIT_TXID}`,
+				REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionIndex,
+				REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionCount,
+				realMerkleSiblings,
+			],
+		}), `0x${REAL_MT_DEPOSIT_BLOCK.merkleRoot}`);
+		const realMerkleGas = await publicClient.estimateGas({
+			account: proofSubmitter,
+			to: verifierHarness.address,
+			data: realMerkleData,
+		});
 
 		const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 		const manifest = JSON.parse(await readFile(
@@ -549,6 +602,99 @@ async function main() {
 			address: gateway.address, abi: gatewayArtifact.abi,
 			functionName: 'processedSourceOutpoints', args: [sourceOutpoint],
 		}), false, 'Proof fuzz consumed the source outpoint.');
+
+		const proofDepthProfiles = [];
+		for (const depth of [0, 2, 4, 8, 12]) {
+			const merkle = syntheticMerkleProof(depositVector.txid, depth);
+			await jsonRpc(rpcUrl, 'hardhat_setStorageAt', [
+				relay, merkleRootSlot, merkle.merkleRoot,
+			]);
+			await jsonRpc(rpcUrl, 'evm_mine');
+			const profiledProof = {
+				...proof,
+				transactionIndex: merkle.transactionIndex,
+				transactionCount: merkle.transactionCount,
+				displayedSiblings: merkle.displayedSiblings,
+			};
+			const data = encodeFunctionData({
+				abi: gatewayArtifact.abi,
+				functionName: 'mintFromProof',
+				args: [profiledProof],
+			});
+			const gasEstimate = await publicClient.estimateGas({
+				account: proofSubmitter,
+				to: gateway.address,
+				data,
+			});
+			proofDepthProfiles.push({
+				depth,
+				transactionCount: merkle.transactionCount,
+				transactionIndex: merkle.transactionIndex,
+				calldataBytes: (data.length - 2) / 2,
+				gasEstimate: gasEstimate.toString(),
+			});
+		}
+		const oneLeafProfile = proofDepthProfiles[0];
+		assert.ok(oneLeafProfile);
+		for (const [index, profile] of proofDepthProfiles.entries()) {
+			assert.equal(
+				profile.calldataBytes,
+				oneLeafProfile.calldataBytes + profile.depth * 32,
+				`Merkle depth ${profile.depth} did not add exactly one word per sibling.`,
+			);
+			if (index > 0) {
+				assert.ok(
+					BigInt(profile.gasEstimate) > BigInt(proofDepthProfiles[index - 1].gasEstimate),
+					`Merkle depth ${profile.depth} did not increase the gas estimate.`,
+				);
+			}
+		}
+		await jsonRpc(rpcUrl, 'hardhat_setStorageAt', [relay, merkleRootSlot, depositVector.txid]);
+		await jsonRpc(rpcUrl, 'evm_mine');
+		assert.equal((await publicClient.readContract({
+			address: relay,
+			abi: relayArtifact.abi,
+			functionName: 'header',
+			args: [depositBlockHash],
+		}) as { merkleRoot: Hex }).merkleRoot, depositVector.txid);
+
+		const transactionBytes = (depositVector.raw.length - 2) / 2;
+		const parentBytes = depositVector.parents.reduce(
+			(total, parent) => total + (parent.length - 2) / 2, 0,
+		);
+		const ancestorBytes = depositVector.ancestors.flat().reduce(
+			(total, ancestor) => total + (ancestor.length - 2) / 2, 0,
+		);
+		const benchmarkResult = {
+			schema: 'learningmaterials/phase3h-proof-size-gas/v1',
+			parentManifest: 'phase3g-reorg-v1.json',
+			evidenceBytes: {
+				transaction: transactionBytes,
+				parents: parentBytes,
+				ancestors: ancestorBytes,
+				total: transactionBytes + parentBytes + ancestorBytes,
+			},
+			realTbcMerkleVector: {
+				blockHeight: REAL_MT_DEPOSIT_BLOCK.height,
+				transactionCount: REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionCount,
+				transactionIndex: REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionIndex,
+				branchDepth: REAL_MT_DEPOSIT_MERKLE_BRANCH.siblings.length,
+				calldataBytes: (realMerkleData.length - 2) / 2,
+				gasEstimate: realMerkleGas.toString(),
+			},
+			proofDepthProfiles,
+			confirmationPolicy: {
+				contractMinimum: 6,
+				productionStatus: 'unresolved',
+				reason: 'a source reorg cannot roll back an existing destination mint',
+				requiredInputs: [
+					'observed TBC reorganization depth and frequency',
+					'chainwork attack-cost model',
+					'deposit-value exposure limit',
+					'acceptable mint latency',
+				],
+			},
+		};
 		const mintData = encodeFunctionData({
 			abi: gatewayArtifact.abi,
 			functionName: 'mintFromProof',
@@ -562,6 +708,10 @@ async function main() {
 		});
 		const mintReceipt = await publicClient.waitForTransactionReceipt({ hash: mintHash });
 		assert.equal(mintReceipt.status, 'success');
+		assert.equal(
+			mintReceipt.gasUsed.toString(), oneLeafProfile.gasEstimate,
+			'One-leaf estimate differs from the persistent mint gas.',
+		);
 		const decodedGatewayEvents = mintReceipt.logs.flatMap((log) => {
 			try {
 				return [decodeEventLog({
@@ -765,6 +915,12 @@ async function main() {
 			resolve(fixtureRoot, 'phase3f-seeded-fuzz-v1.json'), 'utf8',
 		));
 		assert.deepEqual(fuzzResult, expectedFuzzResult, 'Phase 3F fuzz manifest changed.');
+		const expectedBenchmarkResult = JSON.parse(await readFile(
+			resolve(fixtureRoot, 'phase3h-proof-size-gas-v1.json'), 'utf8',
+		));
+		assert.deepEqual(
+			benchmarkResult, expectedBenchmarkResult, 'Phase 3H benchmark manifest changed.',
+		);
 
 		// Phase 3G injects already-retained header nodes into this disposable chain.
 		// It deliberately does not claim to reproduce submitHeader: mining 68 headers
@@ -891,10 +1047,13 @@ async function main() {
 			resolve(fixtureRoot, 'phase3g-reorg-v1.json'), 'utf8',
 		));
 		assert.deepEqual(reorgResult, expectedReorgResult, 'Phase 3G reorg manifest changed.');
-		console.log(JSON.stringify({ ...localResult, fuzz: fuzzResult, reorg: reorgResult }, null, 2));
+		console.log(JSON.stringify({
+			...localResult, fuzz: fuzzResult, reorg: reorgResult, benchmark: benchmarkResult,
+		}, null, 2));
 		console.log('Phase 3E local persistent-state deployment, relay, proof mint and replay vectors passed.');
 		console.log('Phase 3F seeded proof-envelope and relay-witness fuzz vectors passed.');
 		console.log('Phase 3G deep competing-branch, tie and source-reorg vectors passed.');
+		console.log('Phase 3H proof-size, Merkle-depth and gas vectors passed.');
 		console.log('The synthetic deposit Merkle root existed only in this disposable local EVM.');
 	} finally {
 		node.kill('SIGTERM');

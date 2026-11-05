@@ -11,7 +11,9 @@ same production composition through persistent transactions on a disposable,
 pinned local Cancun EVM; Phase 3F adds deterministic malformed-proof and
 relay-witness property vectors around that rehearsal; Phase 3G exercises deep
 retained competing branches, equal-work fail-closed behavior and source-reorg
-effects; nothing is deployed to a public network or independently audited**
+effects; Phase 3H freezes transaction-evidence size, real and synthetic Merkle
+depth, full-mint gas and confirmation-policy vectors; nothing is deployed to a
+public network or independently audited**
 
 Implementation date: **2026-11-05 (Asia/Kuala_Lumpur)**
 
@@ -451,6 +453,57 @@ parameter, not absolute finality; production must justify this threshold
 against TBC chainwork and reorganization risk. The frozen vector is stored in
 `backend/src/bridge/phase3/fixtures/phase3g-reorg-v1.json`.
 
+### 2.6 Phase 3H proof-size, Merkle-depth and confirmation policy
+
+The Phase 3H local-deployment vector signs for the Gateway address actually
+created in that run and has the following exact serialized sizes. It is
+generated from the real pinned MT v3 Code/Tape artifact but remains synthetic
+test provenance rather than a historical deposit:
+
+| Evidence component | Bytes |
+| --- | ---: |
+| Signed deposit transaction | 3,440 |
+| Two parent transactions | 2,154 |
+| Two one-level ancestor transactions | 170 |
+| Total raw transaction evidence | 5,764 |
+
+The earlier fixed-address read-only RPC vector is 3,441 bytes. The local vector
+is one byte smaller because its different signed destination produces a
+one-byte-shorter canonical DER signature. Parent and ancestor sizes are
+unchanged; both exact encodings are deterministic within their own fixtures.
+
+The local production Gateway was then estimated with the same transaction,
+parent, ancestor, signature and prefix evidence while only the Merkle branch
+depth changed. Each synthetic root was installed in the disposable relay and
+restored before the canonical Phase 3E mint.
+
+| Merkle depth | Represented transaction count | Mint calldata bytes | Gas estimate |
+| ---: | ---: | ---: | ---: |
+| 0 | 1 | 6,980 | 2,004,400 |
+| 2 | 4 | 7,044 | 2,014,944 |
+| 4 | 16 | 7,108 | 2,025,476 |
+| 8 | 256 | 7,236 | 2,046,507 |
+| 12 | 4,096 | 7,364 | 2,067,577 |
+
+Twelve siblings add 384 calldata bytes and 63,177 gas over the one-leaf
+baseline, approximately 3.15%. This indicates that the legacy-v3 semantic
+verification dominates this vector; Merkle depth is measurable but is not its
+largest cost.
+
+Separately, the real TBC Testnet block `839165` vector reconstructs its
+three-transaction Merkle root from transaction index `1` and two displayed
+siblings using the Solidity verifier. The standalone call has 228 calldata
+bytes and a local transaction gas estimate of 39,473. This authenticates the
+real branch algorithm and byte order but does not provide the historical raw
+deposit transaction required for a complete Gateway mint.
+
+Phase 3H does not change `MIN_CONFIRMATIONS = 6`. The production threshold is
+explicitly unresolved because a number cannot be justified from API data
+alone. A decision requires observed TBC reorganization depth/frequency, a
+chainwork attack-cost model, deposit-value exposure limits and acceptable mint
+latency. The deterministic measurements and policy inputs are frozen in
+`backend/src/bridge/phase3/fixtures/phase3h-proof-size-gas-v1.json`.
+
 ## 3. Authenticated bootstrap history
 
 The accepted checkpoint at height `839164` authenticates one header and its
@@ -520,10 +573,10 @@ header-sync, mint and replay rehearsal and its fixed-seed malformed-input corpus
 are complete, together with deep retained-branch/reorganization state vectors.
 Before any public-network deployment, remaining work includes larger multi-seed
 fuzz campaigns, valid mined/submitted competing-branch vectors if such testnet
-data can be obtained, real-size deposit/Merkle-branch benchmarks, a defensible
-confirmation-depth policy and independent Solidity, TBC Script and consensus
-review. A real testnet deposit must then pass through newly deployed contracts
-without moving existing custodial balances.
+data can be obtained, a defensible confirmation-depth decision using actual TBC
+network risk data and independent Solidity, TBC Script and consensus review. A
+real testnet deposit must then pass through newly deployed contracts without
+moving existing custodial balances.
 
 The main protocol blocker is unchanged: finalized transaction inclusion does
 not prove that the minted source FT outpoint remains unspent. An API or TBCScan

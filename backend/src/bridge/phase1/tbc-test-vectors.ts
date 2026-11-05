@@ -30,3 +30,15 @@ export const REAL_MT_DEPOSIT_BLOCK: TbcBlockRecord = Object.freeze({
 	nonce: 1582390056,
 	transactionCount: 3,
 });
+
+export const REAL_MT_DEPOSIT_TXID =
+	'd87d9f42f427a7ac1ade5d2896a88a3e99deeec7257ae5df3ae2c013a3823519';
+
+export const REAL_MT_DEPOSIT_MERKLE_BRANCH = Object.freeze({
+	transactionIndex: 1,
+	transactionCount: 3,
+	siblings: Object.freeze([
+		'0f1f7aad5b51a8de9d37586de34d5271aa6d005dfb966b99602d0b6643ab2aec',
+		'4b76fd1b66b74bf268bffb5f7225a2d9e00720dabbd08a7a6449ddca4a8d7d61',
+	]),
+});

@@ -1,0 +1,66 @@
+{
+  "schema": "learningmaterials/phase3h-proof-size-gas/v1",
+  "parentManifest": "phase3g-reorg-v1.json",
+  "evidenceBytes": {
+    "transaction": 3440,
+    "parents": 2154,
+    "ancestors": 170,
+    "total": 5764
+  },
+  "realTbcMerkleVector": {
+    "blockHeight": 839165,
+    "transactionCount": 3,
+    "transactionIndex": 1,
+    "branchDepth": 2,
+    "calldataBytes": 228,
+    "gasEstimate": "39473"
+  },
+  "proofDepthProfiles": [
+    {
+      "depth": 0,
+      "transactionCount": 1,
+      "transactionIndex": 0,
+      "calldataBytes": 6980,
+      "gasEstimate": "2004400"
+    },
+    {
+      "depth": 2,
+      "transactionCount": 4,
+      "transactionIndex": 1,
+      "calldataBytes": 7044,
+      "gasEstimate": "2014944"
+    },
+    {
+      "depth": 4,
+      "transactionCount": 16,
+      "transactionIndex": 5,
+      "calldataBytes": 7108,
+      "gasEstimate": "2025476"
+    },
+    {
+      "depth": 8,
+      "transactionCount": 256,
+      "transactionIndex": 85,
+      "calldataBytes": 7236,
+      "gasEstimate": "2046507"
+    },
+    {
+      "depth": 12,
+      "transactionCount": 4096,
+      "transactionIndex": 1365,
+      "calldataBytes": 7364,
+      "gasEstimate": "2067577"
+    }
+  ],
+  "confirmationPolicy": {
+    "contractMinimum": 6,
+    "productionStatus": "unresolved",
+    "reason": "a source reorg cannot roll back an existing destination mint",
+    "requiredInputs": [
+      "observed TBC reorganization depth and frequency",
+      "chainwork attack-cost model",
+      "deposit-value exposure limit",
+      "acceptable mint latency"
+    ]
+  }
+}

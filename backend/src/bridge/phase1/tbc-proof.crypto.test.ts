@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { blockHashFromHeader, buildMerkleBranch, merkleRootFromBranch, merkleRootFromTransactionIds, serializeBlockHeader } from './tbc-proof.crypto';
+import {
+	REAL_MT_DEPOSIT_BLOCK, REAL_MT_DEPOSIT_MERKLE_BRANCH, REAL_MT_DEPOSIT_TXID,
+} from './tbc-test-vectors';
 
 const screenshotVector = {
 	transactionIds: [
@@ -44,20 +47,18 @@ test('serializes and hashes the Bitcoin genesis header using the shared TBC head
 });
 
 test('reproduces the real supported MT deposit header and Merkle branch', () => {
-	const txid = 'd87d9f42f427a7ac1ade5d2896a88a3e99deeec7257ae5df3ae2c013a3823519';
-	const merkleRoot = 'cf2ac74ae087c96d00f28d2d6b214f2a7d3085c2dd56058721bc1187bef468ff';
 	const header = serializeBlockHeader({
 		version: 546054144,
 		previousBlockHash: '000000000000023f252086d278485a61b6c225ad07213fff329ef5e31e1c256b',
-		merkleRoot,
+		merkleRoot: REAL_MT_DEPOSIT_BLOCK.merkleRoot,
 		time: 1793340839,
 		bits: 0x1a0420a6,
 		nonce: 1582390056,
 	});
 	assert.equal(header.toString('hex'), '00208c206b251c1ee3f59e32ff3f2107ad25c2b6615a4878d28620253f02000000000000ff68f4be8711bc21870556ddc285307d2a4f216b2d8df2006dc987e04ac72acfa735e46aa620041a285b515e');
 	assert.equal(blockHashFromHeader(header), '0000000000000157b648773dea20cc8addccb3708ec07c330ab711ca033123a9');
-	assert.equal(merkleRootFromBranch(txid, [
-		{ hash: '0f1f7aad5b51a8de9d37586de34d5271aa6d005dfb966b99602d0b6643ab2aec', side: 'left' },
-		{ hash: '4b76fd1b66b74bf268bffb5f7225a2d9e00720dabbd08a7a6449ddca4a8d7d61', side: 'right' },
-	]), merkleRoot);
+	assert.equal(merkleRootFromBranch(REAL_MT_DEPOSIT_TXID, [
+		{ hash: REAL_MT_DEPOSIT_MERKLE_BRANCH.siblings[0], side: 'left' },
+		{ hash: REAL_MT_DEPOSIT_MERKLE_BRANCH.siblings[1], side: 'right' },
+	]), REAL_MT_DEPOSIT_BLOCK.merkleRoot);
 });

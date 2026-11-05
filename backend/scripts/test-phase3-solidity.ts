@@ -10,7 +10,10 @@ import sdk from 'tbc-contract';
 import tbc from 'tbc-lib-js';
 import { blockWork, decodeCompactTarget } from '../src/bridge/phase1/tbc-consensus';
 import { serializeBlockHeader } from '../src/bridge/phase1/tbc-proof.crypto';
-import { REAL_MT_DAA_POINTS, REAL_MT_DEPOSIT_BLOCK } from '../src/bridge/phase1/tbc-test-vectors';
+import {
+	REAL_MT_DAA_POINTS, REAL_MT_DEPOSIT_BLOCK, REAL_MT_DEPOSIT_MERKLE_BRANCH,
+	REAL_MT_DEPOSIT_TXID,
+} from '../src/bridge/phase1/tbc-test-vectors';
 import type { TbcBlockRecord } from '../src/bridge/phase1/tbc-proof.types';
 import {
 	bridgeCovenantFtController, buildBridgeCovenantScript, logicalDepositId, sourceOutpointId,
@@ -1013,11 +1016,10 @@ async function main() {
 	]);
 
 	const realDepositRoot = await call(artifact, 'reconstructMerkleRoot', [
-		'0xd87d9f42f427a7ac1ade5d2896a88a3e99deeec7257ae5df3ae2c013a3823519', 1, 3,
-		[
-			'0x0f1f7aad5b51a8de9d37586de34d5271aa6d005dfb966b99602d0b6643ab2aec',
-			'0x4b76fd1b66b74bf268bffb5f7225a2d9e00720dabbd08a7a6449ddca4a8d7d61',
-		],
+		`0x${REAL_MT_DEPOSIT_TXID}`,
+		REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionIndex,
+		REAL_MT_DEPOSIT_MERKLE_BRANCH.transactionCount,
+		REAL_MT_DEPOSIT_MERKLE_BRANCH.siblings.map((sibling) => `0x${sibling}`),
 	]);
 	assert.equal(realDepositRoot, `0x${REAL_MT_DEPOSIT_BLOCK.merkleRoot}`);
 
