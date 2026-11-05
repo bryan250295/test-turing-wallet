@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "learningmaterials/tbc-header-bootstrap/v2",
+  "route": "tbcdev-testnet",
+  "checkpointId": "tbcdev-official-840039-v2",
+  "checkpointHash": "000000000000005270e8447f4c71c6952ef28e40625fc58ddd38c027f5ef1cda",
+  "checkpointChainWork": "0000000000000000000000000000000000000000014f15b4de5118dc88bc13c7",
+  "supportStartHeight": 824190,
+  "firstVerifiableDaaHeight": 832255,
+  "verifiedDaaTransitions": 7785,
+  "startHeight": 831975,
+  "endHeight": 840039,
+  "pointCount": 8065,
+  "recordBytes": 112,
+  "binaryFile": "tbcdev-bootstrap-history-v2.bin",
+  "binaryBytes": 903280,
+  "binarySha256": "e698a46b29b22c780faa391931bfba025aca0ed3fc58e719931b791ea726f145",
+  "commitmentDomain": "learningmaterials/tbc-hyperevm/v2/header-bootstrap/v2",
+  "commitmentDomainHash": "0x8ea0b761915acd25131005717f4a30a4922fbbedc7dbda44a54c27b971da60f3",
+  "commitmentRoot": "0x471d082663e7ce837793ab0ea19606b3dd6ea66020708f29e9987519154337c5",
+  "checkpointProof": [
+    "0xca4d7d97a1aaabeb08b4083dfd24b94c7d36b8eabe48fbf12963d036a20e6008",
+    "0x3da673193746e0da64dbc02c16056f25ccd71362c8a2f49e62a08b0625c4fb53",
+    "0x2b5a4c1f7212093047c446131db6ebdd059c7992117aa276458d3bbd672c035e",
+    "0x466803f92b9ab8f89a07ab8beb6671b20429afe72ba3d88357adf1725b314783",
+    "0x9c7c36cee1b37d8c163108c28e0bcade0beb33c9c8419e29b4ae57ca46b93431",
+    "0xdddf44cb2135a0c22f1eb3769820094c3fea765717d6fe9d5d65fda6e2249ffc",
+    "0x75db1c04836d71e3a5df7fd05593ac677a479775632338a3de21883ba8923a05",
+    "0x286f45abb779f3a07b3f947169469e4edc5bea83c8374ce55d9fb6efbd4bbf16",
+    "0xca4a9dbe7e1007402cecdfc12140e91cc14b96c8266d9788c1f61f523859a0e0",
+    "0xe86dd7d884e2b5a7b0239fe8c37b7dcc5137cf2f9792359d53b9bbf7ec527744",
+    "0x3998f661e2804f913f9fa99fb7d43f8022fb5914738541001c3b265f9088855e",
+    "0x4ab5b40f6374cd75bdbe7ddb556cd9237cf4d00fdf5e1af6fa079f5c513939ff",
+    "0x01b2d56c2fc56df9698d43b77d90d0b984a8bbf7354f767212b35a417e6a929e"
+  ],
+  "crossCheckedHeights": [
+    824190,
+    831975,
+    832975,
+    833975,
+    834975,
+    835975,
+    836975,
+    837975,
+    838975,
+    839975,
+    840039
+  ],
+  "sources": [
+    "https://api.tbcdev.org/api/tbc/recentblocks",
+    "https://scanapi.tbcdev.org/api/blocks/{height}"
+  ]
+}

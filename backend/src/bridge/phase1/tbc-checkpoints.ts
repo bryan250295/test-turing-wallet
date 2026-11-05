@@ -37,3 +37,33 @@ export const TBCDEV_BOOTSTRAP_CHECKPOINT_V1: TrustedTbcCheckpoint = Object.freez
 		'https://api.tbcdev.org/api/tbc/blockByHeight/height/839164',
 	]),
 });
+
+/**
+ * Public HyperEVM Testnet deployment anchor. This block had six confirmations
+ * when selected from the official tbcdev API. Keeping it separate from V1
+ * preserves the original Phase 3 evidence while avoiding hundreds of relay
+ * transactions before the first public proof-backed mint.
+ */
+export const TBCDEV_BOOTSTRAP_CHECKPOINT_V2: TrustedTbcCheckpoint = Object.freeze({
+	id: 'tbcdev-official-840039-v2',
+	route: 'tbcdev-testnet',
+	authority: 'official-tbcscan',
+	selectedAt: '2026-11-05T16:50:19+08:00',
+	block: Object.freeze({
+		height: 840039,
+		hash: '000000000000005270e8447f4c71c6952ef28e40625fc58ddd38c027f5ef1cda',
+		version: 539566080,
+		previousBlockHash: '00000000000001427d6c8cae98f6abd5871f85578bdb2f660b3496de70a332fb',
+		merkleRoot: '4d6188f659cc62d213cf062d817a3306521d457859af9fedd4a06bee11c15be0',
+		time: 1793865664,
+		bits: 0x1a043383,
+		nonce: 1690531155,
+		transactionCount: 12,
+	}),
+	chainWork: BigInt('0x14f15b4de5118dc88bc13c7'),
+	sources: Object.freeze([
+		'https://scanapi.tbcdev.org/api/blocks/840039',
+		'https://api.tbcdev.org/api/tbc/blockByHeight/height/840039',
+		'https://api.tbcdev.org/api/tbc/nodeinfo',
+	]),
+});

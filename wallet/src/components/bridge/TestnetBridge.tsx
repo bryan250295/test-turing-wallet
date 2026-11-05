@@ -10,6 +10,7 @@ import { BRIDGE_DESTINATIONS } from '../../../../shared/src/config/bridgeRoutes'
 import { formatHypeBalance } from '../../services/evmWallet';
 import { formatDateTime } from '../../utils/dateTime';
 import { formatTokenBalance } from '../../utils/tokenAmounts';
+import ProofBridgeTestnetSetup from './ProofBridgeTestnetSetup';
 
 export default function TestnetBridge({ session, active }: WalletPageProps & { active: boolean }) {
 	const [params, setParams] = useSearchParams();
@@ -106,5 +107,6 @@ export default function TestnetBridge({ session, active }: WalletPageProps & { a
 		<BridgeDeploymentPreview key={ft.verified?.contractId ?? 'no-token'} session={session} evm={evm} asset={ft.verified} active={active && !ft.loading} />
 		</details>}
 		<BridgeOrders session={session} evm={evm} asset={ft.verified} active={active} direction={direction} onReturn={() => chooseDirection('return')} />
+		<ProofBridgeTestnetSetup session={session} evm={evm} active={active} />
 	</section>;
 }

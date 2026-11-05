@@ -124,12 +124,21 @@ export default function useHyperEvmWallet(active: boolean) {
 
 	async function sendDeployment(transaction: BridgeDeploymentTransaction): Promise<string> {
 		if (!active || !provider || command.current) throw new Error('Finish the current MetaMask request before deploying.');
+		if (transaction.chainId !== '0x3e6' || transaction.value !== '0x0'
+			|| !/^0x(?:[0-9a-f]{2})+$/i.test(transaction.data)) {
+			throw new Error('Unsupported deployment transaction.');
+		}
 		const epoch = lifecycle.current;
 		command.current = true;
 		setPending('deploy');
 		try {
 			const current = await withWalletReadTimeout(readEvmWallet(provider));
+			const nonceResponse = await withWalletReadTimeout(provider.request({
+				method: 'eth_getTransactionCount', params: [transaction.from, 'pending'],
+			}));
 			if (lifecycle.current !== epoch || current.chainId !== 998 || current.address.toLowerCase() !== transaction.from.toLowerCase()) throw new Error('MetaMask account, network or page changed before the deployment request.');
+			const nonce = parseWalletNonce(nonceResponse);
+			if (nonce !== BigInt(transaction.nonce)) throw new Error(`MetaMask reports pending nonce ${nonce}, but this deployment requires ${BigInt(transaction.nonce)}. Refresh before retrying.`);
 			if (current.balanceWei === null || BigInt(current.balanceWei) < BigInt(transaction.gas) * BigInt(transaction.gasPrice)) throw new Error('The current MetaMask balance does not cover the reviewed deployment budget.');
 			// Whitelist creation fields: deliberately omit "to", approvals and value.
 			// No timeout: a wallet approval remains pending until the user answers.

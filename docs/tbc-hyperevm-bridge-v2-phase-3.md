@@ -565,6 +565,39 @@ The relay proves header-chain membership, accumulated work and transaction
 Merkle-root availability. It does not prove TBC UTXO state, transaction script
 execution or FT Covenant semantics. Those remain separate gates.
 
+### 4.1 Public Testnet v2 deployment envelope
+
+The public HyperEVM Testnet RPC reported a `3,000,000` block gas limit during
+the checkpoint-v2 deployment rehearsal. The original combined authorization
+module required `4,543,321` gas and therefore could not be deployed by merely
+removing the UI gas buffer. The Testnet-v2 candidate now composes six separately
+deployed, immutable-code components: header relay, finalized-inclusion verifier,
+authenticated-transition verifier, input-signature verifier, unlock-prefix
+verifier and gateway. The gateway constructor pins every supplied component by
+runtime codehash; splitting deployment does not turn any verifier into an
+optional gate.
+
+Final live-RPC creation estimates were `2,211,196` for the relay, `2,019,441`
+for finalized inclusion, `2,757,508` for transition verification, `2,787,845`
+for input signatures and `2,747,807` for unlock-prefix verification. The local
+persistent-EVM suite additionally deploys the bound gateway and asserts that
+every one of the six creation receipts stays at or below `3,000,000` gas. The
+browser uses the current block gas limit as the maximum transaction gas value
+and rejects a deployment whenever its estimate itself exceeds that limit.
+No public deployment transaction is implied by these estimates or local tests;
+each public transaction still requires a separate MetaMask confirmation.
+
+The read-only Testnet relay planner independently checks the deployed relay
+runtime/checkpoint, reads its unique best tip, cross-checks the next TBC block
+between the official API and TBCScan, constructs the exact bootstrap witnesses,
+and runs both `eth_call` simulation and `eth_estimateGas`. Against the deployed
+relay at `0xf63cbd4EB7653cFeeF1c0704781CA76Bf9de1eB7`, the first `840040`
+plan used 26 witnesses, reproduced block hash
+`000000000000028e19c79ad0789f0f24ad4e1c3fd1b33455386648287bea7adf`
+and estimated `1,118,700` gas. The planner emitted `broadcast: false`; it has no
+private key and does not submit a transaction. Run it with
+`npm run phase3:testnet-relay-plan -- --relay=<address> --from=<address>`.
+
 ## 5. Remaining Phase 3 work
 
 Phase 3 now contains the proof-only `WrappedFTV2`/Gateway implementation, but it

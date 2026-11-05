@@ -18,12 +18,27 @@ import {
 	buildTbcdevBootstrapCommitment, decodeTbcdevBootstrapContext, tbcdevBootstrapProof,
 } from '../src/bridge/phase3/bootstrap-history';
 import {
+	buildTbcdevBootstrapCommitmentV2, decodeTbcdevBootstrapContextV2,
+	tbcdevBootstrapProofV2,
+} from '../src/bridge/phase3/bootstrap-history-v2';
+import {
 	PHASE3D_GATEWAY, RELAY_HEADERS, phase3dEnvelopeVector,
 } from './test-phase3-solidity';
 
 const CHAIN_ID = 998;
 const RESERVE_CONTROLLER = `0x${'22'.repeat(20)}` as Hex;
 const ZERO_HASH = `0x${'00'.repeat(32)}` as Hex;
+const PUBLIC_TESTNET_HEADER_840040 = Object.freeze({
+	height: 840040,
+	hash: '000000000000028e19c79ad0789f0f24ad4e1c3fd1b33455386648287bea7adf',
+	version: 547028992,
+	previousBlockHash: '000000000000005270e8447f4c71c6952ef28e40625fc58ddd38c027f5ef1cda',
+	merkleRoot: '45295402484c3869d6f379814b4bce16b1d71428631b3a64defa0510e72cd5e9',
+	time: 1793866214,
+	bits: 0x1a04319f,
+	nonce: 3736431718,
+	transactionCount: 3,
+});
 
 interface Artifact {
 	abi: Abi;
@@ -287,13 +302,19 @@ async function main() {
 			resolve(artifactRoot, `${name}.json`), 'utf8',
 		)) as Artifact;
 		const [authorizationArtifact, prefixArtifact, gatewayArtifact, relayArtifact,
-			tokenArtifact, verifierArtifact] = await Promise.all([
+			tokenArtifact, verifierArtifact, publicGatewayArtifact, publicRelayArtifact,
+			publicFinalizedArtifact, publicTransitionArtifact, publicSignatureArtifact] = await Promise.all([
 			loadArtifact('TbcAuthorizedTransitionVerifier'),
 			loadArtifact('TbcFtUnlockPrefixVerifierModule'),
 			loadArtifact('TbcProofMintGateway'),
 			loadArtifact('TbcHeaderRelayV2'),
 			loadArtifact('WrappedFTV2'),
 			loadArtifact('TbcVerifierHarness'),
+			loadArtifact('TbcProofMintGatewayTestnetV2'),
+			loadArtifact('TbcHeaderRelayTestnetV2'),
+			loadArtifact('TbcFinalizedDepositVerifier'),
+			loadArtifact('TbcAuthenticatedTransitionVerifier'),
+			loadArtifact('TbcInputSignatureVerifier'),
 		]);
 
 		const deploy = async (artifact: Artifact, args: readonly unknown[] = []) => {
@@ -347,6 +368,90 @@ async function main() {
 			address: token, abi: tokenArtifact.abi, functionName: 'gateway',
 		}) as Address;
 		assert.equal(tokenGateway.toLowerCase(), gateway.address.toLowerCase());
+
+		// Deploy the low-gas public Testnet checkpoint-v2 modules and gateway, then
+		// submit its first real child. Each deployment must fit HyperEVM's 3M limit.
+		const publicRelayDeployment = await deploy(publicRelayArtifact);
+		const publicFinalized = await deploy(publicFinalizedArtifact);
+		const publicTransition = await deploy(publicTransitionArtifact);
+		const publicSignature = await deploy(publicSignatureArtifact);
+		const publicGateway = await deploy(publicGatewayArtifact, [
+			publicRelayDeployment.address,
+			publicFinalized.address,
+			publicTransition.address,
+			publicSignature.address,
+			prefix.address,
+			RESERVE_CONTROLLER,
+		]);
+		for (const [label, deployed] of Object.entries({
+			relay: publicRelayDeployment,
+			finalized: publicFinalized,
+			transition: publicTransition,
+			signature: publicSignature,
+			prefix,
+			gateway: publicGateway,
+		})) {
+			assert.ok(deployed.gasUsed <= 3_000_000n,
+				`${label} deployment exceeds HyperEVM's 3M block gas limit: ${deployed.gasUsed}`);
+		}
+		const publicRelay = await publicClient.readContract({
+			address: publicGateway.address,
+			abi: publicGatewayArtifact.abi,
+			functionName: 'relay',
+		}) as Address;
+		assert.equal(publicRelay.toLowerCase(), publicRelayDeployment.address.toLowerCase());
+		assert.equal(await publicClient.getCode({ address: publicRelay }), publicRelayArtifact.deployedBytecode);
+		assert.equal(await publicClient.readContract({
+			address: publicRelay, abi: publicRelayArtifact.abi, functionName: 'CHECKPOINT_HEIGHT',
+		}), 840039);
+		assert.equal(await publicClient.readContract({
+			address: publicRelay, abi: publicRelayArtifact.abi, functionName: 'CHECKPOINT_HASH',
+		}), `0x${PUBLIC_TESTNET_HEADER_840040.previousBlockHash}`);
+		const publicFixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
+		const publicManifest = JSON.parse(await readFile(
+			resolve(publicFixtureRoot, 'tbcdev-bootstrap-history-v2.json'), 'utf8',
+		)) as BootstrapManifest;
+		const publicBootstrap = decodeTbcdevBootstrapContextV2(await readFile(
+			resolve(publicFixtureRoot, publicManifest.binaryFile),
+		));
+		const publicCommitment = buildTbcdevBootstrapCommitmentV2(publicBootstrap);
+		assert.equal(publicCommitment.root, publicManifest.commitmentRoot);
+		const publicByHeight = new Map(publicBootstrap.map((point) => [point.height, point]));
+		const previousHeight = PUBLIC_TESTNET_HEADER_840040.height - 1;
+		const publicWitnessHeights = [
+			previousHeight - 8_064,
+			previousHeight - 146, previousHeight - 145, previousHeight - 144,
+			...Array.from({ length: 23 }, (_, index) => previousHeight - 22 + index),
+		].filter((height) => height < 840039);
+		const publicWitnesses = publicWitnessHeights.map((height) => {
+			const point = publicByHeight.get(height);
+			assert.ok(point, `Missing public Testnet bootstrap point ${height}.`);
+			return {
+				point: {
+					height: point.height,
+					blockHash: `0x${point.blockHash}` as Hex,
+					time: point.time,
+					bits: point.bits,
+					chainWork: point.chainWork,
+				},
+				siblings: tbcdevBootstrapProofV2(publicCommitment, height),
+			};
+		});
+		const publicSubmitHash = await walletClient.writeContract({
+			account: proofSubmitter,
+			address: publicRelay,
+			abi: publicRelayArtifact.abi,
+			functionName: 'submitHeader',
+			args: [
+				`0x${serializeBlockHeader(PUBLIC_TESTNET_HEADER_840040).toString('hex')}`,
+				publicWitnesses,
+			],
+			gas: 8_000_000n,
+		});
+		assert.equal((await publicClient.waitForTransactionReceipt({ hash: publicSubmitHash })).status, 'success');
+		assert.equal(await publicClient.readContract({
+			address: publicRelay, abi: publicRelayArtifact.abi, functionName: 'bestTip',
+		}), `0x${PUBLIC_TESTNET_HEADER_840040.hash}`);
 
 		const realMerkleSiblings = REAL_MT_DEPOSIT_MERKLE_BRANCH.siblings.map(
 			(sibling) => `0x${sibling}` as Hex,

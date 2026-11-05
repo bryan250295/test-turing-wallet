@@ -6,6 +6,7 @@
 	"scripts": {
 		"contracts:compile": "node scripts/compileBridgeContract.mjs",
 		"phase3:compile": "node scripts/compilePhase3Contracts.mjs",
+		"phase3:testnet-v2-compile": "node scripts/compilePhase3TestnetV2Contracts.mjs",
 		"dev": "vite --host 0.0.0.0",
 		"build": "npm run typecheck && vite build",
 		"preview": "vite preview",
@@ -22,7 +23,8 @@
 		"react": "^19.3.0",
 		"react-dom": "^19.3.0",
 		"react-router-dom": "^7.18.4",
-		"turing-wallet-provider": "file:vendor/turing-wallet-provider-1.5.8.tgz"
+		"turing-wallet-provider": "file:vendor/turing-wallet-provider-1.5.8.tgz",
+		"viem": "^2.38.0"
 	},
 	"devDependencies": {
 		"@openzeppelin/contracts": "5.4.0",

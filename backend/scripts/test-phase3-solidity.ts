@@ -23,8 +23,8 @@ import {
 	buildTbcdevBootstrapCommitment, decodeTbcdevBootstrapContext, tbcdevBootstrapProof,
 } from '../src/bridge/phase3/bootstrap-history';
 
-const require = createRequire(__filename);
-const partialSha256 = require('tbc-lib-js/lib/util/partial-sha256') as {
+const nodeRequire = createRequire(__filename);
+const partialSha256 = nodeRequire('tbc-lib-js/lib/util/partial-sha256') as {
 	calculate_partial_hash(value: Buffer): string;
 };
 

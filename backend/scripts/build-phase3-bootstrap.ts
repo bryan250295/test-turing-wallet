@@ -3,20 +3,31 @@ import { resolve } from 'node:path';
 import { TbcScanProofSource } from '../src/bridge/phase1/tbc-proof.sources';
 import type { TbcBlockRecord } from '../src/bridge/phase1/tbc-proof.types';
 import {
-	bootstrapBinarySha256, buildTbcdevBootstrapCommitment, decodeTbcdevBootstrapContext,
-	deriveTbcdevBootstrapContext, encodeTbcdevBootstrapContext, tbcdevBootstrapProof,
-	verifyTbcdevBootstrapProof, TBCDEV_BOOTSTRAP_CONTEXT_DOMAIN,
-	TBCDEV_BOOTSTRAP_CONTEXT_DOMAIN_HASH, TBCDEV_BOOTSTRAP_CONTEXT_SCHEMA,
-	TBCDEV_BOOTSTRAP_END_HEIGHT, TBCDEV_BOOTSTRAP_POINT_COUNT, TBCDEV_BOOTSTRAP_RECORD_BYTES,
-	TBCDEV_BOOTSTRAP_FIRST_VERIFIABLE_DAA_HEIGHT, TBCDEV_BOOTSTRAP_START_HEIGHT,
-	TBCDEV_BOOTSTRAP_SUPPORT_START_HEIGHT,
-} from '../src/bridge/phase3/bootstrap-history';
-import { TBCDEV_BOOTSTRAP_CHECKPOINT_V1 } from '../src/bridge/phase1/tbc-checkpoints';
+	bootstrapBinarySha256V2 as bootstrapBinarySha256,
+	buildTbcdevBootstrapCommitmentV2 as buildTbcdevBootstrapCommitment,
+	decodeTbcdevBootstrapContextV2 as decodeTbcdevBootstrapContext,
+	deriveTbcdevBootstrapContextV2 as deriveTbcdevBootstrapContext,
+	encodeTbcdevBootstrapContextV2 as encodeTbcdevBootstrapContext,
+	tbcdevBootstrapProofV2 as tbcdevBootstrapProof,
+	verifyTbcdevBootstrapProofV2 as verifyTbcdevBootstrapProof,
+	TBCDEV_BOOTSTRAP_CONTEXT_DOMAIN_V2 as TBCDEV_BOOTSTRAP_CONTEXT_DOMAIN,
+	TBCDEV_BOOTSTRAP_CONTEXT_DOMAIN_HASH_V2 as TBCDEV_BOOTSTRAP_CONTEXT_DOMAIN_HASH,
+	TBCDEV_BOOTSTRAP_CONTEXT_SCHEMA_V2 as TBCDEV_BOOTSTRAP_CONTEXT_SCHEMA,
+	TBCDEV_BOOTSTRAP_END_HEIGHT_V2 as TBCDEV_BOOTSTRAP_END_HEIGHT,
+	TBCDEV_BOOTSTRAP_POINT_COUNT_V2 as TBCDEV_BOOTSTRAP_POINT_COUNT,
+	TBCDEV_BOOTSTRAP_RECORD_BYTES_V2 as TBCDEV_BOOTSTRAP_RECORD_BYTES,
+	TBCDEV_BOOTSTRAP_FIRST_VERIFIABLE_DAA_HEIGHT_V2 as TBCDEV_BOOTSTRAP_FIRST_VERIFIABLE_DAA_HEIGHT,
+	TBCDEV_BOOTSTRAP_START_HEIGHT_V2 as TBCDEV_BOOTSTRAP_START_HEIGHT,
+	TBCDEV_BOOTSTRAP_SUPPORT_START_HEIGHT_V2 as TBCDEV_BOOTSTRAP_SUPPORT_START_HEIGHT,
+} from '../src/bridge/phase3/bootstrap-history-v2';
+import {
+	TBCDEV_BOOTSTRAP_CHECKPOINT_V1, TBCDEV_BOOTSTRAP_CHECKPOINT_V2,
+} from '../src/bridge/phase1/tbc-checkpoints';
 
 const API = 'https://api.tbcdev.org/api/tbc';
 const PAGE_SIZE = 100;
 const WORKERS = 3;
-const cacheRoot = resolve(process.cwd(), '.phase3-cache/tbcdev-bootstrap-v1');
+const cacheRoot = resolve(process.cwd(), '.phase3-cache/tbcdev-bootstrap-v2');
 const fixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 
 type JsonRecord = Record<string, unknown>;
@@ -143,18 +154,24 @@ async function main() {
 	const points = deriveTbcdevBootstrapContext(blocks);
 	const binary = encodeTbcdevBootstrapContext(points);
 	const decoded = decodeTbcdevBootstrapContext(binary);
+	const priorCheckpoint = decoded.find((point) => point.height === TBCDEV_BOOTSTRAP_CHECKPOINT_V1.block.height);
+	if (
+		!priorCheckpoint
+		|| priorCheckpoint.blockHash !== TBCDEV_BOOTSTRAP_CHECKPOINT_V1.block.hash
+		|| priorCheckpoint.chainWork !== TBCDEV_BOOTSTRAP_CHECKPOINT_V1.chainWork
+	) throw new Error('V2 history does not reproduce the frozen V1 checkpoint and chainwork.');
 	const commitment = buildTbcdevBootstrapCommitment(decoded);
 	const checkpointPoint = decoded.at(-1)!;
 	const checkpointProof = tbcdevBootstrapProof(commitment, checkpointPoint.height);
 	if (!verifyTbcdevBootstrapProof(checkpointPoint, checkpointProof, commitment.root)) throw new Error('Checkpoint commitment proof failed self-verification.');
 
-	const binaryName = 'tbcdev-bootstrap-history-v1.bin';
+	const binaryName = 'tbcdev-bootstrap-history-v2.bin';
 	const manifest = {
 		schemaVersion: TBCDEV_BOOTSTRAP_CONTEXT_SCHEMA,
 		route: 'tbcdev-testnet',
-		checkpointId: TBCDEV_BOOTSTRAP_CHECKPOINT_V1.id,
-		checkpointHash: TBCDEV_BOOTSTRAP_CHECKPOINT_V1.block.hash,
-		checkpointChainWork: TBCDEV_BOOTSTRAP_CHECKPOINT_V1.chainWork.toString(16).padStart(64, '0'),
+		checkpointId: TBCDEV_BOOTSTRAP_CHECKPOINT_V2.id,
+		checkpointHash: TBCDEV_BOOTSTRAP_CHECKPOINT_V2.block.hash,
+		checkpointChainWork: TBCDEV_BOOTSTRAP_CHECKPOINT_V2.chainWork.toString(16).padStart(64, '0'),
 		supportStartHeight: TBCDEV_BOOTSTRAP_SUPPORT_START_HEIGHT,
 		firstVerifiableDaaHeight: TBCDEV_BOOTSTRAP_FIRST_VERIFIABLE_DAA_HEIGHT,
 		verifiedDaaTransitions: TBCDEV_BOOTSTRAP_END_HEIGHT - TBCDEV_BOOTSTRAP_FIRST_VERIFIABLE_DAA_HEIGHT + 1,
@@ -174,7 +191,7 @@ async function main() {
 	};
 	await mkdir(fixtureRoot, { recursive: true });
 	await writeFile(resolve(fixtureRoot, binaryName), binary);
-	await writeFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v1.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+	await writeFile(resolve(fixtureRoot, 'tbcdev-bootstrap-history-v2.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 	console.log(`Validated ${blocks.length} linked/PoW headers and ${manifest.verifiedDaaTransitions} exact DAA transitions.`);
 	console.log(`Bootstrap commitment root: ${commitment.root}`);
 	console.log(`Binary SHA-256: ${manifest.binarySha256}`);
