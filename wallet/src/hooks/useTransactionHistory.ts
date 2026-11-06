@@ -1,26 +1,56 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchTransactionHistory } from '../services/transactionHistory';
+import { useEffect, useRef, useState } from 'react';
 import { getTokenTransaction, getTokenInfo } from '../services/tbcApi';
 import { detectConfirmations } from '../utils/transactions';
 import { getErrorMessage } from '../utils/errors';
 import type { TransactionData } from '../types/api';
 import type { TransactionRow, TransactionDetails, ConfirmationTracking } from '../types/transaction';
 
+type RealtimeState = 'off' | 'connecting' | 'connected' | 'reconnecting';
+interface HistorySnapshot {
+	type: 'history';
+	address: string;
+	rows: TransactionRow[];
+	errors: string[];
+	checkedAt: string;
+}
+
+function parseSnapshot(value: unknown): HistorySnapshot {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid live history message.');
+	const snapshot = value as Record<string, unknown>;
+	if (snapshot.type !== 'history' || typeof snapshot.address !== 'string' || !Array.isArray(snapshot.rows) || !Array.isArray(snapshot.errors) || typeof snapshot.checkedAt !== 'string' || !Number.isFinite(new Date(snapshot.checkedAt).getTime())) throw new Error('Invalid live history message.');
+	const rows = snapshot.rows.map((value) => {
+		if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid live transaction row.');
+		const row = value as Record<string, unknown>;
+		if (typeof row.txid !== 'string' || !/^[0-9a-f]{64}$/i.test(row.txid) || !Array.isArray(row.records)) throw new Error('Invalid live transaction row.');
+		const records = row.records.map((value) => {
+			if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid live transaction record.');
+			const record = value as Record<string, unknown>;
+			if ((record.source !== 'Native TBC' && record.source !== 'FT tokens') || !record.data || typeof record.data !== 'object' || Array.isArray(record.data) || (record.data as Record<string, unknown>).txid !== row.txid) throw new Error('Invalid live transaction record.');
+			return { source: record.source, data: record.data } as TransactionRow['records'][number];
+		});
+		return { txid: row.txid.toLowerCase(), records };
+	});
+	if (!snapshot.errors.every((error) => typeof error === 'string')) throw new Error('Invalid live history errors.');
+	return { type: 'history', address: snapshot.address, rows, errors: snapshot.errors as string[], checkedAt: snapshot.checkedAt };
+}
+
 export default function useTransactionHistory(address: string, networkIsDevnet: boolean, hidden: boolean | undefined, notifyConfirmation: (txid: string) => void) {
-	const historyRequest = useRef<AbortController | null>(null);
 	const detailRequests = useRef(new Map<string, AbortController>());
 	const [detailsByTxid, setDetailsByTxid] = useState<Record<string, TransactionDetails>>({});
 	const observed = useRef<ConfirmationTracking>({ address: '', statuses: new Map(), notified: new Set() });
 	const [state, setState] = useState<{ address: string; loading: boolean; rows: TransactionRow[]; errors: string[] }>({ address: '', loading: true, rows: [], errors: [] });
-	const loadHistory = useCallback(async () => {
-		historyRequest.current?.abort();
+	const [realtime, setRealtime] = useState<RealtimeState>('off');
+	const [checkedAt, setCheckedAt] = useState('');
+
+	useEffect(() => {
 		for (const controller of detailRequests.current.values()) controller.abort();
 		detailRequests.current.clear();
 		setDetailsByTxid({});
-		if (hidden || !address || !networkIsDevnet) return;
-
-		const controller = new AbortController();
-		historyRequest.current = controller;
+		setCheckedAt('');
+		if (hidden || !address || !networkIsDevnet) {
+			setRealtime('off');
+			return;
+		}
 		if (observed.current.address !== address) {
 			observed.current = { address, statuses: new Map(), notified: new Set() };
 		}
@@ -28,35 +58,50 @@ export default function useTransactionHistory(address: string, networkIsDevnet: 
 			? { ...previous, loading: true, errors: [] }
 			: { address, loading: true, rows: [], errors: [] });
 
-		try {
-			const { rows, errors } = await fetchTransactionHistory(address, controller.signal);
-			if (controller.signal.aborted) return;
-
-			const confirmedTxids = detectConfirmations(rows, observed.current);
-			confirmedTxids.forEach(notifyConfirmation);
-			setState((previous) => ({
-				address,
-				loading: false,
-				rows: errors.length === 2 ? previous.rows : rows,
-				errors,
-			}));
-		} catch (error) {
-			if (!controller.signal.aborted) {
-				setState((previous) => ({ ...previous, loading: false, errors: [getErrorMessage(error)] }));
-			}
-		} finally {
-			if (historyRequest.current === controller) historyRequest.current = null;
-		}
-	}, [address, networkIsDevnet, hidden, notifyConfirmation]);
-
-	useEffect(() => {
-		void loadHistory();
+		let disposed = false;
+		let socket: WebSocket | null = null;
+		let retryTimer: ReturnType<typeof setTimeout> | null = null;
+		let attempts = 0;
+		const connect = () => {
+			if (disposed) return;
+			setRealtime(attempts ? 'reconnecting' : 'connecting');
+			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+			socket = new WebSocket(`${protocol}//${window.location.host}/api/transaction-history/ws`);
+			socket.onopen = () => {
+				attempts = 0;
+				setRealtime('connected');
+			};
+			socket.onmessage = (event) => {
+				if (disposed || typeof event.data !== 'string') return;
+				try {
+					const snapshot = parseSnapshot(JSON.parse(event.data));
+					if (snapshot.address !== address) throw new Error('Live history identity mismatch.');
+					const confirmedTxids = detectConfirmations(snapshot.rows, observed.current);
+					confirmedTxids.forEach(notifyConfirmation);
+					setState({ address, loading: false, rows: snapshot.rows, errors: snapshot.errors });
+					setCheckedAt(snapshot.checkedAt);
+				} catch (error) {
+					setState((previous) => ({ ...previous, loading: false, errors: [getErrorMessage(error)] }));
+					socket?.close(1008, 'Invalid history message');
+				}
+			};
+			socket.onclose = () => {
+				if (disposed) return;
+				attempts++;
+				setRealtime('reconnecting');
+				setState((previous) => ({ ...previous, loading: false }));
+				retryTimer = setTimeout(connect, Math.min(30_000, 1000 * 2 ** Math.min(attempts - 1, 5)));
+			};
+		};
+		connect();
 		return () => {
-			historyRequest.current?.abort();
+			disposed = true;
+			if (retryTimer) clearTimeout(retryTimer);
+			socket?.close(1000, 'Transaction page closed');
 			for (const controller of detailRequests.current.values()) controller.abort();
 			detailRequests.current.clear();
 		};
-	}, [loadHistory]);
+	}, [address, networkIsDevnet, hidden, notifyConfirmation]);
 
 	async function loadTransactionDetails(row: TransactionRow) {
 		if (!row.records.some((record) => record.source === 'FT tokens') ||
@@ -82,5 +127,5 @@ export default function useTransactionHistory(address: string, networkIsDevnet: 
 		}
 	}
 
-	return { state, detailsByTxid, refresh: loadHistory, loadTransactionDetails };
+	return { state, detailsByTxid, realtime, checkedAt, loadTransactionDetails };
 }

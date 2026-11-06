@@ -7,6 +7,7 @@ import { HtlcModule } from './htlc/htlc.module';
 import { BridgeModule } from './bridge/bridge.module';
 import { ActionLogController } from './common/action-log.controller';
 import { HealthController } from './common/health.controller';
+import { TransactionHistoryService } from './transaction-history/transaction-history.service';
 
-@Module({ imports: [DatabaseModule, AuthModule, HtlcModule, BridgeModule, ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 120 }])], controllers: [HealthController, ActionLogController], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] })
+@Module({ imports: [DatabaseModule, AuthModule, HtlcModule, BridgeModule, ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 120 }])], controllers: [HealthController, ActionLogController], providers: [TransactionHistoryService, { provide: APP_GUARD, useClass: ThrottlerGuard }] })
 export class AppModule {}

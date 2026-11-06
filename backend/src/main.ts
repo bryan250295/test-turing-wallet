@@ -9,6 +9,9 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from './app.module';
 import { environment } from './config/environment';
 import { HttpErrorFilter } from './common/http-error.filter';
+import { AuthService } from './auth/auth.service';
+import { TransactionHistoryService } from './transaction-history/transaction-history.service';
+import { attachTransactionHistoryWebSocket } from './transaction-history/transaction-history.websocket';
 
 async function bootstrap() {
 	const config = environment();
@@ -36,6 +39,7 @@ async function bootstrap() {
 		const document = SwaggerModule.createDocument(app, new DocumentBuilder().setTitle('Learning Bridge API').setVersion('1').addCookieAuth('bridge_session').build());
 		SwaggerModule.setup('api/docs', app, document, { swaggerOptions: { persistAuthorization: false } });
 	}
+	attachTransactionHistoryWebSocket(app.getHttpServer(), app.get(AuthService), app.get(TransactionHistoryService), config.origin);
 	await app.listen(config.port, '0.0.0.0');
 	Logger.log(`Backend ready on port ${config.port}`, 'Bootstrap');
 }

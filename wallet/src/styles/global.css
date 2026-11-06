@@ -222,7 +222,11 @@ button:focus-visible, summary:focus-visible, .top-menu a:focus-visible { outline
 .history-titlebar h1 { font-size: clamp(1.7rem, 4vw, 2.1rem); line-height: 1.2; margin: 10px 0; letter-spacing: -.035em; }
 .history-titlebar .intro { margin: 0; font-size: .92rem; color: #98aac2; }
 .history-titlebar .eyebrow { font-size: .68rem; letter-spacing: .16em; }
-.history-refresh { font-size: .85rem; white-space: nowrap; }
+.history-live { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid #40506a; border-radius: 999px; color: #b7c5d8; background: #172238; font-size: .75rem; font-weight: 650; white-space: nowrap; }
+.history-live > span { font-size: .55rem; }
+.history-live-connected { color: #72e1b5; border-color: #27634f; background: #12372d; }
+.history-live-connected > span { filter: drop-shadow(0 0 5px #44d6a3); }
+.history-live-connecting, .history-live-reconnecting { color: #f4ce89; border-color: #66532e; background: #392f1d; }
 .network-pill { color: #92d7fa; background: #162e43; border: 1px solid #244358; border-radius: 20px; padding: 6px 10px; font-size: .7rem; white-space: nowrap; }
 .history-secondary { background: transparent; border: 1px solid #364762; color: #c7d5e8; font-size: .78rem; padding: 8px 12px; }
 .history-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0; }
