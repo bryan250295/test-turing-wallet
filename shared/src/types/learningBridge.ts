@@ -134,6 +134,24 @@ export interface BridgeOrder {
 export type BridgeSettlementStatus = 'awaiting_payment' | 'confirming' | 'ready_to_mint' | 'mint_pending' | 'completed' | 'needs_review';
 export type BridgeCallKind = 'unpause' | 'mint';
 export interface BridgeCallTransaction extends BridgeDeploymentTransaction { to: string }
+export interface Phase3TestnetRelayPlan {
+	schema: 'learningmaterials/phase3-testnet-relay-plan/v1';
+	createdAt: string;
+	network: { tbc: 'testnet'; hyperEvmChainId: 998 };
+	relay: string;
+	from: string;
+	parent: { height: number; hash: string; chainWork: string };
+	target: { height: number; hash: string };
+	crossCheckedSources: ['official-tbc-api', 'tbcscan-api'];
+	witnessCount: number;
+	simulationResult: string;
+	estimatedGas: string;
+	maximumFeeWei: string;
+	balanceWei: string;
+	canCoverMaximumFee: boolean;
+	transaction: BridgeCallTransaction;
+	broadcast: false;
+}
 export interface BridgeCallAttempt {
 	id: string; kind: BridgeCallKind; status: 'quoted' | 'awaiting_wallet' | 'submitted' | 'confirming' | 'verified' | 'reverted' | 'invalid' | 'cancelled';
 	transaction: BridgeCallTransaction; estimatedFeeWei: string; budgetWei: string; expiresAt: string; createdAt: string;

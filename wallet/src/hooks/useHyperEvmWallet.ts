@@ -153,7 +153,7 @@ export default function useHyperEvmWallet(active: boolean) {
 
 	async function sendBridgeCall(transaction: BridgeCallTransaction): Promise<string> {
 		if (!active || !provider || command.current) throw new Error('Finish the current MetaMask request first.');
-		if (transaction.chainId !== '0x3e6' || transaction.value !== '0x0' || !/^0x[0-9a-f]{40}$/.test(transaction.to) || !['0x3f4ba83a', '0xbf31ca75', '0x095ea7b3', '0x2b145d57'].includes(transaction.data.slice(0, 10))) throw new Error('Unsupported bridge wallet call.');
+		if (transaction.chainId !== '0x3e6' || transaction.value !== '0x0' || !/^0x[0-9a-f]{40}$/i.test(transaction.to) || !['0x3f4ba83a', '0xbf31ca75', '0x095ea7b3', '0x2b145d57', '0x959de493'].includes(transaction.data.slice(0, 10).toLowerCase())) throw new Error('Unsupported bridge wallet call.');
 		const epoch = lifecycle.current; command.current = true; setPending('bridge');
 		try {
 			const current = await withWalletReadTimeout(readEvmWallet(provider));

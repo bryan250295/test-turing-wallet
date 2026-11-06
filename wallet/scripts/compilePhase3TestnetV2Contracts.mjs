@@ -7,6 +7,9 @@ import solc from 'solc';
 import { keccak256 } from 'viem';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const publicDeployment = JSON.parse(await readFile(
+    resolve(root, '../shared/src/config/phase3-testnet-v2-public.json'), 'utf8',
+));
 const dependencyRoot = resolve(root, 'node_modules/@openzeppelin/contracts');
 const sourceNames = [
     'contracts/phase3/TbcProofVerifier.sol',
@@ -149,6 +152,7 @@ const deploymentManifest = {
         hash: '0x000000000000005270e8447f4c71c6952ef28e40625fc58ddd38c027f5ef1cda',
         commitmentRoot: '0x471d082663e7ce837793ab0ea19606b3dd6ea66020708f29e9987519154337c5',
     },
+    deployment: publicDeployment,
     contracts: {
         finalized: {
             contractName: finalizedArtifact.contractName,

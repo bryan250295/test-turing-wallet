@@ -1,0 +1,22 @@
+{
+  "schema": "learningmaterials/phase3-public-testnet-v2-addresses/v1",
+  "status": "experimental-testnet",
+  "recordedOn": "2026-11-06",
+  "chainId": 998,
+  "checkpoint": {
+    "height": 840039,
+    "hash": "0x000000000000005270e8447f4c71c6952ef28e40625fc58ddd38c027f5ef1cda",
+    "commitmentRoot": "0x471d082663e7ce837793ab0ea19606b3dd6ea66020708f29e9987519154337c5"
+  },
+  "deployer": "0x8221fae04189F1f2f50268495ED95d1a9b220432",
+  "reserveController": "0x77fd918d8f6f221727f6e2dc282b47674dd741cd",
+  "contracts": {
+    "relay": "0xf63cbd4EB7653cFeeF1c0704781CA76Bf9de1eB7",
+    "finalized": "0x6b8fEd83821F49512A262D8AA0bb33D552a71B30",
+    "transition": "0x543b25082A8C71131b595398DBE59765aBac1045",
+    "signature": "0xC211aaBa219c0d31ba46b0eD3547FB22D7EFb6e1",
+    "prefix": "0x298b94b49c632dFBF90668b600514b69a63Cc5f7",
+    "gateway": "0x6C7D8aE7aad6D9711aC8C4AF14AACfdE7d4dFa4d",
+    "wrappedToken": "0x770A2bDA591fF5a2dAed298e0a67490174f7eD5a"
+  }
+}

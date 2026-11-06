@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEthereumAddress, IsString, IsUUID, Matches, IsOptional, Equals, MaxLength } from 'class-validator';
+import { ArrayMaxSize, Equals, IsArray, IsBoolean, IsEthereumAddress, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 
 export class VerifyBridgeAssetDto {
 	@ApiProperty({ type: String, description: 'The source FT Contract ID selected from the wallet.' })
@@ -34,6 +34,34 @@ export class SubmitBridgeDeploymentDto {
 	@IsString()
 	@Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i)
 	txHash!: string;
+}
+
+export class PreparePhase3TestnetRelayDto {
+	@ApiProperty({ type: String, description: 'Public HyperEVM Testnet account that would pay the relay gas.' })
+	@IsEthereumAddress()
+	from!: string;
+}
+
+export class BuildPhase3TestnetDepositDto {
+	@ApiProperty({ type: String }) @Matches(/^[1-9A-HJ-NP-Za-km-z]{26,100}$/) sender!: string;
+	@ApiProperty({ type: String }) @Matches(/^(?:02|03)[0-9a-f]{64}$|^04[0-9a-f]{128}$/i) publicKey!: string;
+	@ApiProperty({ type: String }) @Matches(/^[0-9a-f]{64}$/i) contractId!: string;
+	@ApiProperty({ type: String, example: '500000' }) @IsString() @MaxLength(278) @Matches(/^\d+(?:\.\d+)?$/) amount!: string;
+	@ApiProperty({ type: String }) @IsEthereumAddress() recipient!: string;
+}
+
+export class Phase3TestnetDepositBuildDto {
+	@ApiProperty({ type: String }) @IsUUID() buildId!: string;
+}
+
+export class FinalizePhase3TestnetDepositDto extends Phase3TestnetDepositBuildDto {
+	@ApiProperty({ type: String }) @Matches(/^(?:02|03)[0-9a-f]{64}$|^04[0-9a-f]{128}$/i) publicKey!: string;
+	@ApiProperty({ type: [String] }) @IsArray() @ArrayMaxSize(6) @Matches(/^(?:[0-9a-f]{2}){9,80}$/i, { each: true }) signatures!: string[];
+}
+
+export class BroadcastPhase3TestnetDepositDto extends Phase3TestnetDepositBuildDto {
+	@ApiProperty({ type: String }) @IsIn(['submit', 'check']) action!: 'submit' | 'check';
+	@ApiProperty({ type: Boolean }) @IsBoolean() @Equals(true) confirmed!: true;
 }
 
 export class PrepareBridgeOrderDto {
