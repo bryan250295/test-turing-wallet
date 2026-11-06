@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TBC → HyperEVM Bridge：旧 Flow 与新 Flow</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #dce5f2; color: #13243d; font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial, sans-serif; }
+  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .page { position: relative; width: 297mm; height: 210mm; padding: 13mm 16mm 12mm; overflow: hidden; background: #f7f9fd; break-after: page; page-break-after: always; }
+  .page:last-child { break-after: auto; page-break-after: auto; }
+  @media screen {
+    body:has(.page:target) .page:not(:target) { display: none; }
+  }
+  .navy { background: linear-gradient(135deg, #071426 0%, #102448 62%, #173c59 100%); color: #f4f8ff; }
+  .eyebrow { color: #32d3b2; font-size: 10pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  h1 { margin: 5mm 0 3mm; font-size: 29pt; line-height: 1.16; letter-spacing: -.02em; }
+  h2 { margin: 0 0 6mm; font-size: 22pt; line-height: 1.2; color: #102448; }
+  h3 { margin: 0 0 2mm; font-size: 13pt; }
+  p { margin: 0; line-height: 1.52; }
+  .lead { max-width: 230mm; color: #c9d8ed; font-size: 13pt; }
+  .rule { width: 26mm; height: 1.3mm; margin: 5mm 0; border-radius: 99px; background: #32d3b2; }
+  .footer { position: absolute; left: 16mm; right: 16mm; bottom: 5mm; display: flex; justify-content: space-between; align-items: center; color: #70819b; font-size: 8.5pt; }
+  .navy .footer { color: #9fb2cb; }
+  .badge { display: inline-flex; align-items: center; gap: 2mm; padding: 1.4mm 3mm; border-radius: 99px; font-size: 9pt; font-weight: 700; }
+  .badge.done { background: #dff7ef; color: #087a64; }
+  .badge.manual { background: #fff0cf; color: #a66200; }
+  .badge.next { background: #e5e9ff; color: #3e52bc; }
+  .badge.gap { background: #ffe3e6; color: #a73342; }
+  .hero-grid { display: grid; grid-template-columns: 1.08fr .92fr; gap: 14mm; align-items: center; margin-top: 12mm; }
+  .hero-visual { position: relative; height: 114mm; }
+  .hero-card { position: absolute; width: 83mm; padding: 7mm; border: 1px solid rgba(255,255,255,.18); border-radius: 6mm; background: rgba(255,255,255,.08); box-shadow: 0 8mm 16mm rgba(0,0,0,.16); }
+  .hero-card.old { left: 2mm; top: 10mm; transform: rotate(-4deg); }
+  .hero-card.new { right: 2mm; bottom: 8mm; transform: rotate(3deg); border-color: rgba(50,211,178,.55); background: rgba(50,211,178,.12); }
+  .hero-card strong { display: block; margin-bottom: 4mm; font-size: 15pt; }
+  .mini-step { display: flex; align-items: center; gap: 3mm; margin: 2.6mm 0; font-size: 10pt; color: #dae5f4; }
+  .dot { flex: 0 0 6mm; width: 6mm; height: 6mm; border-radius: 50%; display: grid; place-items: center; background: #324a6c; font-size: 8pt; font-weight: 800; }
+  .new .dot { background: #16a88e; color: white; }
+  .hero-arrow { position: absolute; left: 90mm; top: 49mm; font-size: 32pt; color: #32d3b2; font-weight: 300; }
+
+  .legend { display: flex; gap: 3mm; margin: -2mm 0 6mm; flex-wrap: wrap; }
+  .flow { display: flex; align-items: stretch; gap: 3mm; width: 100%; }
+  .node { position: relative; flex: 1; min-height: 55mm; padding: 5mm; border: 1px solid #cbd6e7; border-radius: 4mm; background: #fff; box-shadow: 0 2mm 7mm rgba(32,56,89,.07); }
+  .node .num { display: grid; place-items: center; width: 8mm; height: 8mm; margin-bottom: 3mm; border-radius: 50%; color: white; background: #48617f; font-size: 9pt; font-weight: 800; }
+  .node p { color: #586a83; font-size: 9.5pt; }
+  .node.user { border-top: 2mm solid #e7a12c; }
+  .node.system { border-top: 2mm solid #18aa8c; }
+  .node.chain { border-top: 2mm solid #5369d4; }
+  .node.future { border: 1.2mm dashed #697bd2; background: #f4f5ff; }
+  .arrow { align-self: center; flex: 0 0 6mm; color: #8aa0bc; text-align: center; font-size: 20pt; }
+  .pain-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; margin-top: 7mm; }
+  .pain { min-height: 34mm; padding: 4mm; border-radius: 4mm; background: #fff3e2; border: 1px solid #f1d39f; }
+  .pain strong { display: block; margin-bottom: 2mm; color: #9a5e07; font-size: 10.5pt; }
+  .pain span { color: #765c34; font-size: 9pt; line-height: 1.45; }
+
+  .concept-grid { display: grid; grid-template-columns: 1fr 14mm 1fr; gap: 4mm; align-items: stretch; }
+  .concept-side { padding: 6mm; border-radius: 6mm; background: white; border: 1px solid #cad6e6; }
+  .concept-side.old { border-top: 2.5mm solid #d89a32; }
+  .concept-side.new { border-top: 2.5mm solid #16a88e; }
+  .concept-side h3 { font-size: 15pt; }
+  .concept-side > p { min-height: 14mm; margin-bottom: 4mm; color: #62738a; font-size: 9.3pt; }
+  .trust-path { display: flex; align-items: center; gap: 2mm; }
+  .trust-node { flex: 1; min-height: 32mm; padding: 3.5mm 2.5mm; border-radius: 3mm; display: flex; flex-direction: column; justify-content: center; text-align: center; background: #f2f5f9; color: #2f4664; font-size: 8.7pt; font-weight: 700; }
+  .trust-node small { display: block; margin-top: 1.5mm; color: #73839a; font-size: 7.6pt; font-weight: 500; line-height: 1.35; }
+  .old .trust-node.authority { color: #8b5809; background: #fff0cf; }
+  .new .trust-node.authority { color: #087a64; background: #dff7ef; }
+  .trust-arrow { flex: 0 0 4mm; color: #8ba0b9; text-align: center; font-size: 14pt; }
+  .authority-list { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 5mm; }
+  .authority-card { min-height: 29mm; padding: 3.5mm; border-radius: 3mm; background: #f7f9fc; border: 1px solid #d9e1ed; }
+  .authority-card b { display: block; margin-bottom: 1.5mm; font-size: 9pt; }
+  .authority-card span { display: block; color: #66778e; font-size: 8.2pt; line-height: 1.4; }
+  .versus { display: grid; place-items: center; color: #7d8da2; font-size: 22pt; font-weight: 300; }
+  .migration-strip { margin-top: 6mm; padding: 4.5mm 6mm; border-radius: 4mm; background: #102448; color: white; display: grid; grid-template-columns: 35mm 1fr; gap: 5mm; align-items: center; }
+  .migration-strip strong { color: #44d8bc; font-size: 11pt; }
+  .migration-strip span { color: #c9d6e7; font-size: 9.2pt; line-height: 1.45; }
+
+  .architecture { display: grid; grid-template-columns: 46mm 1fr 50mm; gap: 6mm; align-items: center; }
+  .actor-stack { display: grid; gap: 5mm; }
+  .actor { padding: 5mm; text-align: center; border-radius: 5mm; background: #102448; color: #fff; }
+  .actor small { display: block; margin-top: 1.5mm; color: #b9c8dc; font-size: 8.5pt; }
+  .backend { position: relative; padding: 6mm; border-radius: 6mm; background: #eaf8f5; border: 1px solid #b8e9df; }
+  .backend-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm; color: #0c755f; font-weight: 800; }
+  .backend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .service { min-height: 40mm; padding: 4mm; border-radius: 3mm; background: white; border: 1px solid #c4e9e1; }
+  .service b { display: block; margin-bottom: 2mm; font-size: 10pt; }
+  .service span { color: #586a83; font-size: 8.7pt; line-height: 1.45; }
+  .chain-box { padding: 5mm; border-radius: 5mm; background: #eef0ff; border: 1px solid #cbd0f6; text-align: center; }
+  .chain-box + .chain-box { margin-top: 5mm; }
+  .chain-box strong { color: #3e52bc; }
+  .chain-box small { display: block; margin-top: 2mm; color: #64708e; line-height: 1.4; }
+  .signal { margin: 6mm 0 0 52mm; padding: 4mm 6mm; border-radius: 4mm; color: #0c755f; background: #dff7ef; font-size: 10pt; }
+  .warning { margin-top: 5mm; padding: 4mm 5mm; border-radius: 4mm; background: #fff4dc; border-left: 2mm solid #e8a229; color: #795318; font-size: 9.5pt; }
+
+  .lane-wrap { display: grid; grid-template-columns: 34mm 1fr; border: 1px solid #ccd7e7; border-radius: 5mm; overflow: hidden; background: #fff; }
+  .lane-labels { background: #102448; color: white; }
+  .lane-label { height: 29mm; padding: 9mm 4mm; border-bottom: 1px solid rgba(255,255,255,.12); font-size: 10pt; font-weight: 700; }
+  .lane-label:last-child { border-bottom: 0; }
+  .lanes { position: relative; }
+  .lane { height: 29mm; display: flex; align-items: center; gap: 4mm; padding: 4mm; border-bottom: 1px solid #e3e9f2; }
+  .lane:last-child { border-bottom: 0; }
+  .pill { flex: 1; padding: 3mm; border-radius: 3mm; text-align: center; font-size: 9pt; font-weight: 700; background: #eff3f8; color: #39506d; }
+  .pill.user { background: #fff0cf; color: #8d5907; }
+  .pill.auto { background: #dff7ef; color: #087a64; }
+  .pill.proof { background: #e6e9ff; color: #3f51b4; }
+  .pill.gas { background: #fee6e9; color: #a73342; }
+  .small-arrow { color: #94a5ba; font-size: 14pt; }
+  .target-note { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; margin-top: 6mm; }
+  .note-card { padding: 4mm; border-radius: 4mm; border: 1px solid #cdd8e7; background: white; }
+  .note-card strong { display: block; margin-bottom: 1.5mm; font-size: 10pt; }
+  .note-card p { color: #65758c; font-size: 8.7pt; }
+
+  table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border: 1px solid #cbd6e7; border-radius: 4mm; background: white; font-size: 9.2pt; }
+  th, td { padding: 3.2mm 4mm; border-right: 1px solid #dfe6ef; border-bottom: 1px solid #dfe6ef; vertical-align: top; line-height: 1.4; }
+  th:last-child, td:last-child { border-right: 0; }
+  tr:last-child td { border-bottom: 0; }
+  th { color: #fff; background: #102448; text-align: left; font-size: 9.7pt; }
+  th.old { background: #7f5b23; }
+  th.current { background: #0f816c; }
+  th.target { background: #4b5fc4; }
+  td:first-child { width: 35mm; color: #2e425f; font-weight: 700; background: #f6f8fb; }
+  .gas-map { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-top: 6mm; }
+  .gas-card { padding: 5mm; border-radius: 4mm; background: white; border: 1px solid #ced9e8; }
+  .gas-card h3 { color: #102448; }
+  .meter { height: 7mm; margin: 3mm 0; border-radius: 99px; background: #edf1f6; overflow: hidden; }
+  .meter span { display: block; height: 100%; border-radius: inherit; }
+  .meter.setup span { width: 83%; background: linear-gradient(90deg, #5369d4, #7b8deb); }
+  .meter.transfer span { width: 45%; background: linear-gradient(90deg, #16a88e, #53d2ba); }
+  .gas-card p { color: #64758c; font-size: 9pt; }
+
+  .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; }
+  .status-col { min-height: 125mm; padding: 5mm; border-radius: 5mm; background: white; border: 1px solid #cad6e6; }
+  .status-col.done { border-top: 2.5mm solid #16a88e; }
+  .status-col.next { border-top: 2.5mm solid #5369d4; }
+  .status-col.gap { border-top: 2.5mm solid #d55766; }
+  .status-col h3 { font-size: 14pt; }
+  .checklist { margin: 4mm 0 0; padding: 0; list-style: none; }
+  .checklist li { position: relative; margin: 3mm 0; padding-left: 7mm; color: #52647e; font-size: 9.4pt; line-height: 1.45; }
+  .checklist li::before { position: absolute; left: 0; top: .2mm; width: 5mm; height: 5mm; border-radius: 50%; display: grid; place-items: center; color: white; font-size: 7pt; font-weight: 800; content: "✓"; background: #16a88e; }
+  .next .checklist li::before { content: "→"; background: #5369d4; }
+  .gap .checklist li::before { content: "!"; background: #d55766; }
+  .verdict { margin-top: 6mm; padding: 5mm 7mm; border-radius: 5mm; color: white; background: linear-gradient(90deg, #102448, #17405b); display: flex; align-items: center; justify-content: space-between; gap: 8mm; }
+  .verdict strong { font-size: 13pt; }
+  .verdict span { color: #c7d6e9; font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<section class="page navy" id="page-1">
+  <div class="eyebrow">TBC → HyperEVM Testnet Bridge</div>
+  <div class="hero-grid">
+    <div>
+      <h1>旧 Flow 与新 Flow<br>最终对比概览</h1>
+      <div class="rule"></div>
+      <p class="lead">这次改造包含两个不同层次：操作层由“用户逐步点击”升级为后台持续观察；协议层则由“custody + trusted minter”迁移到“proof-only Gateway 决定 mint”。</p>
+      <div style="margin-top:8mm;display:flex;gap:3mm;flex-wrap:wrap">
+        <span class="badge done">✓ 已完成：后台观察 + SSE</span>
+        <span class="badge manual">● 当前仍需：钱包签名</span>
+        <span class="badge next">→ 协议目标：Proof 决定 mint</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-card old">
+        <strong>旧 Flow</strong>
+        <div class="mini-step"><span class="dot">1</span>用户付款</div>
+        <div class="mini-step"><span class="dot">2</span>点击检查 / 继续</div>
+        <div class="mini-step"><span class="dot">3</span>等待 confirmations</div>
+        <div class="mini-step"><span class="dot">4</span>Trusted minter mint</div>
+      </div>
+      <div class="hero-arrow">→</div>
+      <div class="hero-card new">
+        <strong>新 Flow</strong>
+        <div class="mini-step"><span class="dot">1</span>用户发起一次</div>
+        <div class="mini-step"><span class="dot">2</span>后台自动观察</div>
+        <div class="mini-step"><span class="dot">3</span>SSE 推送进度</div>
+        <div class="mini-step"><span class="dot">4</span>Gateway 验 proof 后 mint</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>Project flow summary · Testnet scope</span><span>01 / 07</span></div>
+</section>
+
+<section class="page" id="page-2">
+  <div class="eyebrow">01 · Before</div>
+  <h2>旧 Flow：由用户和浏览器推动每一个阶段</h2>
+  <div class="legend"><span class="badge manual">橙色：用户动作</span><span class="badge done">绿色：系统处理</span><span class="badge next">紫色：链上确认</span></div>
+  <div class="flow">
+    <div class="node user"><div class="num">1</div><h3>创建 transfer</h3><p>用户连接 Turing Wallet 与 MetaMask，填写数量和接收地址。</p></div>
+    <div class="arrow">›</div>
+    <div class="node user"><div class="num">2</div><h3>签署 TBC 付款</h3><p>钱包产生并广播 source transaction，取得 TXID。</p></div>
+    <div class="arrow">›</div>
+    <div class="node user"><div class="num">3</div><h3>重复检查</h3><p>依赖页面操作、刷新或继续按钮，观察 deposit 与 confirmations。</p></div>
+    <div class="arrow">›</div>
+    <div class="node chain"><div class="num">4</div><h3>等待 6 confirmations</h3><p>浏览器调用 backend，再由 backend 查询 TBC API / TBCScan 数据。</p></div>
+    <div class="arrow">›</div>
+    <div class="node user"><div class="num">5</div><h3>Trusted minter mint</h3><p>由指定 minter 账户调用合约；learning UI 中可能体现为 MetaMask 确认。</p></div>
+    <div class="arrow">›</div>
+    <div class="node chain"><div class="num">6</div><h3>完成</h3><p>达到目标链确认门槛后，UI 显示 wrapped token 已收到。</p></div>
+  </div>
+  <div class="pain-row">
+    <div class="pain"><strong>浏览器依赖</strong><span>关闭页面或重新打开后，需要用户主动恢复与检查流程。</span></div>
+    <div class="pain"><strong>操作次数多</strong><span>等待期间需要多次按键，用户容易误以为流程停住。</span></div>
+    <div class="pain"><strong>重复提交风险</strong><span>状态不清楚时，用户可能重复开启钱包请求或重复操作。</span></div>
+    <div class="pain"><strong>体验不连续</strong><span>后台没有持续负责推进，UI 同时承担操作器与状态面板。</span></div>
+  </div>
+  <div class="footer"><span>旧 flow = custody + trusted authority + browser-driven orchestration</span><span>02 / 07</span></div>
+</section>
+
+<section class="page" id="page-3">
+  <div class="eyebrow">02 · Protocol concept change</div>
+  <h2>核心改变：从“信任 minter”转为“合约验证 proof”</h2>
+  <div class="concept-grid">
+    <div class="concept-side old">
+      <h3>旧 Concept：Custodial / trusted-minter bridge</h3>
+      <p>资产真实性与 mint 决策主要由 backend/operator 的 custody、API 检查和授权账户保证。</p>
+      <div class="trust-path">
+        <div class="trust-node">用户 TBC FT<small>发送到每笔订单的 custody address</small></div><div class="trust-arrow">›</div>
+        <div class="trust-node authority">Backend custody<small>持有/恢复加密 custody key，等待 confirmations</small></div><div class="trust-arrow">›</div>
+        <div class="trust-node authority">Trusted minter<small>off-chain 判断通过后调用 mint</small></div><div class="trust-arrow">›</div>
+        <div class="trust-node">BridgeWrappedFT<small>只检查 caller 是否为 minter</small></div>
+      </div>
+      <div class="authority-list">
+        <div class="authority-card"><b>Owner / Admin authority</b><span>可以暂停合约，并更换 minter；控制权属于 backend/operator 管理的角色账户。</span></div>
+        <div class="authority-card"><b>Contract 不验证 TBC proof</b><span>合约本身不知道 custody deposit 是否真实；它信任被授权 minter 的判断。</span></div>
+      </div>
+    </div>
+    <div class="versus">→</div>
+    <div class="concept-side new">
+      <h3>新 Concept：Proof-backed mint authorization</h3>
+      <p>Backend/relayer 只负责取得资料、构建 proof 和支付 gas；是否 mint 由 immutable Gateway rules 决定。</p>
+      <div class="trust-path">
+        <div class="trust-node">TBC v2 deposit<small>绑定 destination Gateway 与 reserve controller</small></div><div class="trust-arrow">›</div>
+        <div class="trust-node authority">Proof verifiers<small>headers、Merkle、transition、signature、prefix</small></div><div class="trust-arrow">›</div>
+        <div class="trust-node authority">Proof Gateway<small>验证全部 gates、finality 与 replay protection</small></div><div class="trust-arrow">›</div>
+        <div class="trust-node">WrappedFTV2<small>只有 Gateway 可以 mint</small></div>
+      </div>
+      <div class="authority-list">
+        <div class="authority-card"><b>没有 trusted minter</b><span>任何 relayer 都可以提交，但没有人能绕过 proof；relayer 是运输者，不是 mint authority。</span></div>
+        <div class="authority-card"><b>没有 owner / admin 后门</b><span>Gateway 与 WrappedFTV2 没有 alternate minter、暂停 key 或任意 mint 权限。</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="migration-strip"><strong>目前迁移状态</strong><span>旧 custodial flow 仍保留并服务现有 learning transfers；新的 proof-backed contracts 只是部分部署，尚未接管真实 mint。后台 polling + SSE 的完成代表“操作自动化”，不等于“trustless protocol 已上线”。旧 custody balances 也不会自动被当作 v2 proof-backed assets。</span></div>
+  <div class="footer"><span>Authority moves from a privileged account to immutable proof verification</span><span>03 / 07</span></div>
+</section>
+
+<section class="page" id="page-4">
+  <div class="eyebrow">02 · Current implementation</div>
+  <h2>新 Flow（已完成部分）：后台观察，UI 只显示进度</h2>
+  <div class="architecture">
+    <div class="actor-stack">
+      <div class="actor">用户 / Wallet<small>发起付款与必要签名</small></div>
+      <div class="actor">Bridge UI<small>读取快照、显示阶段</small></div>
+    </div>
+    <div class="backend">
+      <div class="backend-title"><span>Backend automation</span><span class="badge done">已运行</span></div>
+      <div class="backend-grid">
+        <div class="service"><b>TXID 持久化</b><span>钱包返回 TXID 后立即写入 PostgreSQL；页面或 backend 重启后可继续。</span></div>
+        <div class="service"><b>TBC observer</b><span>每 60 秒检查 source transaction、区块与 confirmations。</span></div>
+        <div class="service"><b>HyperEVM observer</b><span>每约 12 秒检查已经提交的 transaction receipt 与 confirmations。</span></div>
+        <div class="service"><b>PostgreSQL</b><span>作为唯一事实来源，保存 order、TXID、状态与检查时间。</span></div>
+        <div class="service"><b>SSE progress</b><span>认证后的单向事件流；只通知“状态改变”，不会把事件当成事实。</span></div>
+        <div class="service"><b>REST snapshot</b><span>UI 收到 SSE 后重新读取并验证完整快照，也可断线重连。</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="chain-box"><strong>TBC Testnet</strong><small>API / TBCScan operational data<br>confirmation observation</small></div>
+      <div class="chain-box"><strong>HyperEVM Testnet</strong><small>RPC receipt observation<br>chain ID 998</small></div>
+    </div>
+  </div>
+  <div class="signal"><strong>SSE 取代 WebSocket：</strong>这里主要是 server → browser 的进度通知，SSE 更简单；网络断开后自动重连，真正状态仍从 REST + PostgreSQL 读取。</div>
+  <div class="warning"><strong>重要边界：</strong>这一页是操作层自动化，尚未改变旧 custodial 合约的信任模型。目前 worker 只观察与 reconciliation，不会持有私钥、签名、重试或广播交易；现有 trusted-minter mint 仍要明确钱包确认。</div>
+  <div class="footer"><span>新 flow（current）= durable background observation</span><span>04 / 07</span></div>
+</section>
+
+<section class="page" id="page-5">
+  <div class="eyebrow">03 · Target</div>
+  <h2>新 Flow（目标形态）：用户付款一次，系统自动完成 proof-backed mint</h2>
+  <div class="lane-wrap">
+    <div class="lane-labels">
+      <div class="lane-label">用户</div>
+      <div class="lane-label">后台</div>
+      <div class="lane-label">Proof / Relayer</div>
+      <div class="lane-label">链上</div>
+    </div>
+    <div class="lanes">
+      <div class="lane"><div class="pill user">创建 transfer</div><span class="small-arrow">→</span><div class="pill user">签署一笔 TBC deposit</div><span class="small-arrow">→</span><div class="pill">只查看实时进度</div></div>
+      <div class="lane"><div class="pill auto">保存 TXID</div><span class="small-arrow">→</span><div class="pill auto">每 60 秒观察 TBC</div><span class="small-arrow">→</span><div class="pill auto">SSE 更新 UI</div></div>
+      <div class="lane"><div class="pill proof">同步 / relay headers</div><span class="small-arrow">→</span><div class="pill proof">建立 Merkle + FT proof</div><span class="small-arrow">→</span><div class="pill proof">eth_call 模拟后提交 Gateway</div></div>
+      <div class="lane"><div class="pill">TBC 达到确认门槛</div><span class="small-arrow">→</span><div class="pill gas">Operator 支付 EVM gas</div><span class="small-arrow">→</span><div class="pill">Gateway mint wrapped FT</div></div>
+    </div>
+  </div>
+  <div class="target-note">
+    <div class="note-card"><strong>一次性管理员 setup</strong><p>部署 input-signature verifier、prefix verifier 与 Gateway；Gateway 绑定所有 verifier 的 runtime codehash，并建立 wrapped token。</p></div>
+    <div class="note-card"><strong>持续运行的 operator</strong><p>专用 relayer 账户负责 header relay 与 Gateway transaction；需要独立 Testnet HYPE、nonce 管理、限额和安全签名器。</p></div>
+    <div class="note-card"><strong>用户体验</strong><p>普通用户不再逐步部署 verifier，也不重复按“继续”；只签 source deposit，然后观察每个阶段。</p></div>
+  </div>
+  <div class="warning"><strong>当前状态：</strong>relay、finalized-inclusion verifier、transition verifier 已部署；signature verifier、prefix verifier 与 Gateway 尚未完成公开 Testnet 部署，所以本页是下一阶段目标，不代表已经上线。</div>
+  <div class="footer"><span>目标 flow = proof builder + funded operator relayer + Gateway</span><span>05 / 07</span></div>
+</section>
+
+<section class="page" id="page-6">
+  <div class="eyebrow">04 · Difference map</div>
+  <h2>三种状态对比：旧 Flow、目前新 Flow、最终目标</h2>
+  <table>
+    <thead><tr><th>比较项目</th><th class="old">旧 Flow</th><th class="current">目前新 Flow</th><th class="target">完成 Relayer 后</th></tr></thead>
+    <tbody>
+      <tr><td>用户操作</td><td>逐步点击、刷新、继续，并确认 mint。</td><td>签 TBC 付款；后台自动观察，但当前 mint 仍需 MetaMask。</td><td>正常用户只签 TBC deposit；其余由后台推进。</td></tr>
+      <tr><td>流程驱动者</td><td>浏览器页面和用户。</td><td>PostgreSQL + background worker。</td><td>状态机 + proof builder + operator relayer。</td></tr>
+      <tr><td>进度更新</td><td>用户主动刷新或按检查。</td><td>SSE 通知 UI，再读取 REST 快照。</td><td>SSE 显示 header、proof、submit、confirmation、mint。</td></tr>
+      <tr><td>重启恢复</td><td>较依赖浏览器上下文。</td><td>TXID 与状态已持久化，可在重启后恢复。</td><td>relayer job / nonce / transaction 也必须可恢复。</td></tr>
+      <tr><td>EVM gas payer</td><td>用户 MetaMask。</td><td>当前 custodial mint 仍由用户账户承担。</td><td>operator relayer 先支付，可再通过 bridge fee 回收。</td></tr>
+      <tr><td>信任模型</td><td>Custody + trusted minter；owner 可暂停及更换 minter，合约不验证 TBC proof。</td><td>观察已自动化，但真实 mint 仍走旧 trusted-minter 权限路线。</td><td>无 owner / alternate minter；Gateway 在 EVM 验证 header、Merkle、transition、signature、prefix 与 replay。</td></tr>
+    </tbody>
+  </table>
+  <div class="gas-map">
+    <div class="gas-card"><h3>一次性 setup gas</h3><div class="meter setup"><span></span></div><p>部署 verifier 与 Gateway 的费用只发生在管理员 setup，不会让每个 bridge 用户重复支付。由于 HyperEVM Testnet block gas limit 为 3,000,000，各组件需要分开部署。</p></div>
+    <div class="gas-card"><h3>每次 transfer gas</h3><div class="meter transfer"><span></span></div><p>仍存在 source network fee、必要的 header relay 与 Gateway mint gas。自动化不会令 gas 消失，而是减少重复动作、共享 header 成本，并把 gas payer 改为 operator。</p></div>
+  </div>
+  <div class="footer"><span>Automation changes orchestration; Gateway changes mint authority</span><span>06 / 07</span></div>
+</section>
+
+<section class="page" id="page-7">
+  <div class="eyebrow">05 · Final status</div>
+  <h2>完成范围、下一步与 Production 边界</h2>
+  <div class="status-grid">
+    <div class="status-col done">
+      <h3>✓ 已完成</h3>
+      <ul class="checklist">
+        <li>保存 source TXID 与 settlement 状态</li>
+        <li>后台每 60 秒检查 TBC confirmations</li>
+        <li>后台每约 12 秒检查 HyperEVM receipts</li>
+        <li>认证 SSE + heartbeat + 自动重连</li>
+        <li>UI 收到通知后重新读取可信 REST 快照</li>
+        <li>worker 不签名、不广播、不保存私钥</li>
+        <li>Phase 1–3 本地与容器测试通过</li>
+      </ul>
+    </div>
+    <div class="status-col next">
+      <h3>→ Testnet 下一步</h3>
+      <ul class="checklist">
+        <li>补充 Testnet HYPE，仅用于一次性部署和 relayer</li>
+        <li>部署 signature verifier</li>
+        <li>部署 prefix verifier</li>
+        <li>部署并校验 Gateway / wrapped token</li>
+        <li>建立安全 operator signer 与 spending cap</li>
+        <li>启动 header relayer 与 proof job</li>
+        <li>用真实 TBC Testnet TXID 跑完整 mint</li>
+        <li>记录 gas、失败恢复和重复提交保护</li>
+      </ul>
+    </div>
+    <div class="status-col gap">
+      <h3>! Production 仍未解决</h3>
+      <ul class="checklist">
+        <li>TBC API / TBCScan 的 unspent 状态只是 operational evidence</li>
+        <li>目前没有 EVM 可验证的 cryptographic unspent proof</li>
+        <li>需要独立 Solidity、TBC Script 与 consensus security review</li>
+        <li>需要更大规模 fuzz、competing branch 与 reorg vectors</li>
+        <li>需要根据真实网络风险决定 confirmation policy</li>
+        <li>完成以上项目之前，不应称为 production-trustless bridge</li>
+      </ul>
+    </div>
+  </div>
+  <div class="verdict"><strong>结论：操作自动化已完成；协议去信任仍在迁移。</strong><span>下一阶段的重点不是再加按钮，而是让 proof-only Gateway 真正取代 trusted-minter mint，并用一笔真实 Testnet deposit 证明端到端流程。</span></div>
+  <div class="footer"><span>Prepared from the repository’s current Phase 3 implementation</span><span>07 / 07</span></div>
+</section>
+
+</body>
+</html>
