@@ -143,6 +143,18 @@
   .verdict { margin-top: 6mm; padding: 5mm 7mm; border-radius: 5mm; color: white; background: linear-gradient(90deg, #102448, #17405b); display: flex; align-items: center; justify-content: space-between; gap: 8mm; }
   .verdict strong { font-size: 13pt; }
   .verdict span { color: #c7d6e9; font-size: 9.5pt; }
+  .evidence-head { display: grid; grid-template-columns: 1.1fr .9fr; gap: 6mm; margin-bottom: 6mm; }
+  .evidence-card { padding: 5mm; border-radius: 5mm; background: white; border: 1px solid #cad6e6; }
+  .evidence-card strong { display: block; margin-bottom: 2mm; color: #102448; font-size: 11pt; }
+  .evidence-card p { color: #5d6f87; font-size: 9pt; }
+  .txid { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.2pt; color: #31506f; }
+  .timeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3mm; margin-top: 6mm; }
+  .milestone { position: relative; min-height: 56mm; padding: 4mm; border-radius: 4mm; background: white; border: 1px solid #cdd8e7; }
+  .milestone.done { border-top: 2mm solid #16a88e; }
+  .milestone.active { border-top: 2mm solid #e7a12c; background: #fffaf0; }
+  .milestone.wait { border-top: 2mm solid #5369d4; background: #f6f7ff; }
+  .milestone b { display: block; margin: 2mm 0; font-size: 10pt; }
+  .milestone p { color: #62738a; font-size: 8.3pt; line-height: 1.42; }
 </style>
 </head>
 <body>
@@ -153,11 +165,12 @@
     <div>
       <h1>旧 Flow 与新 Flow<br>最终对比概览</h1>
       <div class="rule"></div>
-      <p class="lead">这次改造包含两个不同层次：操作层由“用户逐步点击”升级为后台持续观察；协议层则由“custody + trusted minter”迁移到“proof-only Gateway 决定 mint”。</p>
+      <p class="lead">这次改造包含两个不同层次：操作层由“用户逐步点击”升级为后台持续观察；协议层则由“custody + trusted minter”迁移到“proof-only Gateway 决定 mint”。公开 Testnet-v2 合约已部署，并已发出第一笔真实 Bridge Covenant deposit。</p>
       <div style="margin-top:8mm;display:flex;gap:3mm;flex-wrap:wrap">
-        <span class="badge done">✓ 已完成：后台观察 + SSE</span>
-        <span class="badge manual">● 当前仍需：钱包签名</span>
-        <span class="badge next">→ 协议目标：Proof 决定 mint</span>
+        <span class="badge done">✓ 合约部署 + Header 840040</span>
+        <span class="badge done">✓ 真实 100 MT v2 deposit</span>
+        <span class="badge manual">● 当前：Pending / 0 confirmations</span>
+        <span class="badge next">→ 下一步：finalized proof + mint</span>
       </div>
     </div>
     <div class="hero-visual">
@@ -178,7 +191,7 @@
       </div>
     </div>
   </div>
-  <div class="footer"><span>Project flow summary · Testnet scope</span><span>01 / 07</span></div>
+  <div class="footer"><span>Project flow summary · Testnet scope · Updated 2026-11-06</span><span>01 / 08</span></div>
 </section>
 
 <section class="page" id="page-2">
@@ -204,7 +217,7 @@
     <div class="pain"><strong>重复提交风险</strong><span>状态不清楚时，用户可能重复开启钱包请求或重复操作。</span></div>
     <div class="pain"><strong>体验不连续</strong><span>后台没有持续负责推进，UI 同时承担操作器与状态面板。</span></div>
   </div>
-  <div class="footer"><span>旧 flow = custody + trusted authority + browser-driven orchestration</span><span>02 / 07</span></div>
+  <div class="footer"><span>旧 flow = custody + trusted authority + browser-driven orchestration</span><span>02 / 08</span></div>
 </section>
 
 <section class="page" id="page-3">
@@ -241,8 +254,8 @@
       </div>
     </div>
   </div>
-  <div class="migration-strip"><strong>目前迁移状态</strong><span>旧 custodial flow 仍保留并服务现有 learning transfers；新的 proof-backed contracts 只是部分部署，尚未接管真实 mint。后台 polling + SSE 的完成代表“操作自动化”，不等于“trustless protocol 已上线”。旧 custody balances 也不会自动被当作 v2 proof-backed assets。</span></div>
-  <div class="footer"><span>Authority moves from a privileged account to immutable proof verification</span><span>03 / 07</span></div>
+  <div class="migration-strip"><strong>目前迁移状态</strong><span>旧 custodial flow 仍保留并服务既有 learning receipts；新的 proof-backed Testnet-v2 verifier、Gateway 与 wrapped token 已全部部署。第一笔 100 MT Bridge Covenant deposit 已由 Turing Wallet 签名并广播，但仍须完成入块、6 confirmations、header relay、Merkle/FT proof 与 Gateway mint，才算端到端完成。</span></div>
+  <div class="footer"><span>Authority moves from a privileged account to immutable proof verification</span><span>03 / 08</span></div>
 </section>
 
 <section class="page" id="page-4">
@@ -271,7 +284,7 @@
   </div>
   <div class="signal"><strong>SSE 取代 WebSocket：</strong>这里主要是 server → browser 的进度通知，SSE 更简单；网络断开后自动重连，真正状态仍从 REST + PostgreSQL 读取。</div>
   <div class="warning"><strong>重要边界：</strong>这一页是操作层自动化，尚未改变旧 custodial 合约的信任模型。目前 worker 只观察与 reconciliation，不会持有私钥、签名、重试或广播交易；现有 trusted-minter mint 仍要明确钱包确认。</div>
-  <div class="footer"><span>新 flow（current）= durable background observation</span><span>04 / 07</span></div>
+  <div class="footer"><span>新 flow（current）= durable background observation</span><span>04 / 08</span></div>
 </section>
 
 <section class="page" id="page-5">
@@ -296,8 +309,8 @@
     <div class="note-card"><strong>持续运行的 operator</strong><p>专用 relayer 账户负责 header relay 与 Gateway transaction；需要独立 Testnet HYPE、nonce 管理、限额和安全签名器。</p></div>
     <div class="note-card"><strong>用户体验</strong><p>普通用户不再逐步部署 verifier，也不重复按“继续”；只签 source deposit，然后观察每个阶段。</p></div>
   </div>
-  <div class="warning"><strong>当前状态：</strong>relay、finalized-inclusion verifier、transition verifier 已部署；signature verifier、prefix verifier 与 Gateway 尚未完成公开 Testnet 部署，所以本页是下一阶段目标，不代表已经上线。</div>
-  <div class="footer"><span>目标 flow = proof builder + funded operator relayer + Gateway</span><span>05 / 07</span></div>
+  <div class="warning"><strong>当前状态：</strong>全部 Testnet-v2 verifier、Header Relay、Gateway 与 Wrapped Token 已部署并校验；Header 840040 已 relay。第一笔真实 deposit 已广播，但自动 relayer/proof job 尚未接管，因此 confirmations 后的 headers 与第一次 Gateway mint 仍待执行。</div>
+  <div class="footer"><span>Target flow = proof builder + funded operator relayer + Gateway</span><span>05 / 08</span></div>
 </section>
 
 <section class="page" id="page-6">
@@ -306,19 +319,19 @@
   <table>
     <thead><tr><th>比较项目</th><th class="old">旧 Flow</th><th class="current">目前新 Flow</th><th class="target">完成 Relayer 后</th></tr></thead>
     <tbody>
-      <tr><td>用户操作</td><td>逐步点击、刷新、继续，并确认 mint。</td><td>签 TBC 付款；后台自动观察，但当前 mint 仍需 MetaMask。</td><td>正常用户只签 TBC deposit；其余由后台推进。</td></tr>
-      <tr><td>流程驱动者</td><td>浏览器页面和用户。</td><td>PostgreSQL + background worker。</td><td>状态机 + proof builder + operator relayer。</td></tr>
+      <tr><td>用户操作</td><td>逐步点击、刷新、继续，并确认 trusted-minter mint。</td><td>Review unsigned Covenant → Turing Wallet 签名 → 明确 Submit；header relay 仍由 MetaMask 执行。</td><td>正常用户只签 TBC deposit；其余由后台 operator 推进。</td></tr>
+      <tr><td>流程驱动者</td><td>浏览器页面和用户。</td><td>安全边界已建立；当前真实 Testnet run 仍由 UI 协调关键签名。</td><td>持久化状态机 + proof builder + operator relayer。</td></tr>
       <tr><td>进度更新</td><td>用户主动刷新或按检查。</td><td>SSE 通知 UI，再读取 REST 快照。</td><td>SSE 显示 header、proof、submit、confirmation、mint。</td></tr>
       <tr><td>重启恢复</td><td>较依赖浏览器上下文。</td><td>TXID 与状态已持久化，可在重启后恢复。</td><td>relayer job / nonce / transaction 也必须可恢复。</td></tr>
-      <tr><td>EVM gas payer</td><td>用户 MetaMask。</td><td>当前 custodial mint 仍由用户账户承担。</td><td>operator relayer 先支付，可再通过 bridge fee 回收。</td></tr>
-      <tr><td>信任模型</td><td>Custody + trusted minter；owner 可暂停及更换 minter，合约不验证 TBC proof。</td><td>观察已自动化，但真实 mint 仍走旧 trusted-minter 权限路线。</td><td>无 owner / alternate minter；Gateway 在 EVM 验证 header、Merkle、transition、signature、prefix 与 replay。</td></tr>
+      <tr><td>EVM gas payer</td><td>用户 MetaMask。</td><td>部署与 Header 840040 由测试账户支付；后续 headers/mint 仍需 Testnet HYPE。</td><td>operator relayer 先支付，可再通过 bridge fee 回收。</td></tr>
+      <tr><td>信任模型</td><td>Custody + trusted minter；owner 可暂停及更换 minter，合约不验证 TBC proof。</td><td>新 deposit 已绑定 Gateway/recipient/controller；最终 mint 尚未发生，但不再交给 trusted minter 决策。</td><td>无 owner / alternate minter；Gateway 在 EVM 验证 header、Merkle、transition、signature、prefix 与 replay。</td></tr>
     </tbody>
   </table>
   <div class="gas-map">
     <div class="gas-card"><h3>一次性 setup gas</h3><div class="meter setup"><span></span></div><p>部署 verifier 与 Gateway 的费用只发生在管理员 setup，不会让每个 bridge 用户重复支付。由于 HyperEVM Testnet block gas limit 为 3,000,000，各组件需要分开部署。</p></div>
     <div class="gas-card"><h3>每次 transfer gas</h3><div class="meter transfer"><span></span></div><p>仍存在 source network fee、必要的 header relay 与 Gateway mint gas。自动化不会令 gas 消失，而是减少重复动作、共享 header 成本，并把 gas payer 改为 operator。</p></div>
   </div>
-  <div class="footer"><span>Automation changes orchestration; Gateway changes mint authority</span><span>06 / 07</span></div>
+  <div class="footer"><span>Automation changes orchestration; Gateway changes mint authority</span><span>06 / 08</span></div>
 </section>
 
 <section class="page" id="page-7">
@@ -334,20 +347,23 @@
         <li>认证 SSE + heartbeat + 自动重连</li>
         <li>UI 收到通知后重新读取可信 REST 快照</li>
         <li>worker 不签名、不广播、不保存私钥</li>
-        <li>Phase 1–3 本地与容器测试通过</li>
+        <li>全部 Testnet-v2 verifier、Gateway、Wrapped Token 已部署</li>
+        <li>Checkpoint 840039 与 Header 840040 已验证 / relay</li>
+        <li>真实 100 MT Covenant deposit 已签名、proof-check、广播</li>
+        <li>Phase 2 tests 9/9、Phase 3 tests 4/4 通过</li>
       </ul>
     </div>
     <div class="status-col next">
       <h3>→ Testnet 下一步</h3>
       <ul class="checklist">
-        <li>补充 Testnet HYPE，仅用于一次性部署和 relayer</li>
-        <li>部署 signature verifier</li>
-        <li>部署 prefix verifier</li>
-        <li>部署并校验 Gateway / wrapped token</li>
-        <li>建立安全 operator signer 与 spending cap</li>
-        <li>启动 header relayer 与 proof job</li>
-        <li>用真实 TBC Testnet TXID 跑完整 mint</li>
-        <li>记录 gas、失败恢复和重复提交保护</li>
+        <li>等待真实 deposit 入块并达到 6 confirmations</li>
+        <li>从 840041 顺序 relay 至 deposit block + 5</li>
+        <li>建立该 TXID 的 Merkle branch 与完整 FT proof</li>
+        <li>eth_call 模拟 Gateway proof submission</li>
+        <li>提交第一次真实 proof-backed 100 wMT mint</li>
+        <li>补充 Testnet HYPE 支付后续 relay / mint gas</li>
+        <li>将当前手动 relayer 升级为安全 operator job</li>
+        <li>持久化 v2 job、nonce 与 uncertain submission recovery</li>
       </ul>
     </div>
     <div class="status-col gap">
@@ -362,8 +378,26 @@
       </ul>
     </div>
   </div>
-  <div class="verdict"><strong>结论：操作自动化已完成；协议去信任仍在迁移。</strong><span>下一阶段的重点不是再加按钮，而是让 proof-only Gateway 真正取代 trusted-minter mint，并用一笔真实 Testnet deposit 证明端到端流程。</span></div>
-  <div class="footer"><span>Prepared from the repository’s current Phase 3 implementation</span><span>07 / 07</span></div>
+  <div class="verdict"><strong>结论：v2 deposit 已真实执行；proof-backed mint 尚未完成。</strong><span>下一阶段以 TXID 96f0…1caa 为唯一对象，完成 finality、header relay、Merkle/FT proof 与 Gateway mint；在链上 mint 成功前不能宣称端到端完成。</span></div>
+  <div class="footer"><span>Prepared from the repository’s current Phase 3 implementation</span><span>07 / 08</span></div>
+</section>
+
+<section class="page" id="page-8">
+  <div class="eyebrow">06 · Live Testnet evidence · 2026-11-06</div>
+  <h2>第一次真实 v2 执行：已经走到哪里？</h2>
+  <div class="evidence-head">
+    <div class="evidence-card"><strong>真实 TBC Testnet deposit</strong><p class="txid">TXID<br>96f0d0a76ba406a684537469a269e70a7584a917bb37c9ff7de68ae64aed1caa</p><p style="margin-top:2mm">Version 10 · 5,608 bytes · 100 MT（raw 1,000）· source fee 0.000552 TBC</p></div>
+    <div class="evidence-card"><strong>绑定的目标</strong><p>HyperEVM chain ID 998<br>Recipient 0x8221…20432<br>Gateway 0x6C7D…dFa4d<br>Reserve controller 77fd…41cd</p></div>
+  </div>
+  <div class="timeline">
+    <div class="milestone done"><span class="badge done">完成</span><b>1 · 合约 setup</b><p>Relay、finalized、transition、signature、prefix、Gateway 与 wrapped token 已部署并核对绑定。</p></div>
+    <div class="milestone done"><span class="badge done">完成</span><b>2 · Header bootstrap</b><p>Checkpoint 840039 已固化；TBC Header 840040 已成功 relay 到 HyperEVM。</p></div>
+    <div class="milestone done"><span class="badge done">完成</span><b>3 · Covenant deposit</b><p>Unsigned review、Turing Wallet ALL|FORKID signatures、local script/proof verification 与单次广播均成功。</p></div>
+    <div class="milestone active"><span class="badge manual">进行中</span><b>4 · TBC finality</b><p>API 已接受交易；更新时状态为 Pending / 0 confirmations。等待入块与 6 confirmations。</p></div>
+    <div class="milestone wait"><span class="badge next">待执行</span><b>5 · Proof-backed mint</b><p>顺序 relay headers → Merkle/FT proof → Gateway simulation → mint 100 wMT → 验证 receipt。</p></div>
+  </div>
+  <div class="warning"><strong>不要混淆：</strong>“deposit 已广播”不是“bridge 已完成”。只有 Gateway 在 HyperEVM 上验证 finalized inclusion、authenticated transition、input signature、prefix 与 replay protection，并成功 mint 100 wMT，才算第一次端到端 Testnet flow 完成。</div>
+  <div class="footer"><span>Live evidence snapshot · Pending state may advance after this PDF was generated</span><span>08 / 08</span></div>
 </section>
 
 </body>
