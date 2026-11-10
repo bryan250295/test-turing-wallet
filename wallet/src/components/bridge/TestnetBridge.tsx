@@ -10,7 +10,7 @@ import { BRIDGE_DESTINATIONS } from '../../../../shared/src/config/bridgeRoutes'
 import { formatHypeBalance } from '../../services/evmWallet';
 import { formatDateTime } from '../../utils/dateTime';
 import { formatTokenBalance } from '../../utils/tokenAmounts';
-import ProofBridgeTestnetSetup from './ProofBridgeTestnetSetup';
+import ProofBridgeTestnetV3Setup from './ProofBridgeTestnetV3Setup';
 
 export default function TestnetBridge({ session, active }: WalletPageProps & { active: boolean }) {
 	const [params, setParams] = useSearchParams();
@@ -33,7 +33,7 @@ export default function TestnetBridge({ session, active }: WalletPageProps & { a
 		<header className="history-titlebar">
 			<div>
 				<h2 id="testnet-bridge-title">Transfer tokens</h2>
-				<p className="intro">Send a TBC token to HyperEVM or return wrapped tokens to TBC. Follow one step at a time.</p>
+				<p className="intro">Send a TBC token to HyperEVM or return wrapped tokens to TBC. After one source-wallet signature, live progress continues automatically.</p>
 			</div>
 			<span className="network-pill">Test networks only</span>
 		</header>
@@ -107,6 +107,6 @@ export default function TestnetBridge({ session, active }: WalletPageProps & { a
 		<BridgeDeploymentPreview key={ft.verified?.contractId ?? 'no-token'} session={session} evm={evm} asset={ft.verified} active={active && !ft.loading} />
 		</details>}
 		<BridgeOrders session={session} evm={evm} asset={ft.verified} active={active} direction={direction} onReturn={() => chooseDirection('return')} />
-		<ProofBridgeTestnetSetup session={session} evm={evm} active={active} />
+		{direction === 'forward' && <ProofBridgeTestnetV3Setup session={session} evm={evm} active={active} />}
 	</section>;
 }

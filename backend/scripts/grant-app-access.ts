@@ -48,6 +48,9 @@ async function main() {
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "redemption_escrow_deployments" TO "${user}"`);
 			await tx.$executeRawUnsafe(`REVOKE UPDATE ON "redemption_escrow_deployments" FROM "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "txHash", "contractAddress", "confirmations", "receiptBlockHash", "receiptBlockNumber", "actualFeeWei", "runtimeCodeHash", "verifiedAt", "checkedAt", "lastError", "updatedAt") ON "redemption_escrow_deployments" TO "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "proof_bridge_routes", "proof_bridge_transfers" TO "${user}"`);
+			await tx.$executeRawUnsafe(`REVOKE UPDATE, DELETE ON "proof_bridge_routes", "proof_bridge_transfers" FROM "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "blockHash", "blockHeight", "transactionIndex", "transactionCount", "merkleSiblings", "sourceConfirmations", "relayHeight", "relayPendingHeight", "relayPendingTxHash", "relayPendingRaw", "relayPendingNonce", "mintTxHash", "mintRawTransaction", "mintNonce", "mintBlockNumber", "mintConfirmations", "mintGasUsed", "mintFeeWei", "checkedAt", "completedAt", "lastError", "failureCount", "updatedAt") ON "proof_bridge_transfers" TO "${user}"`);
 		});
 		console.log('Application database privileges applied. Schema migrations and import ledgers remain restricted.');
 	} finally { await db.$disconnect(); }

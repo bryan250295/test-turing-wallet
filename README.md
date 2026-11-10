@@ -14,9 +14,11 @@ Open `http://localhost:5173`. Subsequent starts use `docker compose up`.
 React TypeScript lives in `wallet/`, NestJS in `backend/`, shared types/helpers
 in `shared/`, and PostgreSQL runs in Docker with a persistent volume.
 
-Setup preserves the existing HTLC key and prepares a separate bridge custody
-encryption key. Keep backups of the database and both `.secrets/htlc.key` and
-`.secrets/bridge-custody.key`; keys are excluded from Git and Docker images.
+Setup preserves the existing HTLC key and prepares separate bridge-custody and
+Testnet-v3 relayer keys. Keep backups of the database, `.secrets/htlc.key`,
+`.secrets/bridge-custody.key` and `.secrets/phase3-relayer.key`; keys are
+excluded from Git and Docker images. The relayer address shown in the V3 UI
+must hold Testnet HYPE before it can relay headers and submit proof mints.
 The learning bridge supports verified deployments, prepared orders, explicit
 payment details, FT deposit verification and wallet-confirmed unpause/mint calls.
 Funding and minting require the user's wallet actions; they never start on refresh.
@@ -28,22 +30,25 @@ remaining acceptance limits and reverse-redemption options are recorded in
 See [setup, authentication, migration and backups / 启动与迁移](docs/backend-architecture.md),
 [backend modules](backend/README.md), and [wallet usage](wallet/README.md).
 
-The proof-oriented v2 bridge has an accepted
+The proof-oriented bridge has an accepted
 [Phase 0 protocol baseline](docs/tbc-hyperevm-bridge-v2-phase-0.md), an isolated,
 read-only [Phase 1 API proof builder](docs/tbc-hyperevm-bridge-v2-phase-1.md), and
 the offline [Phase 2 Covenant and legacy-FT proof](docs/tbc-hyperevm-bridge-v2-phase-2.md)
 for the `tbcdev` route. [Phase 3A–D Solidity verification work](docs/tbc-hyperevm-bridge-v2-phase-3.md)
-now reproduces the real header, PoW, DAA, Merkle and frozen 8,065-point bootstrap
+reproduces the real header, PoW, DAA, Merkle and frozen 8,065-point bootstrap
 commitment vectors, plus the bounded version-10 TXID and pinned v3 Covenant
 output envelope, bound parents, exact one-level FT ancestor set and committed
 `ALL|FORKID` FT/native input signatures through read-only HyperEVM Testnet EVM
-calls. The executable
-route is hard-locked to Testnet and contains no Mainnet provider path. The
-permissionless header-relay core is implemented but not deployed or audited;
-complete legacy FT Script execution, replay protection and the proof-backed
-mint gateway remain incomplete. The bounded parent/outpoint, FT/native
-conservation, ancestor-authentication and owner-signature layers are
-implemented but are not a substitute for Script execution.
+calls. Testnet-v3 adds a freshly finalized checkpoint, permissionless header
+relay, complete bounded legacy-FT Script/input-signature verification, replay
+protection and a proof-only mint Gateway. Its backend operator only transports
+headers and proofs; it is not an owner or trusted minter. After one Turing Wallet
+signature, the backend submits that exact source transaction once, checks TBC
+once per minute, relays only required headers, submits the proof mint and waits
+for six HyperEVM confirmations while the page receives WebSocket progress.
+The executable route is hard-locked to Testnet and contains no Mainnet provider
+path. Testnet-v3 is still experimental, not audited, and does not claim a
+production cryptographic unspent proof or production-ready bridge status.
 This work does not install TBCNODE or modify the running custodial Learning Bridge.
 
 `STUDY2.md` is teacher-provided, read-only source material.

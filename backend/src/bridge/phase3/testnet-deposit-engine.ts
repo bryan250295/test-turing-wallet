@@ -4,7 +4,6 @@ import tbc from 'tbc-lib-js';
 import { getApiData } from '../../../../shared/src/services/apiClient';
 import { getNativeUtxos, getTokenInfo, getTokenUtxos } from '../../../../shared/src/services/tbcApi';
 import { API_URLS } from '../../../../shared/src/config/constants';
-import deployment from '../../../../shared/src/config/phase3-testnet-v2-public.json';
 import type {
 	Phase3TestnetDepositBroadcast, Phase3TestnetDepositTerms, SignedPhase3TestnetDeposit,
 	UnsignedPhase3TestnetDeposit,
@@ -25,6 +24,7 @@ const MAX_CONTEXTS = 20;
 type Input = UnsignedPhase3TestnetDeposit['inputs'][number];
 interface BuildContext {
 	owner: string;
+	policy: Phase3TestnetRoutePolicy;
 	transaction: UnsignedPhase3TestnetDeposit;
 	parentsRaw: string[];
 	ancestorGroupsRaw: string[][];
@@ -32,6 +32,17 @@ interface BuildContext {
 	signed?: SignedPhase3TestnetDeposit;
 	broadcast?: Phase3TestnetDepositBroadcast;
 	broadcasting?: boolean;
+	evidence?: Phase3SignedEvidence;
+}
+export interface Phase3TestnetRoutePolicy {
+	destinationGateway: `0x${string}`;
+	reserveController: `0x${string}`;
+}
+export interface Phase3SignedEvidence {
+	buildId: string; sender: string; recipient: string; amountRaw: string; depositId: string;
+	sourceTxid: string; sourceRaw: string; parentTransactions: string[]; ancestorTransactions: string[][];
+	signatureWitnesses: Array<{ signaturePushOffset: number; publicKeyX: string; publicKeyY: string }>;
+	signaturePushOffsets: number[];
 }
 const contexts = new Map<string, BuildContext>();
 
@@ -68,9 +79,10 @@ function attachInputOutputs(tx: tbc.Transaction, inputs: Input[]) {
 	}
 }
 
-export async function buildUnsignedPhase3TestnetDeposit(owner: string, terms: Phase3TestnetDepositTerms, signal: AbortSignal) {
+export async function buildUnsignedPhase3TestnetDeposit(owner: string, terms: Phase3TestnetDepositTerms, policy: Phase3TestnetRoutePolicy, signal: AbortSignal) {
 	requireValue(terms.sender === owner, 'The deposit sender differs from the signed-in TBC account.');
-	requireValue(terms.contractId.toLowerCase() === SOURCE_CONTRACT_ID, 'This Testnet-v2 gateway is pinned to the MT v3 source Contract ID.');
+	requireValue(terms.contractId.toLowerCase() === SOURCE_CONTRACT_ID, 'This Testnet-v3 gateway is pinned to the MT v3 source Contract ID.');
+	requireValue(/^0x[0-9a-f]{40}$/i.test(policy.destinationGateway) && /^0x[0-9a-f]{40}$/i.test(policy.reserveController), 'The verified V3 route policy is invalid.');
 	requireValue(/^0x[0-9a-f]{40}$/i.test(terms.recipient) && !/^0x0{40}$/i.test(terms.recipient), 'Enter a nonzero HyperEVM recipient.');
 	p2pkhOwner(terms.publicKey, owner);
 	const cache = new Map<string, tbc.Transaction>();
@@ -122,8 +134,8 @@ export async function buildUnsignedPhase3TestnetDeposit(owner: string, terms: Ph
 	const depositNonce = BigInt(`0x${randomBytes(32).toString('hex')}`);
 	const intent = {
 		sourceContractId: SOURCE_CONTRACT_ID, destinationChainId: 998n,
-		destinationGateway: deployment.contracts.gateway as `0x${string}`, recipient: terms.recipient,
-		amountRaw, depositNonce, reserveControllerPubKeyHash: deployment.reserveController.replace(/^0x/, ''),
+		destinationGateway: policy.destinationGateway, recipient: terms.recipient,
+		amountRaw, depositNonce, reserveControllerPubKeyHash: policy.reserveController.replace(/^0x/, ''),
 	};
 	const covenant = buildBridgeCovenantScript(intent);
 	const { amountHex, changeHex } = sdk.FT.buildTapeAmount(amountRaw, tokenInputs.map((input) => input.ftBalance!));
@@ -155,14 +167,14 @@ export async function buildUnsignedPhase3TestnetDeposit(owner: string, terms: Ph
 	const estimatedBytes = sizing.toBuffer().length + 128;
 	const feeRaw = BigInt(Math.max(80, Math.ceil(estimatedBytes * FEE_RATE_SAT_PER_KB / 1000 * 1.2)));
 	const unsigned = assemble(feeRaw);
-	requireValue(unsigned.toObject().version === 10 && unsigned.inputs.length >= 2 && unsigned.inputs.length <= 6 && unsigned.outputs.length >= 4 && unsigned.outputs.length <= 6, 'Constructed deposit is outside the bounded v2 shape.');
+	requireValue(unsigned.toObject().version === 10 && unsigned.inputs.length >= 2 && unsigned.inputs.length <= 6 && unsigned.outputs.length >= 4 && unsigned.outputs.length <= 6, 'Constructed deposit is outside the bounded V3 shape.');
 	const rawHex = unsigned.uncheckedSerialize();
 	const buildId = randomUUID(); const expires = Date.now() + SIGNING_TTL_MS;
 	const transaction: UnsignedPhase3TestnetDeposit = {
 		buildId, signingExpiresAt: new Date(expires).toISOString(), network: 'testnet', terms: { ...terms, publicKey },
 		tokenName: info.name || 'MT', symbol: info.symbol || 'MT', decimals, amountRaw: amountRaw.toString(),
-		depositNonce: depositNonce.toString(), destinationChainId: '998', destinationGateway: deployment.contracts.gateway as `0x${string}`,
-		reserveController: deployment.reserveController, rawHex, unsignedBytes: rawHex.length / 2,
+		depositNonce: depositNonce.toString(), destinationChainId: '998', destinationGateway: policy.destinationGateway,
+		reserveController: policy.reserveController, rawHex, unsignedBytes: rawHex.length / 2,
 		feeRaw: feeRaw.toString(), nativeChangeRaw: unsigned.outputs.at(-1)!.satoshis.toString(), tokenChangeRaw: tokenChange.toString(),
 		inputs: inputs.map((input, index) => ({ txid: input.txId, index: input.outputIndex, scriptHex: input.script, nativeAmountRaw: String(input.satoshis), kind: index < tokenInputs.length ? 'token' : 'fee' })),
 		outputs: unsigned.outputs.map((output, index) => ({ index, purpose: index === 0 ? 'Bridge Covenant' : index === 1 ? 'Covenant-controlled MT Code' : index === 2 ? 'Deposited MT Tape' : tokenChange > 0n && index === 3 ? 'MT change Code → sender' : tokenChange > 0n && index === 4 ? 'MT change Tape → sender' : 'Native TBC change → sender', nativeAmountRaw: String(output.satoshis), scriptHex: output.script.toHex(), ...(index === 2 ? { tokenAmountRaw: amountRaw.toString() } : tokenChange > 0n && index === 4 ? { tokenAmountRaw: tokenChange.toString() } : {}) })),
@@ -170,14 +182,14 @@ export async function buildUnsignedPhase3TestnetDeposit(owner: string, terms: Ph
 	};
 	for (const [id, value] of contexts) if (value.expires <= Date.now()) contexts.delete(id);
 	while (contexts.size >= MAX_CONTEXTS) contexts.delete(contexts.keys().next().value!);
-	contexts.set(buildId, { owner, transaction, parentsRaw: parents.map((tx) => tx.uncheckedSerialize()), ancestorGroupsRaw: ancestorGroups.map((group) => group.map((tx) => tx.uncheckedSerialize())), expires });
+	contexts.set(buildId, { owner, policy, transaction, parentsRaw: parents.map((tx) => tx.uncheckedSerialize()), ancestorGroupsRaw: ancestorGroups.map((group) => group.map((tx) => tx.uncheckedSerialize())), expires });
 	return transaction;
 }
 
 function contextFor(owner: string, buildId: string, allowExpiredReceipt = false) {
 	const context = contexts.get(buildId);
-	requireValue(context && context.owner === owner, 'The v2 deposit signing session does not exist for this TBC account.');
-	if (!allowExpiredReceipt) requireValue(context.expires > Date.now(), 'The v2 deposit signing session expired. Build and review a new transaction.');
+	requireValue(context && context.owner === owner, 'The V3 deposit signing session does not exist for this TBC account.');
+	if (!allowExpiredReceipt) requireValue(context.expires > Date.now(), 'The V3 deposit signing session expired. Build and review a new transaction.');
 	return context;
 }
 async function assertInputsUnspent(context: BuildContext, signal: AbortSignal) {
@@ -191,9 +203,9 @@ export async function phase3DepositSigningRequest(owner: string, buildId: string
 }
 export async function finalizePhase3Deposit(owner: string, buildId: string, publicKeyHex: string, signatures: string[], signal: AbortSignal) {
 	const context = contextFor(owner, buildId); const { transaction } = context;
-	requireValue(!context.signed && !context.broadcast, 'This v2 deposit signing session has already been finalized.');
+	requireValue(!context.signed && !context.broadcast, 'This V3 deposit signing session has already been finalized.');
 	const publicKey = p2pkhOwner(publicKeyHex, owner); requireValue(publicKeyHex.toLowerCase().replace(/^0x/, '') === transaction.terms.publicKey, 'The signing public key differs from the reviewed key.');
-	requireValue(signatures.length === transaction.inputs.length, 'Turing Wallet did not sign every v2 deposit input.');
+	requireValue(signatures.length === transaction.inputs.length, 'Turing Wallet did not sign every V3 deposit input.');
 	const unsigned = new tbc.Transaction(transaction.rawHex); attachInputOutputs(unsigned, transaction.inputs);
 	for (let index = 0; index < signatures.length; index++) {
 		const hex = signatures[index]; requireValue(/^(?:[0-9a-f]{2}){9,80}$/i.test(hex), `Invalid wallet signature ${index}.`);
@@ -217,20 +229,36 @@ export async function finalizePhase3Deposit(owner: string, buildId: string, publ
 		genesisTransaction: PINNED_MT_V3_GENESIS_RAW,
 		inputProofs: context.parentsRaw.map((parentTransaction, vin) => ({ vin, parentTransaction, ancestorTransactions: context.ancestorGroupsRaw[vin] })),
 	};
-	const verified = verifyLegacyFtDepositProof(proof, { expectedSourceContractId: SOURCE_CONTRACT_ID, expectedLegacyVersion: 3, expectedDestinationChainId: 998n, expectedDestinationGateway: deployment.contracts.gateway as `0x${string}`, expectedReserveControllerPubKeyHash: deployment.reserveController.replace(/^0x/, '') });
-	requireValue(verified.txid === signed.hash && verified.amountRaw.toString() === transaction.amountRaw && verified.intent.recipient.toLowerCase() === transaction.terms.recipient.toLowerCase(), 'Final v2 proof differs from the reviewed deposit.');
+	const verified = verifyLegacyFtDepositProof(proof, { expectedSourceContractId: SOURCE_CONTRACT_ID, expectedLegacyVersion: 3, expectedDestinationChainId: 998n, expectedDestinationGateway: context.policy.destinationGateway, expectedReserveControllerPubKeyHash: context.policy.reserveController.replace(/^0x/, '') });
+	requireValue(verified.txid === signed.hash && verified.amountRaw.toString() === transaction.amountRaw && verified.intent.recipient.toLowerCase() === transaction.terms.recipient.toLowerCase(), 'Final V3 proof differs from the reviewed deposit.');
 	await assertInputsUnspent(context, signal);
 	const minimumFee = Math.max(80, Math.ceil(rawHex.length / 2 * FEE_RATE_SAT_PER_KB / 1000));
 	const result: SignedPhase3TestnetDeposit = { txid: signed.hash, rawHex, signedBytes: rawHex.length / 2, feeRaw: transaction.feeRaw, minimumFeeRaw: String(minimumFee), feeSufficient: BigInt(transaction.feeRaw) >= BigInt(minimumFee), signaturesVerified: true, proofVerified: true, depositId: verified.depositId, signedAt: new Date().toISOString() };
-	requireValue(result.feeSufficient, 'The signed v2 deposit is larger than the reviewed fee budget. Nothing was broadcast.');
+	requireValue(result.feeSufficient, 'The signed V3 deposit is larger than the reviewed fee budget. Nothing was broadcast.');
+	const point = publicKey.toObject() as { x: string; y: string };
+	const compressedPublicKey = publicKey.toBuffer();
+	const signatureWitnesses = signed.inputs.map((input, vin) => {
+		const signature = Buffer.from(signatures[vin]!, 'hex');
+		const needle = Buffer.concat([Buffer.from([signature.length]), signature, Buffer.from([compressedPublicKey.length]), compressedPublicKey]);
+		const signaturePushOffset = input.script.toBuffer().indexOf(needle);
+		requireValue(signaturePushOffset >= 0, `Signed V3 input ${vin} does not contain the reviewed signature/public-key pair.`);
+		return { signaturePushOffset, publicKeyX: `0x${point.x.padStart(64, '0')}`, publicKeyY: `0x${point.y.padStart(64, '0')}` };
+	});
+	context.evidence = { buildId, sender: owner, recipient: transaction.terms.recipient, amountRaw: transaction.amountRaw, depositId: verified.depositId, sourceTxid: signed.hash, sourceRaw: rawHex, parentTransactions: context.parentsRaw, ancestorTransactions: context.ancestorGroupsRaw, signatureWitnesses, signaturePushOffsets: signatureWitnesses.map((item) => item.signaturePushOffset) };
 	context.signed = result; return result;
+}
+
+export function phase3DepositEvidence(owner: string, buildId: string) {
+	const context = contextFor(owner, buildId);
+	requireValue(context.evidence, 'The V3 deposit evidence has not been finalized.');
+	return context.evidence;
 }
 
 export async function broadcastPhase3Deposit(owner: string, buildId: string, checkOnly: boolean, signal: AbortSignal) {
 	const context = contextFor(owner, buildId, checkOnly); if (context.broadcast) return context.broadcast;
-	requireValue(!checkOnly, 'There is no submission receipt for this v2 deposit.');
-	const signed = context.signed; requireValue(signed?.proofVerified && signed.feeSufficient, 'Finalize and locally verify this exact v2 deposit before submitting it.');
-	requireValue(!context.broadcasting, 'This v2 deposit submission is already in progress.');
+	requireValue(!checkOnly, 'There is no submission receipt for this V3 deposit.');
+	const signed = context.signed; requireValue(signed?.proofVerified && signed.feeSufficient, 'Finalize and locally verify this exact V3 deposit before submitting it.');
+	requireValue(!context.broadcasting, 'This V3 deposit submission is already in progress.');
 	context.broadcasting = true;
 	try {
 		await assertInputsUnspent(context, signal);
@@ -238,7 +266,7 @@ export async function broadcastPhase3Deposit(owner: string, buildId: string, che
 		try {
 			const response = await fetch(API_URLS.testnetBroadcast, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ txraw: signed.rawHex }), signal: AbortSignal.any([signal, AbortSignal.timeout(25_000)]) });
 			const body = await response.json();
-			if (response.ok && String(body.code) === '200' && body.data?.txid === signed.txid) context.broadcast = { ...context.broadcast, status: 'submitted', message: 'TBC Testnet accepted the proof-backed v2 deposit. Await inclusion and six confirmations before relaying its block.', updatedAt: new Date().toISOString() };
+			if (response.ok && String(body.code) === '200' && body.data?.txid === signed.txid) context.broadcast = { ...context.broadcast, status: 'submitted', message: 'TBC Testnet accepted the proof-backed V3 deposit. The backend will wait for six confirmations, relay headers and mint automatically.', updatedAt: new Date().toISOString() };
 			else if (String(body.code) === '400' || body.error || !response.ok && response.status < 500) context.broadcast = { ...context.broadcast, status: 'rejected', message: String(body.data?.error ?? body.message ?? body.msg ?? 'TBC Testnet rejected the transaction.').slice(0, 600), updatedAt: new Date().toISOString() };
 		} catch { /* Unknown is intentional: POST must never be retried automatically. */ }
 		return context.broadcast;

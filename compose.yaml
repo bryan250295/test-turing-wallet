@@ -57,9 +57,11 @@ services:
       <<: *backend_environment
       DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-learning_bridge}?schema=public
       BRIDGE_CUSTODY_KEY_FILE: /run/secrets/bridge_custody_key
+      PHASE3_RELAYER_KEY_FILE: /run/secrets/phase3_relayer_key
     secrets:
       - htlc_key
       - bridge_custody_key
+      - phase3_relayer_key
     volumes:
       - ./backend/src:/app/backend/src:ro
       - ./backend/scripts:/app/backend/scripts:ro
@@ -101,3 +103,5 @@ secrets:
     file: ./.secrets/htlc.key
   bridge_custody_key:
     file: ./.secrets/bridge-custody.key
+  phase3_relayer_key:
+    file: ./.secrets/phase3-relayer.key

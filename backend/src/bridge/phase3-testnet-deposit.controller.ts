@@ -10,7 +10,7 @@ import {
 } from './bridge.dto';
 import { Phase3TestnetDepositService } from './phase3-testnet-deposit.service';
 
-@ApiTags('Proof-backed Testnet v2') @ApiCookieAuth() @UseGuards(SessionGuard)
+@ApiTags('Proof-backed Testnet v3 deposit') @ApiCookieAuth() @UseGuards(SessionGuard)
 @Controller('api/bridge/phase3/testnet-deposit')
 export class Phase3TestnetDepositController {
 	constructor(@Inject(Phase3TestnetDepositService) private readonly deposits: Phase3TestnetDepositService) {}

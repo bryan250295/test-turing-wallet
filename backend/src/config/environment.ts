@@ -9,6 +9,7 @@ export interface Environment {
 	custodyKeyFile: string;
 	legacyDirectory: string;
 	sessionHours: number;
+	phase3RelayerKeyFile: string | null;
 }
 
 export function environment(): Environment {
@@ -19,5 +20,5 @@ export function environment(): Environment {
 	const sessionHours = Number(process.env.SESSION_HOURS ?? '12');
 	if (!Number.isInteger(port) || port < 1 || port > 65535 || !Number.isInteger(sessionHours) || sessionHours < 1 || sessionHours > 24) throw new Error('Invalid PORT or SESSION_HOURS.');
 	if (process.env.NODE_ENV === 'production' && origin.protocol !== 'https:') throw new Error('Production requires an HTTPS APP_ORIGIN.');
-	return { port, origin: origin.origin, secureCookies: origin.protocol === 'https:', keyFile: resolve(process.env.SECRET_KEY_FILE ?? '../.secrets/htlc.key'), custodyKeyFile: resolve(process.env.BRIDGE_CUSTODY_KEY_FILE ?? '../.secrets/bridge-custody.key'), legacyDirectory: resolve(process.env.LEGACY_STORAGE_DIR ?? '../wallet/storage/htlc'), sessionHours };
+	return { port, origin: origin.origin, secureCookies: origin.protocol === 'https:', keyFile: resolve(process.env.SECRET_KEY_FILE ?? '../.secrets/htlc.key'), custodyKeyFile: resolve(process.env.BRIDGE_CUSTODY_KEY_FILE ?? '../.secrets/bridge-custody.key'), legacyDirectory: resolve(process.env.LEGACY_STORAGE_DIR ?? '../wallet/storage/htlc'), sessionHours, phase3RelayerKeyFile: process.env.PHASE3_RELAYER_KEY_FILE ? resolve(process.env.PHASE3_RELAYER_KEY_FILE) : null };
 }

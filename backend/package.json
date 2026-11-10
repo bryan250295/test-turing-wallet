@@ -19,10 +19,11 @@
 		"phase1:test": "tsx --test src/bridge/phase1/*.test.ts",
 		"phase2:test": "tsx --test src/bridge/phase2/*.test.ts",
 		"phase3:bootstrap": "tsx scripts/build-phase3-bootstrap.ts",
+		"phase3:testnet-v3-prepare": "tsx scripts/prepare-phase3-testnet-v3.ts",
 		"phase3:testnet-relay-plan": "tsx scripts/prepare-phase3-testnet-relay.ts",
 		"phase3:test": "tsx --test src/bridge/phase3/*.test.ts",
 		"phase3:solidity-rpc-test": "tsx scripts/test-phase3-solidity.ts",
-		"phase3:local-evm-test": "npm --prefix ../wallet run phase3:compile && npm --prefix ../wallet run phase3:testnet-v2-compile && tsx scripts/test-phase3-local-evm.ts"
+		"phase3:local-evm-test": "npm --prefix ../wallet run phase3:compile && npm --prefix ../wallet run phase3:testnet-v2-compile && npm --prefix ../wallet run phase3:testnet-v3-compile && tsx scripts/test-phase3-local-evm.ts"
 	},
 	"dependencies": {
 		"@nestjs/common": "^11.1.0",

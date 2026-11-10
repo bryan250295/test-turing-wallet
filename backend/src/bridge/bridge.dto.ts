@@ -64,6 +64,15 @@ export class BroadcastPhase3TestnetDepositDto extends Phase3TestnetDepositBuildD
 	@ApiProperty({ type: Boolean }) @IsBoolean() @Equals(true) confirmed!: true;
 }
 
+export class RegisterPhase3TestnetV3RouteDto {
+	@ApiProperty({ type: String }) @IsEthereumAddress() deployer!: string;
+	@ApiProperty({ type: String }) @IsEthereumAddress() relay!: string;
+	@ApiProperty({ type: String }) @IsEthereumAddress() gateway!: string;
+	@ApiProperty({ type: String }) @IsEthereumAddress() wrappedToken!: string;
+	@ApiProperty({ type: String }) @Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i) relayTxHash!: string;
+	@ApiProperty({ type: String }) @Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i) gatewayTxHash!: string;
+}
+
 export class PrepareBridgeOrderDto {
 	@ApiProperty({ type: String, description: 'Stable request ID retained across retries of these exact terms.' })
 	@IsUUID('4')

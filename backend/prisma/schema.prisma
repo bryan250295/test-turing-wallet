@@ -20,8 +20,85 @@ model WalletIdentity {
 	bridgeOrders BridgeOrder[]
 	escrowDeployments RedemptionEscrowDeployment[]
 	redemptionOrders RedemptionOrder[]
+	proofBridgeRoutes ProofBridgeRoute[]
+	proofBridgeTransfers ProofBridgeTransfer[]
 	@@unique([chain, network, address])
 	@@map("wallet_identities")
+}
+
+model ProofBridgeRoute {
+	id                  String   @id @default(uuid()) @db.Uuid
+	identityId          String   @db.Uuid
+	identity            WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+	version             String   @unique @db.VarChar(32)
+	chainId             Int      @default(998)
+	sourceAddress       String   @db.VarChar(100)
+	deployer            String   @db.VarChar(42)
+	relay               String   @unique @db.VarChar(42)
+	gateway             String   @unique @db.VarChar(42)
+	wrappedToken        String   @unique @db.VarChar(42)
+	relayTxHash         String   @unique @db.VarChar(66)
+	gatewayTxHash       String   @unique @db.VarChar(66)
+	reserveController   String   @db.VarChar(42)
+	checkpointHeight    Int
+	checkpointHash      String   @db.VarChar(66)
+	bootstrapRoot       String   @db.VarChar(66)
+	status              String   @default("verified") @db.VarChar(24)
+	verifiedAt          DateTime @db.Timestamptz(3)
+	createdAt           DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+	transfers           ProofBridgeTransfer[]
+
+	@@index([identityId, createdAt])
+	@@map("proof_bridge_routes")
+}
+
+model ProofBridgeTransfer {
+	id                    String   @id @default(uuid()) @db.Uuid
+	identityId            String   @db.Uuid
+	identity              WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+	routeId                String   @db.Uuid
+	route                  ProofBridgeRoute @relation(fields: [routeId], references: [id], onDelete: Restrict)
+	buildId                String   @unique @db.Uuid
+	status                 String   @default("signed") @db.VarChar(32)
+	sender                 String   @db.VarChar(100)
+	recipient              String   @db.VarChar(42)
+	amountRaw              Decimal  @db.Decimal(78, 0)
+	depositId              String   @unique @db.VarChar(66)
+	sourceTxid             String   @unique @db.Char(64)
+	sourceRaw              String
+	parentTransactions     Json
+	ancestorTransactions   Json
+	signatureWitnesses     Json
+	signaturePushOffsets   Json
+	blockHash              String?  @db.VarChar(66)
+	blockHeight            Int?
+	transactionIndex       Int?
+	transactionCount       Int?
+	merkleSiblings         Json?
+	sourceConfirmations    Int      @default(0)
+	relayHeight            Int?
+	relayPendingHeight     Int?
+	relayPendingTxHash     String?  @db.VarChar(66)
+	relayPendingRaw        String?
+	relayPendingNonce      BigInt?
+	mintTxHash             String?  @unique @db.VarChar(66)
+	mintRawTransaction     String?
+	mintNonce              BigInt?
+	mintBlockNumber        BigInt?
+	mintConfirmations      Int      @default(0)
+	mintGasUsed            Decimal? @db.Decimal(78, 0)
+	mintFeeWei             Decimal? @db.Decimal(78, 0)
+	checkedAt              DateTime? @db.Timestamptz(3)
+	completedAt            DateTime? @db.Timestamptz(3)
+	lastError              String?
+	failureCount           Int      @default(0)
+	createdAt              DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+
+	@@index([identityId, createdAt])
+	@@index([status, checkedAt])
+	@@map("proof_bridge_transfers")
 }
 
 model AuthChallenge {

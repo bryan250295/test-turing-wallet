@@ -15,7 +15,7 @@ async function main() {
   try { encryptedFiles = (await readdir(resolve(source, 'secrets'))).filter((name) => name.endsWith('.json')); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (encryptedFiles.length && !legacyKey && !key) throw new Error('Restore the original encryption key before setup.');
-  if (legacyKey && legacyKey.length !== 32 || key && key.length !== 32) throw new Error('Invalid encryption key length.');
+  if ((legacyKey && legacyKey.length !== 32) || (key && key.length !== 32)) throw new Error('Invalid encryption key length.');
   if (legacyKey && key && !timingSafeEqual(legacyKey, key)) throw new Error('Existing and legacy encryption keys differ. Resolve this before starting.');
   if (!key) {
     key = legacyKey ?? randomBytes(32);
@@ -32,7 +32,7 @@ async function main() {
   const custodyBackupPath = resolve(custodyBackupDirectory, 'bridge-custody.key');
   let custodyKey = await readIfPresent(custodyPath);
   const custodyBackup = await readIfPresent(custodyBackupPath);
-  if (custodyKey && custodyKey.length !== 32 || custodyBackup && custodyBackup.length !== 32) throw new Error('Invalid custody key length. Restore the correct custody key.');
+  if ((custodyKey && custodyKey.length !== 32) || (custodyBackup && custodyBackup.length !== 32)) throw new Error('Invalid custody key length. Restore the correct custody key.');
   if (custodyKey && custodyBackup && !timingSafeEqual(custodyKey, custodyBackup)) throw new Error('The custody key and its backup differ. Existing keys were retained.');
   if (!custodyKey) {
     custodyKey = custodyBackup ?? randomBytes(32);
@@ -43,6 +43,22 @@ async function main() {
   await chmod(custodyPath, 0o644);
   if (!custodyBackup) await writeFile(custodyBackupPath, custodyKey, { flag: 'wx', mode: 0o600 });
   custodyKey.fill(0);
+  // Dedicated permissionless Testnet-v3 operator. It is intentionally separate
+  // from custody and application-encryption keys; only its public address is exposed.
+  const relayerPath = resolve(keyDirectory, 'phase3-relayer.key');
+  const relayerBackupPath = resolve(custodyBackupDirectory, 'phase3-relayer.key');
+  let relayerKey = await readIfPresent(relayerPath);
+  const relayerBackup = await readIfPresent(relayerBackupPath);
+  if ((relayerKey && !/^[0-9a-f]{64}$/.test(relayerKey.toString().trim())) || (relayerBackup && !/^[0-9a-f]{64}$/.test(relayerBackup.toString().trim()))) throw new Error('Invalid Testnet-v3 relayer key. Restore the correct key before continuing.');
+  if (relayerKey && relayerBackup && !timingSafeEqual(Buffer.from(relayerKey.toString().trim(), 'hex'), Buffer.from(relayerBackup.toString().trim(), 'hex'))) throw new Error('The Testnet-v3 relayer key and backup differ. Existing keys were retained.');
+  if (!relayerKey) {
+    relayerKey = Buffer.from(randomBytes(32).toString('hex') + '\n');
+    await writeFile(relayerPath, relayerKey, { flag: 'wx', mode: 0o600 });
+  }
+  // The host directory remains 0700; Compose mounts this single file read-only.
+  await chmod(relayerPath, 0o644);
+  if (!relayerBackup) await writeFile(relayerBackupPath, relayerKey, { flag: 'wx', mode: 0o600 });
+  relayerKey.fill(0);
   const envPath = resolve(root, '.env');
   let local = await readIfPresent(envPath);
   if (!local) {
@@ -64,6 +80,8 @@ async function main() {
     await writeFile(backendEnv, existingBackend.toString().replace(oldUrl, appUrl), { mode: 0o600 });
   }
   if (!await readIfPresent(backendEnv)) await writeFile(backendEnv, `DATABASE_URL=postgresql://${values.APP_DB_USER}:${values.APP_DB_PASSWORD}@127.0.0.1:${values.POSTGRES_PORT}/${values.POSTGRES_DB}?schema=public\nAPP_ORIGIN=${values.APP_ORIGIN}\nPORT=3001\nSESSION_HOURS=${values.SESSION_HOURS ?? '12'}\nSECRET_KEY_FILE=../.secrets/htlc.key\nBRIDGE_CUSTODY_KEY_FILE=../.secrets/bridge-custody.key\nLEGACY_STORAGE_DIR=../wallet/storage/htlc\n`, { mode: 0o600, flag: 'wx' });
+  const configuredBackendEnv = await readFile(backendEnv, 'utf8');
+  if (!configuredBackendEnv.includes('PHASE3_RELAYER_KEY_FILE=')) await writeFile(backendEnv, configuredBackendEnv.trimEnd() + '\nPHASE3_RELAYER_KEY_FILE=../.secrets/phase3-relayer.key\n', { mode: 0o600 });
   const backupRoot = resolve(root, '.backups');
   await mkdir(backupRoot, { recursive: true, mode: 0o700 });
   const marker = resolve(backupRoot, '.initial-storage-backup');

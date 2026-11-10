@@ -36,6 +36,7 @@ interface DeploymentState {
 }
 const STORAGE_KEY = 'learningmaterials.phase3.testnet-v2.deployment.v2';
 const PINNED_MT_CONTRACT_ID = 'ac54e83d476839a11bbb7d0a2495e50c9d0d23c9283f94e11222bad589259e6c';
+const V2_ROUTE_PAUSED = true;
 
 const constructorAbi = [{
 	type: 'constructor',
@@ -132,6 +133,7 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 
 	async function review() {
 		if (!ready || running.current) return;
+		if (V2_ROUTE_PAUSED) { setError('Testnet-v2 is paused because its header relay is too far behind. Use the V3 route above.'); return; }
 		running.current = true; setWorking('Reading both wallets…'); setError('');
 		try {
 			const wallets = await verifyWallets();
@@ -148,6 +150,7 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 
 	async function deploy() {
 		if (!ready || !state || !next || running.current) return;
+		if (V2_ROUTE_PAUSED) { setError('Testnet-v2 deployment is paused. Use the V3 route above.'); return; }
 		running.current = true; setWorking(`Preparing ${next} deployment…`); setError('');
 		try {
 			const wallets = await verifyWallets(state);
@@ -250,6 +253,7 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 
 	async function relayNextHeader() {
 		if (!ready || !state?.gateway || !state.relay || running.current) return;
+		if (V2_ROUTE_PAUSED) { setError('V2 header relay is paused to prevent a 162+ transaction catch-up cost.'); return; }
 		running.current = true; setWorking('Cross-checking the next TBC header…'); setError(''); setRelayResult(null);
 		try {
 			const wallets = await verifyWallets(state);
@@ -291,6 +295,7 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 
 	async function prepareDeposit() {
 		if (!ready || !state?.gateway || running.current) return;
+		if (V2_ROUTE_PAUSED) { setError('New V2 deposits are paused. Existing deposits remain recorded; use V3 for the next test.'); return; }
 		running.current = true; setWorking('Building a wallet-bound Bridge Covenant deposit…'); setError(''); setDeposit(null); setSignedDeposit(null); setDepositReceipt(null);
 		try {
 			const wallets = await verifyWallets(state);
@@ -333,10 +338,10 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 	}
 
 	return <details className="bridge-flow-history">
-		<summary>Proof-backed Testnet v2 setup · {state?.gateway ? 'deployed' : 'not deployed'}</summary>
+		<summary>Proof-backed Testnet v2 · paused · {state?.gateway ? 'deployed' : 'not deployed'}</summary>
 		<section className="htlc-section" aria-busy={Boolean(working)}>
 			<h3>Experimental proof-backed route</h3>
-			<p>This is a public Testnet experiment, not a production-trustless bridge. It does not solve the cryptographic unspent-proof gap.</p>
+			<p className="result error">V2 is retained as audit evidence but all new deployments, header relays and deposits are paused. Its checkpoint is too far behind the TBC tip.</p>
 			<dl className="history-detail-grid">
 				<div><dt>Checkpoint</dt><dd>{manifest.checkpoint.height} · <code>{manifest.checkpoint.hash}</code></dd></div>
 				<div><dt>Bootstrap root</dt><dd><code>{manifest.checkpoint.commitmentRoot}</code></dd></div>
@@ -352,7 +357,7 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 			<div className="htlc-actions">
 				{!state && <button type="button" disabled={!ready || Boolean(working)} onClick={() => { void review(); }}>Review wallet-bound route</button>}
 				{state && next && <button type="button" disabled={!ready || Boolean(working)} onClick={() => { void deploy(); }}>Deploy {next} with MetaMask</button>}
-				{state?.gateway && <button type="button" disabled={!ready || Boolean(working)} onClick={() => { void relayNextHeader(); }}>Relay next TBC header with MetaMask</button>}
+				{state?.gateway && <button type="button" disabled onClick={() => { void relayNextHeader(); }}>V2 relay paused</button>}
 			</div>
 			{state?.gateway && <section className="htlc-section">
 				<h4>Create the first real v2 MT deposit</h4>
@@ -362,7 +367,7 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 				</label>
 				<p>Recipient: <code>{state.deployer}</code><br />Source Contract ID: <code>{PINNED_MT_CONTRACT_ID}</code></p>
 				<div className="htlc-actions">
-					{!deposit && <button type="button" disabled={!ready || Boolean(working) || !depositAmount.trim()} onClick={() => { void prepareDeposit(); }}>Review unsigned v2 deposit</button>}
+					{!deposit && <button type="button" disabled onClick={() => { void prepareDeposit(); }}>New V2 deposits paused</button>}
 					{deposit && !signedDeposit && <button type="button" disabled={!ready || Boolean(working)} onClick={() => { void signDeposit(); }}>Sign reviewed deposit with Turing Wallet</button>}
 					{deposit && !signedDeposit && <button type="button" className="secondary" disabled={Boolean(working)} onClick={() => { setDeposit(null); setDepositAmount(''); }}>Discard review</button>}
 					{signedDeposit && !depositReceipt && <button type="button" disabled={!ready || Boolean(working)} onClick={() => { void submitDeposit(false); }}>Submit signed deposit to TBC Testnet</button>}

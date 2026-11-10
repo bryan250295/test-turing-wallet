@@ -301,9 +301,16 @@ async function main() {
 		const loadArtifact = async (name: string) => JSON.parse(await readFile(
 			resolve(artifactRoot, `${name}.json`), 'utf8',
 		)) as Artifact;
+		const loadV3Artifact = async (name: string) => JSON.parse(await readFile(
+			resolve(process.cwd(), `../wallet/artifacts/phase3-v3/${name}.json`), 'utf8',
+		)) as Artifact;
+		const publicV3Manifest = JSON.parse(await readFile(
+			resolve(process.cwd(), '../wallet/src/generated/phase3-testnet-v3-deployment.json'), 'utf8',
+		)) as { checkpoint: { height: number } };
 		const [authorizationArtifact, prefixArtifact, gatewayArtifact, relayArtifact,
 			tokenArtifact, verifierArtifact, publicGatewayArtifact, publicRelayArtifact,
-			publicFinalizedArtifact, publicTransitionArtifact, publicSignatureArtifact] = await Promise.all([
+			publicFinalizedArtifact, publicTransitionArtifact, publicSignatureArtifact,
+			publicV3GatewayArtifact, publicV3RelayArtifact] = await Promise.all([
 			loadArtifact('TbcAuthorizedTransitionVerifier'),
 			loadArtifact('TbcFtUnlockPrefixVerifierModule'),
 			loadArtifact('TbcProofMintGateway'),
@@ -315,6 +322,8 @@ async function main() {
 			loadArtifact('TbcFinalizedDepositVerifier'),
 			loadArtifact('TbcAuthenticatedTransitionVerifier'),
 			loadArtifact('TbcInputSignatureVerifier'),
+			loadV3Artifact('TbcProofMintGatewayTestnetV3'),
+			loadV3Artifact('TbcHeaderRelayTestnetV3'),
 		]);
 
 		const deploy = async (artifact: Artifact, args: readonly unknown[] = []) => {
@@ -407,6 +416,41 @@ async function main() {
 		assert.equal(await publicClient.readContract({
 			address: publicRelay, abi: publicRelayArtifact.abi, functionName: 'CHECKPOINT_HASH',
 		}), `0x${PUBLIC_TESTNET_HEADER_840040.previousBlockHash}`);
+
+		// V3 reuses the four already verified modules and deploys only a fresh
+		// checkpoint relay plus gateway. Prove both deployments and their child
+		// token fit the public HyperEVM 3M block limit before asking MetaMask.
+		const publicV3Relay = await deploy(publicV3RelayArtifact);
+		const publicV3Gateway = await deploy(publicV3GatewayArtifact, [
+			publicV3Relay.address,
+			publicFinalized.address,
+			publicTransition.address,
+			publicSignature.address,
+			prefix.address,
+			RESERVE_CONTROLLER,
+		]);
+		assert.ok(publicV3Relay.gasUsed <= 3_000_000n,
+			`V3 relay deployment exceeds HyperEVM's 3M block gas limit: ${publicV3Relay.gasUsed}`);
+		assert.ok(publicV3Gateway.gasUsed <= 3_000_000n,
+			`V3 gateway deployment exceeds HyperEVM's 3M block gas limit: ${publicV3Gateway.gasUsed}`);
+		console.log(`V3 gas benchmark: relay deployment ${publicV3Relay.gasUsed}, gateway deployment ${publicV3Gateway.gasUsed}.`);
+		assert.equal(await publicClient.readContract({
+			address: publicV3Relay.address,
+			abi: publicV3RelayArtifact.abi,
+			functionName: 'CHECKPOINT_HEIGHT',
+		}), publicV3Manifest.checkpoint.height);
+		assert.equal((await publicClient.readContract({
+			address: publicV3Gateway.address,
+			abi: publicV3GatewayArtifact.abi,
+			functionName: 'relay',
+		}) as Address).toLowerCase(), publicV3Relay.address.toLowerCase());
+		const publicV3Token = await publicClient.readContract({
+			address: publicV3Gateway.address,
+			abi: publicV3GatewayArtifact.abi,
+			functionName: 'wrappedToken',
+		}) as Address;
+		assert.ok((await publicClient.getCode({ address: publicV3Token })) !== '0x',
+			'V3 wrapped token runtime must exist.');
 		const publicFixtureRoot = resolve(process.cwd(), 'src/bridge/phase3/fixtures');
 		const publicManifest = JSON.parse(await readFile(
 			resolve(publicFixtureRoot, 'tbcdev-bootstrap-history-v2.json'), 'utf8',
