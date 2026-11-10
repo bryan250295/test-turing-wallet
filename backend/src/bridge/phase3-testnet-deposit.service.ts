@@ -30,7 +30,7 @@ export class Phase3TestnetDepositService {
 	}
 	async build(principal: Principal, terms: Phase3TestnetDepositTerms) {
 		const owner = this.requireOwner(principal, terms.sender);
-		const route = await this.repository.route(principal.id);
+		const route = await this.repository.route();
 		if (!route || route.status !== 'verified') throw new ConflictException('Deploy and register the verified Testnet-v3 route first.');
 		if (await this.repository.hasActive(principal.id)) throw new ConflictException('Wait for the active V3 transfer to complete before building another deposit.');
 		return this.run(`build:${owner}`, () => buildUnsignedPhase3TestnetDeposit(owner, terms, { destinationGateway: route.gateway as `0x${string}`, reserveController: route.reserveController as `0x${string}` }, AbortSignal.timeout(90_000)));

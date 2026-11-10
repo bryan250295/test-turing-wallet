@@ -48,8 +48,11 @@ export function transferRecord(row: ProofBridgeTransfer): ProofBridgeV3Transfer 
 export class ProofBridgeV3Repository {
 	constructor(@Inject(PrismaService) private readonly db: PrismaService) {}
 
-	async route(identityId?: string) {
-		return this.db.proofBridgeRoute.findFirst({ where: { version: 'testnet-v3', ...(identityId ? { identityId } : {}) } });
+	async route() {
+		// A verified route is infrastructure shared by every bridge user. The
+		// identityId records the operator who registered it; it must not make the
+		// Relay, Gateway or wrapped token private to that operator.
+		return this.db.proofBridgeRoute.findUnique({ where: { version: 'testnet-v3' } });
 	}
 
 	async register(identityId: string, data: Omit<Prisma.ProofBridgeRouteUncheckedCreateInput, 'id' | 'identityId' | 'version' | 'status' | 'verifiedAt' | 'createdAt' | 'updatedAt'>) {
@@ -67,7 +70,7 @@ export class ProofBridgeV3Repository {
 	}
 
 	async createSigned(identityId: string, evidence: SignedTransferEvidence) {
-		const route = await this.route(identityId);
+		const route = await this.route();
 		if (!route || route.status !== 'verified') throw new ConflictException('Register the verified Testnet-v3 route before signing a deposit.');
 		return this.db.$transaction(async (tx) => {
 			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`proof-bridge:testnet-v3:${identityId}`}, 0))`;
@@ -109,7 +112,7 @@ export class ProofBridgeV3Repository {
 
 	async snapshot(identityId: string, relayer: ProofBridgeV3Snapshot['relayer']): Promise<ProofBridgeV3Snapshot> {
 		const [route, transfers] = await Promise.all([
-			this.route(identityId),
+			this.route(),
 			this.db.proofBridgeTransfer.findMany({ where: { identityId }, orderBy: { createdAt: 'desc' }, take: 20 }),
 		]);
 		return { type: 'proof-bridge-v3', route: route ? routeRecord(route) : null, transfers: transfers.map(transferRecord), relayer, checkedAt: new Date().toISOString() };

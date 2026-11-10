@@ -9,10 +9,6 @@ import type useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
 import type { WalletAddresses, WalletSession } from '../../types/wallet';
 import type { BridgeDeploymentTransaction } from '../../types/learningBridge';
 import { getErrorMessage } from '../../utils/errors';
-import {
-	buildPhase3TestnetDeposit, broadcastPhase3TestnetDeposit, finalizePhase3TestnetDeposit,
-	phase3TestnetDepositSigningRequest,
-} from '../../services/phase3TestnetDeposit';
 import { connectProofBridgeV3Progress, getProofBridgeV3Progress, registerProofBridgeV3Route } from '../../services/proofBridgeV3';
 import type { ProofBridgeV3Snapshot } from '../../../../shared/src/types/proofBridgeV3';
 
@@ -38,7 +34,6 @@ interface Quote {
 }
 
 const STORAGE_KEY = 'learningmaterials.phase3.testnet-v3.deployment.v1';
-const PINNED_MT_CONTRACT_ID = 'ac54e83d476839a11bbb7d0a2495e50c9d0d23c9283f94e11222bad589259e6c';
 const constructorAbi = [{
 	type: 'constructor',
 	inputs: [
@@ -79,8 +74,6 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 	const [error, setError] = useState('');
 	const [snapshot, setSnapshot] = useState<ProofBridgeV3Snapshot | null>(null);
 	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'live' | 'reconnecting'>('off');
-	const [depositAmount, setDepositAmount] = useState('');
-	const [sourceTxid, setSourceTxid] = useState('');
 	const running = useRef(false);
 	const registrationAttempted = useRef('');
 	const client = useMemo(() => createPublicClient({ transport: http(HYPEREVM_TESTNET.rpcUrl) }), []);
@@ -240,49 +233,19 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 		finally { running.current = false; setWorking(''); }
 	}
 
-	async function startDeposit() {
-		if (!ready || !state?.gateway || !snapshot?.route || running.current) return;
-		running.current = true; session.setBusy(true); setWorking('Building and locally reviewing one V3 Bridge Covenant deposit…'); setError(''); setSourceTxid('');
-		try {
-			const wallets = await verifyWallets(state);
-			const controller = new AbortController();
-			const deposit = await buildPhase3TestnetDeposit({ sender: state.sourceAddress, publicKey: wallets.publicKey, contractId: PINNED_MT_CONTRACT_ID, amount: depositAmount.trim(), recipient: wallets.evmAddress }, controller.signal);
-			setWorking('Review and sign the exact V3 deposit in Turing Wallet…');
-			const request = await phase3TestnetDepositSigningRequest(deposit, controller.signal);
-			const response = await session.wallet.signTransaction(request);
-			if (response?.error) throw new Error(response.error);
-			if (!response?.sigs || response.sigs.length !== 1 || !Array.isArray(response.sigs[0]) || response.sigs[0].length !== deposit.inputs.length) throw new Error('Turing Wallet did not sign every reviewed V3 input.');
-			setWorking('Verifying signatures, complete FT transition and Bridge Covenant proof…');
-			const signed = await finalizePhase3TestnetDeposit(deposit.buildId, wallets.publicKey, response.sigs[0], controller.signal);
-			setWorking('Submitting the exact signed V3 deposit once…');
-			const receipt = await broadcastPhase3TestnetDeposit(deposit.buildId, signed.txid, false, controller.signal);
-			if (receipt.status === 'rejected') throw new Error(receipt.message);
-			setSourceTxid(signed.txid); setDepositAmount('');
-			setWorking('');
-		} catch (cause) { setError(getErrorMessage(cause)); }
-		finally { session.setBusy(false); running.current = false; setWorking(''); }
-	}
-
-	const latest = snapshot?.transfers[0];
-	const stage = latest?.status === 'completed' ? 'Completed'
-		: latest?.status === 'mint_submitted' ? `Waiting for HyperEVM confirmations (${latest.mintConfirmations}/6)`
-			: latest?.status === 'ready_to_mint' ? 'Proof mint'
-			: latest?.status === 'relaying_headers' ? 'Relaying finalized headers'
-				: latest?.status === 'confirming_source' || latest?.status === 'source_submitted' ? `Waiting for TBC confirmations (${latest.sourceConfirmations}/6)`
-					: latest?.status === 'signed' ? 'Signed locally' : 'Ready';
-
 	return <details className="bridge-flow-history" open>
-		<summary>Proof-backed Testnet v3 · {snapshot?.route ? 'live' : state?.gateway ? 'registering' : 'prepared, no broadcast'}</summary>
+		<summary>Shared MT → wMT Testnet v3 route · {snapshot?.route ? 'live' : state?.gateway ? 'registering' : 'not deployed'}</summary>
 		<section className="htlc-section" aria-busy={Boolean(working)}>
-			<h3>Gas-safe V3 bootstrap</h3>
-			<p>Old V2 relay actions are paused. V3 starts at finalized checkpoint <strong>{manifest.checkpoint.height}</strong>, reuses four verified modules, and requires only a new Relay and Gateway.</p>
+			<h3>Deploy shared proof-backed infrastructure</h3>
+			<p>This operator-only setup runs once. Every user then shares the same Relay, Gateway and wMT contract; minting never creates another wrapped token.</p>
 			<dl className="history-detail-grid">
 				<div><dt>Checkpoint</dt><dd>{manifest.checkpoint.height} · <code>{manifest.checkpoint.hash}</code></dd></div>
 				<div><dt>Prepared finality</dt><dd>6 confirmations at tip {manifest.checkpoint.height + 5}</dd></div>
 				<div><dt>Bootstrap commitment</dt><dd><code>{manifest.bootstrap.commitmentRoot}</code></dd></div>
 				<div><dt>Reusable verifiers</dt><dd>Finalized · Transition · Signature · Prefix</dd></div>
-				<div><dt>V3 Relay</dt><dd><code>{state?.relay ?? 'Not deployed'}</code></dd></div>
-				<div><dt>V3 Gateway</dt><dd><code>{state?.gateway ?? 'Not deployed'}</code></dd></div>
+				<div><dt>V3 Relay</dt><dd><code>{snapshot?.route?.relay ?? state?.relay ?? 'Not deployed'}</code></dd></div>
+				<div><dt>V3 Gateway</dt><dd><code>{snapshot?.route?.gateway ?? state?.gateway ?? 'Not deployed'}</code></dd></div>
+				<div><dt>Wrapped token (wMT)</dt><dd><code>{snapshot?.route?.wrappedToken ?? state?.wrappedToken ?? 'Created by Gateway'}</code></dd></div>
 				<div><dt>Backend automation</dt><dd>{snapshot?.relayer.mode === 'automatic' ? <>Automatic · <code>{snapshot.relayer.address}</code>{snapshot.relayer.balanceWei !== null ? <> · {formatEther(BigInt(snapshot.relayer.balanceWei))} HYPE</> : null}</> : 'Observe-only until relayer key is configured'}</dd></div>
 				<div><dt>Live progress</dt><dd>{realtime === 'live' ? 'WebSocket connected' : realtime}</dd></div>
 			</dl>
@@ -294,14 +257,7 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 			</div>
 			{quote && <p className={BigInt(quote.balanceWei) >= BigInt(quote.maximumFeeWei) ? 'result success' : 'result error'}>Estimated gas: {BigInt(quote.estimatedGas).toLocaleString()} · maximum reviewed fee: {formatEther(BigInt(quote.maximumFeeWei))} HYPE · wallet balance: {formatEther(BigInt(quote.balanceWei))} HYPE. Reviewing does not charge gas.</p>}
 			{state?.gateway && !snapshot?.route && <div className="htlc-actions"><button type="button" disabled={!ready || Boolean(working)} onClick={() => { void registerRoute(state).catch((cause) => setError(getErrorMessage(cause))); }}>Verify and register deployed V3 route</button></div>}
-			{snapshot?.route && <section className="htlc-section">
-				<h4>One-action V3 transfer</h4>
-				<p>After the Turing Wallet signature, the exact source transaction is submitted once. The backend then waits for six confirmations, relays only required headers, builds the proof and submits the mint automatically.</p>
-				<label>MT amount<input type="text" inputMode="decimal" placeholder="Example: 100" value={depositAmount} disabled={Boolean(working) || Boolean(latest && latest.status !== 'completed' && latest.status !== 'needs_review')} onChange={(event) => setDepositAmount(event.target.value)} /></label>
-				<div className="htlc-actions"><button type="button" disabled={!ready || Boolean(working) || !depositAmount.trim() || Boolean(latest && latest.status !== 'completed' && latest.status !== 'needs_review') || snapshot.relayer.mode !== 'automatic'} onClick={() => { void startDeposit(); }}>Sign once and run complete V3 flow</button></div>
-				<p className={latest?.status === 'needs_review' ? 'result error' : latest?.status === 'completed' ? 'result success' : 'result'}>Current stage: <strong>{stage}</strong>{latest ? <><br />TXID: <code>{latest.sourceTxid}</code><br />Source confirmations: {latest.sourceConfirmations}/6{latest.relayHeight ? <> · Relay height: {latest.relayHeight}</> : null}{latest.mintTxHash ? <><br />Mint transaction: <code>{latest.mintTxHash}</code> · confirmations: {latest.mintConfirmations}/6</> : null}{latest.lastError ? <><br />Attention: {latest.lastError}</> : null}</> : null}</p>
-				{sourceTxid && <p className="result success">Source transaction accepted for automatic processing: <code>{sourceTxid}</code></p>}
-			</section>}
+			{snapshot?.route && <p className="result success">The shared route is registered. Users can now select MT → HyperEVM in Transfer; no user setup or contract deployment is required.</p>}
 			{working && <p role="status">{working}</p>}
 			{error && <p className="result error" role="alert">{error}</p>}
 		</section>

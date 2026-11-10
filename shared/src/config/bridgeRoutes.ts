@@ -2,6 +2,32 @@ import { LEARNING_BRIDGE_SOURCE_FT } from './learningBridge';
 
 /** Explicitly enabled destinations; RPCs and chain IDs never come from form input. */
 export const BRIDGE_DESTINATIONS = [{ id: 'hyperevm-testnet', chainId: 998, name: 'HyperEVM Testnet', nativeSymbol: 'HYPE' }] as const;
+
+/** Operator-reviewed routes shown by the wallet. Disabled routes remain here
+ * for historical receipts, but cannot be selected for a new transfer. */
+export const BRIDGE_ROUTE_CATALOG = [{
+	id: 'mt-v3-hyperevm-testnet',
+	status: 'enabled',
+	sourceContractId: LEARNING_BRIDGE_SOURCE_FT.contractId,
+	sourceName: LEARNING_BRIDGE_SOURCE_FT.name,
+	sourceSymbol: LEARNING_BRIDGE_SOURCE_FT.symbol,
+	destinationId: 'hyperevm-testnet',
+	destinationChainId: 998,
+	wrappedName: 'Wrapped Mega Token',
+	wrappedSymbol: 'wMT',
+	protocol: 'proof-backed-v3',
+}, {
+	id: 'mt-legacy-lwft-hyperevm-testnet',
+	status: 'disabled',
+	sourceContractId: LEARNING_BRIDGE_SOURCE_FT.contractId,
+	sourceName: LEARNING_BRIDGE_SOURCE_FT.name,
+	sourceSymbol: LEARNING_BRIDGE_SOURCE_FT.symbol,
+	destinationId: 'hyperevm-testnet',
+	destinationChainId: 998,
+	wrappedName: 'Learning Wrapped Test FT',
+	wrappedSymbol: 'lwFT',
+	protocol: 'legacy-custody',
+}] as const;
 export const ORIGINAL_BRIDGE_ROUTE = 'tbc-testnet-legacy-ft-to-hyperevm-testnet-v1';
 export function bridgeRouteId(contractId: string, chainId = 998): string {
  if (!/^(?!0{64}$)[0-9a-f]{64}$/.test(contractId)) throw new Error('Invalid source token contract ID.');

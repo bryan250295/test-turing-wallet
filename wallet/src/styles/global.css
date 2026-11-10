@@ -82,7 +82,21 @@ h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
 .page-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0 0 18px; padding: 4px; border: 1px solid #31405f; border-radius: 11px; background: #0d1729; }
 .page-tabs button { min-height: 42px; padding: 9px 12px; color: #bdc9dd; background: transparent; }
 .page-tabs button.selected { color: #06111f; background: #7dd3fc; }
-.bridge-lab-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.bridge-lab-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bridge-route-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.bridge-route-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 18px; margin: 18px 0; padding: 18px; border: 1px solid #30415c; border-radius: 14px; background: #0e182a; }
+.bridge-route-summary div { display: grid; gap: 4px; }
+.bridge-route-summary span, .bridge-route-summary small { color: #91a2ba; }
+.bridge-route-summary strong { font-size: 1.35rem; color: #7ce6bc; }
+.bridge-route-arrow { font-size: 1.5rem; color: #7dd3fc !important; }
+.bridge-route-catalog { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.bridge-route-card { min-width: 0; padding: 18px; border: 1px solid #30415c; border-radius: 12px; background: #0e182a; }
+.bridge-route-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bridge-route-card p { color: #a9bdd7; line-height: 1.5; }
+.bridge-route-card code { display: block; overflow-wrap: anywhere; color: #a8c7ff; font-size: .75rem; }
+.bridge-route-card.route-disabled { opacity: .72; }
+.route-live { color: #6ee7b7; border-color: #34735e; background: #123c31; }
+.proof-transfer code { overflow-wrap: anywhere; }
 .testnet-bridge-wallets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .testnet-bridge-route { margin-bottom: 22px; }
 .bridge-role-choice { display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; margin: 18px 0; }
@@ -112,6 +126,7 @@ h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
 .testnet-bridge-status { font-weight: 700; }
 @media (max-width: 800px) {
 	.testnet-bridge-wallets { grid-template-columns: 1fr; }
+	.bridge-route-selectors, .bridge-route-catalog { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
 	.bridge-lab-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }

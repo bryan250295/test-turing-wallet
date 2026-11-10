@@ -10,6 +10,7 @@ import type { HtlcRecoveryTarget } from '../types/htlc';
 import { formatDateTime } from '../utils/dateTime';
 import TestnetBridge from '../components/bridge/TestnetBridge';
 import BridgeReconciliation from '../components/bridge/BridgeReconciliation';
+import BridgeAdmin from '../components/bridge/BridgeAdmin';
 
 function getHealthDisplay(health: Health | null, loading: boolean) {
 	if (loading) return { tone: 'warning', label: 'Checking…' };
@@ -27,6 +28,7 @@ const tabs = [
 	{ id: 'htlc', label: 'Token locks' },
 	{ id: 'requests', label: 'My locks' },
 	{ id: 'overview', label: 'Markets' },
+	{ id: 'admin', label: 'Admin' },
 ] as const;
 
 type BridgeTab = typeof tabs[number]['id'];
@@ -64,7 +66,7 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 		<section className="card history-card inquiry-page">
 			<p className="eyebrow">TESTNET</p>
 			<h1>Bridge</h1>
-			<p className="intro">Choose a direction and follow the steps to transfer your tokens.</p>
+			<p className="intro">Use a shared bridge route, review activity, or manage operator infrastructure.</p>
 			<div className="page-tabs bridge-lab-tabs" role="tablist" aria-label="Bridge sections">
 				{tabs.map((tab) => (
 					<button
@@ -100,6 +102,9 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 					setRecoveryTarget(target);
 					setActiveTab('htlc');
 				}} />}
+			</div>
+			<div id="bridge-admin-panel" role="tabpanel" aria-labelledby="bridge-admin-tab" hidden={activeTab !== 'admin'} tabIndex={0}>
+				{activeTab === 'admin' && <BridgeAdmin session={session} active />}
 			</div>
 		</section>
 	);
