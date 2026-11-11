@@ -1,5 +1,5 @@
 import { API_URLS } from '../../../shared/src/config/constants';
-import type { ProofBridgeV3Route, ProofBridgeV3Snapshot } from '../../../shared/src/types/proofBridgeV3';
+import type { ProofBridgeV3GasPreflight, ProofBridgeV3Route, ProofBridgeV3Snapshot } from '../../../shared/src/types/proofBridgeV3';
 import { backendData } from './backendClient';
 
 export interface RegisterV3RouteInput {
@@ -12,6 +12,10 @@ export async function registerProofBridgeV3Route(input: RegisterV3RouteInput, si
 
 export async function getProofBridgeV3Progress(signal?: AbortSignal) {
 	return await backendData(API_URLS.phase3TestnetV3Progress, undefined, true, signal) as ProofBridgeV3Snapshot;
+}
+
+export async function getProofBridgeV3GasPreflight(signal?: AbortSignal) {
+	return await backendData(API_URLS.phase3TestnetV3Preflight, undefined, true, signal) as ProofBridgeV3GasPreflight;
 }
 
 export function connectProofBridgeV3Progress(onSnapshot: (snapshot: ProofBridgeV3Snapshot) => void, onState: (state: 'connecting' | 'live' | 'reconnecting') => void) {

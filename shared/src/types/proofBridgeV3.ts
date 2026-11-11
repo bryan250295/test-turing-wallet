@@ -48,3 +48,30 @@ export interface ProofBridgeV3Snapshot {
 	relayer: { mode: 'automatic' | 'observe-only'; address: `0x${string}` | null; balanceWei: string | null };
 	checkedAt: string;
 }
+
+export interface ProofBridgeV3GasPreflight {
+	status: 'ready' | 'insufficient' | 'unavailable';
+	sufficient: boolean;
+	reason: string | null;
+	relayerMode: 'automatic' | 'observe-only';
+	relayerAddress: `0x${string}` | null;
+	balanceWei: string | null;
+	gasPriceWei: string | null;
+	routeDeployed: boolean;
+	checkpointHeight: number;
+	relayHeight: number | null;
+	tbcTipHeight: number | null;
+	estimatedTargetHeight: number | null;
+	estimatedHeaderCount: number | null;
+	setupGas: string;
+	headerGas: string;
+	mintGas: string;
+	rawGas: string;
+	bufferedGas: string;
+	requiredWei: string | null;
+	shortfallWei: string | null;
+	gasUsedBufferPercent: number;
+	gasPriceBufferPercent: number;
+	inclusionReserveBlocks: number;
+	checkedAt: string;
+}

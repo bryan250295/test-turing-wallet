@@ -57,7 +57,7 @@ contract TbcProofMintGatewayTestnetV3 is TbcDepositReplayProtection {
     bytes32 public constant SOURCE_CONTRACT_ID =
         0xac54e83d476839a11bbb7d0a2495e50c9d0d23c9283f94e11222bad589259e6c;
 
-    bytes32 public constant RELAY_RUNTIME_CODEHASH = 0xa304f4e24311fa2178e29647e1f2afaa0d4096c448e1c475381dc3a5c5a60a8a;
+    bytes32 public constant RELAY_RUNTIME_CODEHASH = 0x5b3b5f1afedaec65d86f50ef28f24e357eceae52190ddec156d672ede69f9132;
     bytes32 public constant FINALIZED_RUNTIME_CODEHASH =
         0xdcb75adcfe25c35695f757962f3f978c0fd63c8c1ec243a6abef1c30b27c5679;
     bytes32 public constant TRANSITION_RUNTIME_CODEHASH =

@@ -12,13 +12,13 @@ contract TbcHeaderRelayTestnetV3 {
     uint256 public constant TARGET_CHAIN_ID = 998;
     uint256 public constant TBC_MAIN_POW_LIMIT =
         0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
-    uint32 public constant CHECKPOINT_HEIGHT = 840761;
-    bytes32 public constant CHECKPOINT_HASH = 0x00000000000001323f160d35d5e0c6d2a90d98232f2cef53f2d4b629b8b2fdb4;
-    bytes32 public constant CHECKPOINT_MERKLE_ROOT = 0xc597abdf490d5d402dbe5a92a47a2ff41b5d6f4958a97b8d29a611294e9c531a;
-    uint32 public constant CHECKPOINT_TIME = 1794302362;
-    uint32 public constant CHECKPOINT_BITS = 0x1a04a70a;
-    uint256 public constant CHECKPOINT_CHAIN_WORK = 0x0000000000000000000000000000000000000000014f15b5880904ee0252bca1;
-    bytes32 public constant BOOTSTRAP_COMMITMENT_ROOT = 0x7a96498fbbd2ce473770b7fd71aa49fc72f432c85355623048f9406d9565769b;
+    uint32 public constant CHECKPOINT_HEIGHT = 840932;
+    bytes32 public constant CHECKPOINT_HASH = 0x0000000000000034e4fd15c535dc48b74f305b3864359db53fa618f71f54a43c;
+    bytes32 public constant CHECKPOINT_MERKLE_ROOT = 0xfc7d0dff92a976473f661a255ead68e84710297c06d204accdeea941a6aedec0;
+    uint32 public constant CHECKPOINT_TIME = 1794399932;
+    uint32 public constant CHECKPOINT_BITS = 0x1a045b54;
+    uint256 public constant CHECKPOINT_CHAIN_WORK = 0x0000000000000000000000000000000000000000014f15b5af388104e88fb007;
+    bytes32 public constant BOOTSTRAP_COMMITMENT_ROOT = 0x560bd1322d4d1da2a3aac73785d23f370252fe6b3e07a1b0d053080821f89b28;
     uint32 public constant MIN_CONFIRMATIONS = 6;
     uint32 public constant MAX_FUTURE_BLOCK_TIME = 20 minutes;
 

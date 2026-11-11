@@ -9,8 +9,8 @@ import type useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
 import type { WalletAddresses, WalletSession } from '../../types/wallet';
 import type { BridgeDeploymentTransaction } from '../../types/learningBridge';
 import { getErrorMessage } from '../../utils/errors';
-import { connectProofBridgeV3Progress, getProofBridgeV3Progress, registerProofBridgeV3Route } from '../../services/proofBridgeV3';
-import type { ProofBridgeV3Snapshot } from '../../../../shared/src/types/proofBridgeV3';
+import { connectProofBridgeV3Progress, getProofBridgeV3GasPreflight, getProofBridgeV3Progress, registerProofBridgeV3Route } from '../../services/proofBridgeV3';
+import type { ProofBridgeV3GasPreflight, ProofBridgeV3Snapshot } from '../../../../shared/src/types/proofBridgeV3';
 
 type EvmWallet = ReturnType<typeof useHyperEvmWallet>;
 type Step = 'relay' | 'gateway';
@@ -32,8 +32,10 @@ interface Quote {
 	balanceWei: string;
 	expiresAt: number;
 }
+interface SetupBudget { gasPriceWei: string; requiredWei: string; balanceWei: string; checkedAt: number }
 
 const STORAGE_KEY = 'learningmaterials.phase3.testnet-v3.deployment.v1';
+const CONSERVATIVE_SETUP_GAS = 3_998_666n;
 const constructorAbi = [{
 	type: 'constructor',
 	inputs: [
@@ -73,12 +75,17 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 	const [working, setWorking] = useState('');
 	const [error, setError] = useState('');
 	const [snapshot, setSnapshot] = useState<ProofBridgeV3Snapshot | null>(null);
+	const [gasPreflight, setGasPreflight] = useState<ProofBridgeV3GasPreflight | null>(null);
+	const [setupBudget, setSetupBudget] = useState<SetupBudget | null>(null);
 	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'live' | 'reconnecting'>('off');
 	const running = useRef(false);
 	const registrationAttempted = useRef('');
 	const client = useMemo(() => createPublicClient({ transport: http(HYPEREVM_TESTNET.rpcUrl) }), []);
 	const next: Step | null = !state?.relay ? 'relay' : !state.gateway ? 'gateway' : null;
-	const ready = active && session.networkIsDevnet && Boolean(session.address) && evm.networkIsTestnet && Boolean(evm.address) && !session.busy && !evm.pending;
+	const candidateLag = gasPreflight?.tbcTipHeight === null || gasPreflight?.tbcTipHeight === undefined ? null : gasPreflight.tbcTipHeight - manifest.checkpoint.height;
+	const candidateFresh = candidateLag !== null && candidateLag >= 5 && candidateLag <= 12;
+	const candidateAllowed = Boolean(snapshot?.route || state?.relay || candidateFresh);
+	const ready = active && session.networkIsDevnet && Boolean(session.address) && evm.networkIsTestnet && Boolean(evm.address) && !session.busy && !evm.pending && candidateAllowed;
 
 	useEffect(() => {
 		if (!active || !session.address || !evm.address) return;
@@ -95,6 +102,33 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 		const disconnect = connectProofBridgeV3Progress(setSnapshot, setRealtime);
 		return () => { controller.abort(); disconnect(); setRealtime('off'); };
 	}, [active, session.address]);
+
+	useEffect(() => {
+		if (!active || !session.address || !session.backendAuth.ready) { setGasPreflight(null); return; }
+		const controller = new AbortController();
+		const refresh = () => { void getProofBridgeV3GasPreflight(controller.signal).then(setGasPreflight).catch(() => {
+			if (!controller.signal.aborted) setGasPreflight(null);
+		}); };
+		refresh();
+		const timer = window.setInterval(refresh, 60_000);
+		return () => { controller.abort(); window.clearInterval(timer); };
+	}, [active, session.address, session.backendAuth.ready, snapshot?.route?.relay]);
+
+	useEffect(() => {
+		if (!active || !evm.address || snapshot?.route) { setSetupBudget(null); return; }
+		let disposed = false;
+		const refresh = () => { void Promise.all([
+			client.getGasPrice(), client.getBalance({ address: getAddress(evm.address!), blockTag: 'pending' }),
+		]).then(([gasPrice, balance]) => {
+			if (disposed) return;
+			const gasWithUsageBuffer = (CONSERVATIVE_SETUP_GAS * 120n + 99n) / 100n;
+			const requiredWei = (gasWithUsageBuffer * gasPrice * 125n + 99n) / 100n;
+			setSetupBudget({ gasPriceWei: gasPrice.toString(), requiredWei: requiredWei.toString(), balanceWei: balance.toString(), checkedAt: Date.now() });
+		}).catch(() => { if (!disposed) setSetupBudget(null); }); };
+		refresh();
+		const timer = window.setInterval(refresh, 60_000);
+		return () => { disposed = true; window.clearInterval(timer); };
+	}, [active, client, evm.address, snapshot?.route]);
 
 	function remember(value: V3State) {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
@@ -249,6 +283,16 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 				<div><dt>Backend automation</dt><dd>{snapshot?.relayer.mode === 'automatic' ? <>Automatic · <code>{snapshot.relayer.address}</code>{snapshot.relayer.balanceWei !== null ? <> · {formatEther(BigInt(snapshot.relayer.balanceWei))} HYPE</> : null}</> : 'Observe-only until relayer key is configured'}</dd></div>
 				<div><dt>Live progress</dt><dd>{realtime === 'live' ? 'WebSocket connected' : realtime}</dd></div>
 			</dl>
+			{!snapshot?.route && !state?.relay && <p className={candidateFresh ? 'result success' : 'result error'}>
+				<strong>Checkpoint freshness: {candidateFresh ? 'ready' : 'blocked'}</strong><br />
+				Prepared checkpoint: {manifest.checkpoint.height} · current TBC tip: {gasPreflight?.tbcTipHeight ?? 'unavailable'} · lag: {candidateLag ?? 'unknown'} blocks.<br />
+				Deployment is allowed only when the candidate has 6 confirmations and is no more than 12 blocks behind tip. A stale or unverifiable candidate cannot open MetaMask.
+			</p>}
+			{!snapshot?.route && setupBudget && <p className={BigInt(setupBudget.balanceWei) >= BigInt(setupBudget.requiredWei) ? 'result success' : 'result error'}>
+				<strong>One-time Admin deployment budget</strong><br />
+				Conservative Relay + Gateway estimate: <strong>{formatEther(BigInt(setupBudget.requiredWei))} HYPE</strong> · connected MetaMask balance: <strong>{formatEther(BigInt(setupBudget.balanceWei))} HYPE</strong>.<br />
+				This setup fee is paid here once by the operator; it is not a user transfer fee. Each contract is estimated again immediately before its MetaMask deployment. Checked {new Date(setupBudget.checkedAt).toLocaleTimeString()}.
+			</p>}
 			<div className="htlc-actions">
 				{!state && <button type="button" disabled={!ready || Boolean(working)} onClick={() => { void reviewRoute(); }}>Verify reusable V3 route</button>}
 				{state && next && !quote && <button type="button" disabled={!ready || Boolean(working)} onClick={() => { void reviewCost(); }}>Review {next} gas only</button>}

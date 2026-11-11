@@ -30,6 +30,7 @@ export const API_URLS = {
 	phase3TestnetDepositBroadcast: '/api/bridge/phase3/testnet-deposit/broadcast',
 	phase3TestnetV3Route: '/api/bridge/phase3/testnet-v3/route',
 	phase3TestnetV3Progress: '/api/bridge/phase3/testnet-v3/progress',
+	phase3TestnetV3Preflight: '/api/bridge/phase3/testnet-v3/preflight',
 	scriptUtxos: (hash: string) => `${DEVNET_API_BASE}/utxo/scriptpubkeyhash/${encodeURIComponent(hash)}`,
 	contractTokenUtxos: (hash: string, contractId: string) => `${DEVNET_API_BASE}/ft/utxo/combinescript/${encodeURIComponent(hash)}01/contract/${encodeURIComponent(contractId)}`,
 	testnetBroadcast: `${DEVNET_API_BASE}/broadcasttx`,
