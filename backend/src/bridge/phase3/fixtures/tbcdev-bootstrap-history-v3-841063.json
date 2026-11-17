@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "learningmaterials/tbc-header-bootstrap/v3",
+  "status": "candidate-not-deployed",
+  "route": "tbcdev-testnet",
+  "preparedAt": "2026-11-12T12:05:30.814Z",
+  "observedTip": 841068,
+  "requiredConfirmations": 6,
+  "checkpoint": {
+    "height": 841063,
+    "hash": "0x0000000000000309e04b02f4c53d5fac3f98b4623222ab9f1d93b7ed63fb38b3",
+    "version": 570957824,
+    "previousBlockHash": "0x00000000000001ad606e3aa5d64656e6e3c6c1c8649d9e955b61d4bd7552153a",
+    "merkleRoot": "0x22f350345a9d5fcce3775a658d0ccc9862fc34dd7f79de3ee514b2ac6450b3e1",
+    "time": 1794477239,
+    "bits": 436486223,
+    "nonce": 392483656,
+    "transactionCount": 1,
+    "chainWork": "0x0000000000000000000000000000000000000000014f15b5ccc5f1670b479b8c"
+  },
+  "bootstrap": {
+    "startHeight": 832999,
+    "endHeight": 841063,
+    "pointCount": 8065,
+    "recordBytes": 112,
+    "binaryFile": "tbcdev-bootstrap-history-v3-841063.bin",
+    "binaryBytes": 903280,
+    "binarySha256": "f28c2aa0a65486800ec3387b2e587e994e7a839102d6ff59d4ce4653e2d0c8d8",
+    "commitmentDomain": "learningmaterials/tbc-hyperevm/v3/header-bootstrap/v3",
+    "commitmentDomainHash": "0x67580be190f63bae2a4b74e51b27298aa0a7b0de80df4964c494823ec68f4e54",
+    "commitmentRoot": "0xfc167da0d5aea50490737e111c0d66b117ba4eb67cca7582d11de3eae9b256f9",
+    "checkpointProof": [
+      "0xbc9650e0c17d2c02e6fd1b72ad38bf275eb28e8700336900b03a9ddf1587aab4",
+      "0x073cd80f2d327ffcdf39f3829cd8f97924a2d6c856bdf0f17580aa8d15e6f5e3",
+      "0x6ca99a8f9356f4e471872394110901db3ee2060a2c7ab23b9fd988ea14c9f55f",
+      "0xd7b2bc5320c996de05f879ebc6531a1d1a6cb4165dfe8ae988cee73cee31c938",
+      "0x43f09b709af57f68721c2bd133efd6959e3ed6e8cc40e67d275f11041031ef91",
+      "0x6b3e02e388fa31b60959b32efd5d8664b297226d4399f3726583efe896a38aa9",
+      "0x20bf034321c89e5764cfbf9ca5be6bbc840499ca0031165a3c8294f8a0f55211",
+      "0x62fbec6205d99a36e71fec013857bae007962746e099fd038daf8af625b4cf6a",
+      "0x7f5ff1ee4bb0574befa19828c66c7b34bc7ed75d64a793b51cbb34d82134af2c",
+      "0x0ee741b849e11440853064dff18a432f3f36c88c02cc36e845ea990de26c4994",
+      "0xfeed5da0a93748960cee502a9570e1b2674d0ece5b1d0e28ffd1856493fa161d",
+      "0xc9dfdb1c5e42f3d06030426ada797eb9e9c31cc94a98518f91918759930f08c0",
+      "0xc91b83658e27ee005351f7432b4960ba2d5a7ec123ab2b331ec10b958e715e2b"
+    ]
+  },
+  "crossCheckedHeights": [
+    840040,
+    840140,
+    840240,
+    840340,
+    840440,
+    840540,
+    840640,
+    840740,
+    840840,
+    840940,
+    841040,
+    841063
+  ],
+  "sources": [
+    "https://api.tbcdev.org/api/tbc",
+    "https://scanapi.tbcdev.org/api"
+  ],
+  "safety": {
+    "broadcast": false,
+    "oldRouteAction": "paused",
+    "oldDepositTxid": "96f0d0a76ba406a684537469a269e70a7584a917bb37c9ff7de68ae64aed1caa"
+  }
+}

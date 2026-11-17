@@ -4,10 +4,10 @@ pragma solidity 0.8.30;
 /// @notice Verifies DAA points committed by the prepared public Testnet checkpoint v3.
 library TbcBootstrapVerifierTestnetV3 {
     bytes32 internal constant CONTEXT_DOMAIN_HASH = 0x67580be190f63bae2a4b74e51b27298aa0a7b0de80df4964c494823ec68f4e54;
-    bytes32 internal constant CHECKPOINT_HASH = 0x0000000000000034e4fd15c535dc48b74f305b3864359db53fa618f71f54a43c;
-    bytes32 internal constant COMMITMENT_ROOT = 0x560bd1322d4d1da2a3aac73785d23f370252fe6b3e07a1b0d053080821f89b28;
-    uint32 internal constant START_HEIGHT = 832868;
-    uint32 internal constant END_HEIGHT = 840932;
+    bytes32 internal constant CHECKPOINT_HASH = 0x0000000000000309e04b02f4c53d5fac3f98b4623222ab9f1d93b7ed63fb38b3;
+    bytes32 internal constant COMMITMENT_ROOT = 0xfc167da0d5aea50490737e111c0d66b117ba4eb67cca7582d11de3eae9b256f9;
+    uint32 internal constant START_HEIGHT = 832999;
+    uint32 internal constant END_HEIGHT = 841063;
     uint32 internal constant POINT_COUNT = 8065;
     uint256 internal constant PROOF_LENGTH = 13;
 

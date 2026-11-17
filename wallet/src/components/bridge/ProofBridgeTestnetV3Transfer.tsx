@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { formatEther, formatUnits, getAddress } from 'viem';
+import { formatEther, getAddress } from 'viem';
 import { BRIDGE_ROUTE_CATALOG } from '../../../../shared/src/config/bridgeRoutes';
-import type { ProofBridgeV3GasPreflight, ProofBridgeV3Snapshot } from '../../../../shared/src/types/proofBridgeV3';
+import type { ProofBridgeV3Snapshot } from '../../../../shared/src/types/proofBridgeV3';
 import type useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
 import type { WalletAddresses, WalletSession } from '../../types/wallet';
 import { getErrorMessage } from '../../utils/errors';
@@ -23,8 +23,6 @@ function normalizedPublicKey(value: string) {
 
 export default function ProofBridgeTestnetV3Transfer({ session, evm, active }: { session: WalletSession; evm: EvmWallet; active: boolean }) {
 	const [snapshot, setSnapshot] = useState<ProofBridgeV3Snapshot | null>(null);
-	const [preflight, setPreflight] = useState<ProofBridgeV3GasPreflight | null>(null);
-	const [preflightError, setPreflightError] = useState('');
 	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'live' | 'reconnecting'>('off');
 	const [amount, setAmount] = useState('');
 	const [sourceTxid, setSourceTxid] = useState('');
@@ -42,19 +40,6 @@ export default function ProofBridgeTestnetV3Transfer({ session, evm, active }: {
 		return () => { controller.abort(); disconnect(); setRealtime('off'); };
 	}, [active, session.address, session.backendAuth.ready]);
 
-	useEffect(() => {
-		if (!active || !session.address || !session.backendAuth.ready) { setPreflight(null); return; }
-		const controller = new AbortController();
-		const refresh = () => { void getProofBridgeV3GasPreflight(controller.signal).then((value) => {
-			setPreflight(value); setPreflightError('');
-		}).catch((cause) => {
-			if (!controller.signal.aborted) { setPreflight(null); setPreflightError(getErrorMessage(cause)); }
-		}); };
-		refresh();
-		const timer = window.setInterval(refresh, 60_000);
-		return () => { controller.abort(); window.clearInterval(timer); };
-	}, [active, session.address, session.backendAuth.ready, snapshot?.route?.relay]);
-
 	async function verifyWallets() {
 		const [network, addresses, key, current] = await Promise.all([
 			session.wallet.getNetwork(), session.wallet.getAddress(), session.wallet.getPubKey(), evm.readCurrent(),
@@ -71,8 +56,12 @@ export default function ProofBridgeTestnetV3Transfer({ session, evm, active }: {
 		running.current = true; session.setBusy(true); setWorking('Rechecking the full Testnet HYPE budget…'); setError(''); setSourceTxid('');
 		try {
 			const latestPreflight = await getProofBridgeV3GasPreflight();
-			setPreflight(latestPreflight);
-			if (!latestPreflight.sufficient || latestPreflight.requiredWei === null) throw new Error(latestPreflight.reason ?? 'The operator relayer does not have enough Testnet HYPE for the full transfer.');
+			if (!latestPreflight.sufficient || latestPreflight.requiredWei === null) {
+				const required = latestPreflight.requiredWei === null ? 'unavailable' : `${formatEther(BigInt(latestPreflight.requiredWei))} HYPE`;
+				const balance = latestPreflight.balanceWei === null ? 'unavailable' : `${formatEther(BigInt(latestPreflight.balanceWei))} HYPE`;
+				const shortfall = latestPreflight.shortfallWei === null ? 'unavailable' : `${formatEther(BigInt(latestPreflight.shortfallWei))} HYPE`;
+				throw new Error(`Transfer cannot start yet. The operator relayer requires ${required}, currently has ${balance}, and is short by ${shortfall}. You pay 0 HYPE. ${latestPreflight.reason ?? ''}`.trim());
+			}
 			setWorking('Building and locally reviewing the MT deposit…');
 			const wallets = await verifyWallets();
 			const controller = new AbortController();
@@ -97,11 +86,9 @@ export default function ProofBridgeTestnetV3Transfer({ session, evm, active }: {
 
 	const latest = snapshot?.transfers[0];
 	const hasActive = Boolean(latest && latest.status !== 'completed' && latest.status !== 'needs_review');
-	const relayerFunded = preflight?.sufficient === true;
 	const ready = active && session.networkIsDevnet && Boolean(session.address) && session.backendAuth.ready
 		&& evm.networkIsTestnet && Boolean(evm.address) && !session.busy && !evm.pending && Boolean(snapshot?.route)
-		&& relayerFunded && !hasActive && amount.trim().length > 0;
-	const hype = (value: string | null) => value === null ? 'unavailable' : `${formatEther(BigInt(value))} HYPE`;
+		&& !hasActive && amount.trim().length > 0;
 	const stage = latest?.status === 'completed' ? 'Completed'
 		: latest?.status === 'mint_submitted' ? `Waiting for HyperEVM confirmations (${latest.mintConfirmations}/6)`
 			: latest?.status === 'ready_to_mint' ? 'Submitting proof mint'
@@ -117,21 +104,11 @@ export default function ProofBridgeTestnetV3Transfer({ session, evm, active }: {
 			<div><dt>Shared Gateway</dt><dd><code>{snapshot.route.gateway}</code></dd></div>
 			<div><dt>Shared Header Relay</dt><dd><code>{snapshot.route.relay}</code></dd></div>
 		</dl> : <p className="result error">The shared MT → wMT route is not deployed yet. An operator must complete it once in <Link to="/bridge-lab?tab=admin">Admin</Link>; users never deploy their own copy.</p>}
-		{snapshot?.route && preflight && <div className={preflight.sufficient ? 'result success' : 'result error'} role="status">
-			<strong>Operator runtime gas preflight: {preflight.sufficient ? 'enough' : 'blocked'}</strong> · user pays 0 HYPE<br />
-			Estimated required: <strong>{hype(preflight.requiredWei)}</strong> · Operator relayer balance: <strong>{hype(preflight.balanceWei)}</strong>
-			{preflight.shortfallWei !== null && BigInt(preflight.shortfallWei) > 0n ? <> · Shortfall: <strong>{hype(preflight.shortfallWei)}</strong></> : null}<br />
-			Estimate: {preflight.routeDeployed ? 'existing route' : 'one-time setup included'} · {preflight.estimatedHeaderCount ?? 'unknown'} header transaction(s) · proof mint included
-			{preflight.gasPriceWei ? <> · gas price {formatUnits(BigInt(preflight.gasPriceWei), 9)} gwei</> : null}<br />
-			Buffers: +{preflight.gasUsedBufferPercent}% gas used, +{preflight.gasPriceBufferPercent}% gas price, +{preflight.inclusionReserveBlocks} TBC inclusion blocks. Checked {new Date(preflight.checkedAt).toLocaleTimeString()}.
-			{preflight.reason ? <><br />{preflight.reason}</> : null}
-		</div>}
-		{snapshot?.route && !preflight && <p className="result error" role="alert">Runtime gas preflight is unavailable. Transfer is blocked until the backend can verify the Header relay and mint budget.{preflightError ? ` ${preflightError}` : ''}</p>}
 		{!snapshot?.route && <p className="history-note">The one-time Relay and Gateway deployment budget belongs to Admin. Runtime Header relay and mint gas will be shown here only after that shared route is live.</p>}
 		{snapshot?.relayer.mode === 'observe-only' && <p className="result error">The backend relayer is observe-only. Operator signing must be enabled before a user transfer can start.</p>}
 		<label htmlFor="proof-transfer-amount">Amount ({routeDefinition.sourceSymbol})</label>
 		<input id="proof-transfer-amount" type="text" inputMode="decimal" autoComplete="off" placeholder="For example 100" value={amount} disabled={Boolean(working) || hasActive} onChange={(event) => setAmount(event.target.value)} />
-		<div className="htlc-actions"><button type="button" disabled={!ready || Boolean(working)} onClick={() => { void startDeposit(); }}>{working ? 'Transfer running…' : !snapshot?.route ? 'Waiting for Admin deployment' : preflight && !preflight.sufficient ? 'Insufficient relayer HYPE' : 'Sign MT deposit and start automatic transfer'}</button></div>
+		<div className="htlc-actions"><button type="button" disabled={!ready || Boolean(working)} onClick={() => { void startDeposit(); }}>{working ? 'Transfer running…' : !snapshot?.route ? 'Waiting for Admin deployment' : 'Sign MT deposit and start automatic transfer'}</button></div>
 		<p className="history-note">The source wallet pays only the TBC transaction fee. Header relay and proof-mint gas are paid by the operator relayer.</p>
 		{latest && <p className={latest.status === 'needs_review' ? 'result error' : latest.status === 'completed' ? 'result success' : 'result'}>Current stage: <strong>{stage}</strong><br />TXID: <code>{latest.sourceTxid}</code><br />TBC confirmations: {latest.sourceConfirmations}/6{latest.relayHeight ? <> · Relay height: {latest.relayHeight}</> : null}{latest.mintTxHash ? <><br />Mint transaction: <code>{latest.mintTxHash}</code> · HyperEVM confirmations: {latest.mintConfirmations}/6</> : null}{latest.lastError ? <><br />Attention: {latest.lastError}</> : null}</p>}
 		{sourceTxid && <p className="result success">Deposit accepted for automatic processing: <code>{sourceTxid}</code></p>}

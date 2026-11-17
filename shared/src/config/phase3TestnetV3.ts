@@ -3,13 +3,13 @@ export const PHASE3_TESTNET_V3 = {
 	"version": "testnet-v3",
 	"chainId": 998,
 	"checkpoint": {
-		"height": 840932,
-		"hash": "0x0000000000000034e4fd15c535dc48b74f305b3864359db53fa618f71f54a43c",
-		"bootstrapRoot": "0x560bd1322d4d1da2a3aac73785d23f370252fe6b3e07a1b0d053080821f89b28"
+		"height": 841063,
+		"hash": "0x0000000000000309e04b02f4c53d5fac3f98b4623222ab9f1d93b7ed63fb38b3",
+		"bootstrapRoot": "0xfc167da0d5aea50490737e111c0d66b117ba4eb67cca7582d11de3eae9b256f9"
 	},
 	"reserveController": "0x77fd918d8f6f221727f6e2dc282b47674dd741cd",
-	"relayRuntimeCodeHash": "0x5b3b5f1afedaec65d86f50ef28f24e357eceae52190ddec156d672ede69f9132",
-	"gatewayCreationCodeHash": "0x2070edc5c1584e8b9ecbfc1b5721eb9a90838ea92379009d590da315bf90987b",
+	"relayRuntimeCodeHash": "0x75179a558973967c53ba267cbd35c0a9a45191fd6bfdcda88a5405d5f19a66e6",
+	"gatewayCreationCodeHash": "0xbc8bf62074af046ac0e047cd4d215c6ed63a0776603cf29fd79469965c19b094",
 	"gatewayCreationCodeBytes": 9236,
 	"modules": {
 		"finalized": "0x6b8fEd83821F49512A262D8AA0bb33D552a71B30",
