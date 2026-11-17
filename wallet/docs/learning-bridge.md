@@ -1009,7 +1009,7 @@ No confirmation threshold, immutable order term, role/nonce/calldata check, cust
 - 对账页以余额、交易及已记录费用为主，保留“保存的状态”和“重新读取的余额”之别，以及只覆盖登记地址／跨链读取不同步的简短范围说明。
 - 清理旧锁记录的后台数据库／迁移说明和 mint 页教学示例；已有钱包、mint、锁定、领取、退款功能保持可用。
 
-此修改不更改链上代币名称／合约、金额转换、API 权限或资金校验，不执行迁移或真实交易。前端构建通过；尚未完成新界面的浏览器验收。STUDY2.md 保持只读。
+此修改不更改链上代币名称／合约、金额转换、API TelegramSharing.md 保持只读。
 
 ### English
 

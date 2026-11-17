@@ -99,7 +99,7 @@ Hyperliquid
 
 首笔托管式学习桥往返交易已由用户截图确认：1,000,000 MT → lwFT → 永久锁定 lwFT → MT 返回 6/6 确认（2026-10-29 22:03 MYT）。用户随后明确确认 Turing Wallet 已收到返回的 1,000,000 MT；没有实现跨链 Atomic Swap。
 
-**下一条学习主线已确定（2026-10-26）：自建 TBC Testnet ↔ HyperEVM Testnet 学习桥，参考 Turing Bridge 的产品流程。** 首版为普通 legacy FT → `lwFT` 的托管式 Lock and Mint；2026-10-28 已选 MT、完成真实部署并由用户截图确认准备订单成功。首笔正向 mint 与永久锁定赎回的正常交易流程已走通；往返证据和已确认的返回余额见学习桥说明第 16 节，异常场景仍单独保留。STUDY2.md 为老师原始资料，始终只读；个人分析与计划记录在本文件。
+**下一条学习主线已确定（2026-10-26）：自建 TBC Testnet ↔ HyperEVM Testnet 学习桥，参考 Turing Bridge 的产品流程。** 首版为普通 legacy FT → `lwFT` 的托管式 Lock and Mint；2026-10-28 已选 MT、完成真实部署并由用户截图确认准备订单成功。首笔正向 mint 与永久锁定赎回的正常交易流程已走通；往返证据和已确认的返回余额见学习桥说明第 16 TelegramSharing.md 为老师原始资料，始终只读；个人分析与计划记录在本文件。
 
 | 操作 | 已有结果／依据 | 状态 |
 | --- | --- | --- |
@@ -246,7 +246,7 @@ Hyperliquid
 - [x] 已实现钱包 challenge 登录、数据库 session、HttpOnly Cookie、CSRF 与 Origin 校验；HTLC 按登录钱包检查读写权限，secret 读取保留额外单次签名。EVM EOA 登录 API 可用作后续基础，尚未实现双钱包账户绑定。
 - [x] 钱包连接与登录合并：刷新只恢复有效 Session；没有 Session 时，只有主动点击 Connect／Reconnect 才请求登录签名。账户／网络变化不自动弹出登录签名，取消后通过 Reconnect 重试，不再提供独立 Backend sign in 区块。2026-10-28 修正刷新自动签名触发，实际钱包流程待验收。
 - [x] 已实现请求／关联交易、加密 secret、查询结果、session／challenge 和摘要审计表；旧 JSON 事务导入、文件 hash 去重、保留原解密 key 与独立备份。
-- [x] 本地配置和迁移前备份已生成；原 storage 不删除，STUDY2.md 不变。
+- [x] 本地配置和迁移前备份已生成；原 storage TelegramSharing.md 不变。
 - [x] 已完成 Docker 干净构建与服务启动：PostgreSQL／NestJS healthy，React 运行于 localhost:5173。数据库核对为 5 笔 HTLC 请求、4 份加密 secret、9 个导入登记；重复导入跳过，不产生重复资料。此项不是钱包行为验收。
 - [ ] 用户验收新登录、账户切换、HTLC 列表和 secret 取回；原有链上成功记录保留，迁移后流程尚未重新验收。
 - [ ] 数据库备份恢复演练、正式部署与未来 bridge worker，分别记录，当前不自动完成。
@@ -401,23 +401,23 @@ https://airdrop.tbcdev.org/
 https://github.com/TuringBitChain/turing-wallet-provider
 https://faucet.zalalena.com/hyperliquid
 
-**当前安排（2026-10-29 22:03 MYT）：首笔 MT → lwFT → MT 往返交易已走通；页面显示 MT return confirmed、源 6/6 确认。用户随后明确确认 Turing Wallet 已收到返回的 1,000,000 MT，首笔往返及返回余额验收完成。下一开发步骤为桥对账页面，汇总存入／返回 MT、mint／永久锁定 lwFT、交易确认及实际费用：赎回 lwFT 永久留在 escrow，totalSupply 不减少；0.001 TBC native change 留在保管地址且不自动退回。异常和恢复验收仍单独记录。未运行自动化测试，未代用户签名／广播。详见 wallet/docs/learning-bridge.md 第 16 节；STUDY2.md 只读。**
+**当前安排（2026-10-29 22:03 MYT）：首笔 MT → lwFT → MT 往返交易已走通；页面显示 MT return confirmed、源 6/6 确认。用户随后明确确认 Turing Wallet 已收到返回的 1,000,000 MT，首笔往返及返回余额验收完成。下一开发步骤为桥对账页面，汇总存入／返回 MT、mint／永久锁定 lwFT、交易确认及实际费用：赎回 lwFT 永久留在 escrow，totalSupply 不减少；0.001 TBC native change 留在保管地址且不自动退回。异常和恢复验收仍单独记录。未运行自动化测试，未代用户签名／广播。详见 wallet/docs/learning-bridge.md 第 16 TelegramSharing.md 只读。**
 
-**当前安排（2026-10-30）：首笔 1,000,000 MT 往返及 Turing Wallet 返回余额已由用户确认。已实现 Bridge Lab → Reconciliation：本钱包按 lwFT 合约查看正反向记录、确认金额、公开 TXID 与已保存实际费用；独立手动读取登记保管地址 MT 储备和 HyperEVM totalSupply／永久 escrow locks，显示观察范围、时间与差额，失败不按零处理。无 migration、不签名或广播，不改变原结算状态。前后端构建通过，Docker API schema 已加载对账路径；未运行自动化测试。新页面浏览器验收仍待用户查看；异常和恢复演练未自动完成。说明见 wallet/docs/learning-bridge.md 第 17 节；STUDY2.md 保持只读。**
+**当前安排（2026-10-30）：首笔 1,000,000 MT 往返及 Turing Wallet 返回余额已由用户确认。已实现 Bridge Lab → Reconciliation：本钱包按 lwFT 合约查看正反向记录、确认金额、公开 TXID 与已保存实际费用；独立手动读取登记保管地址 MT 储备和 HyperEVM totalSupply／永久 escrow locks，显示观察范围、时间与差额，失败不按零处理。无 migration、不签名或广播，不改变原结算状态。前后端构建通过，Docker API schema 已加载对账路径；未运行自动化测试。新页面浏览器验收仍待用户查看；异常和恢复演练未自动完成。说明见 wallet/docs/learning-bridge.md 第 17 TelegramSharing.md 保持只读。**
 
 **当前安排（2026-10-30，流程简化）：按用户要求先简化桥页面，再继续备份恢复。Testnet Bridge 按发送／返回分方向；当前步骤突出，设置和历史折叠。已保存待确认交易可每约 30 秒自动检查，错误或页面隐藏时暂停，不自动付款／报价／签名／广播。Prepare next wallet step 合并查下一步与准备费率，仍明确检查后逐笔在钱包确认；返回数量预填完整原始数量，完成后显示收据和对账入口。原往返验收保留；前后端构建通过，Docker ready 且已加载 next 报价选项，未运行自动化测试，新 UI 验收待用户查看。详见 wallet/docs/learning-bridge.md 第 18 节；未自动执行备份恢复或改动 TelegramSharing.md。**
 
-**当前安排（2026-10-30，操作界面）：按用户要求移除用户界面的学习／开发解释，资料继续保留在文档。导航为 Bridge，默认 Transfer；操作页保留逐步指引、数量／地址、费用、确认状态及必要的不可逆／重复付款提示。移除 genesis、fingerprint、nonce、冻结 hash、raw bridge amount、数据库迁移等显示以及独立估算面板，实际报价和签名前核验保持。前端构建通过，未执行真实交易或 migration；新浏览器验收待用户查看。详见 wallet/docs/learning-bridge.md 第 19 节；STUDY2.md 不改。**
+**当前安排（2026-10-30，操作界面）：按用户要求移除用户界面的学习／开发解释，资料继续保留在文档。导航为 Bridge，默认 Transfer；操作页保留逐步指引、数量／地址、费用、确认状态及必要的不可逆／重复付款提示。移除 genesis、fingerprint、nonce、冻结 hash、raw bridge amount、数据库迁移等显示以及独立估算面板，实际报价和签名前核验保持。前端构建通过，未执行真实交易或 migration；新浏览器验收待用户查看。详见 wallet/docs/learning-bridge.md 第 19 TelegramSharing.md 不改。**
 
-**当前安排（2026-10-30，对账请求列表）：按用户反馈改为 Requests 优先：正向／反向请求分行，真实创建时间、搜索、方向／状态／合约过滤、排序、10／25／50 行分页及单笔 View 详情。合约总额、设置交易和当前余额检查移到 Bridge balances；过滤不改变总额。同钱包刷新保留列表上下文。后端每类 200 条限制不变，分页仅作用于完整已加载报告。前后端构建通过，未运行自动化测试，未执行真实签名／广播，新浏览器验收待用户查看。详见 wallet/docs/learning-bridge.md 第 20 节；STUDY2.md 不改。**
+**当前安排（2026-10-30，对账请求列表）：按用户反馈改为 Requests 优先：正向／反向请求分行，真实创建时间、搜索、方向／状态／合约过滤、排序、10／25／50 行分页及单笔 View 详情。合约总额、设置交易和当前余额检查移到 Bridge balances；过滤不改变总额。同钱包刷新保留列表上下文。后端每类 200 条限制不变，分页仅作用于完整已加载报告。前后端构建通过，未运行自动化测试，未执行真实签名／广播，新浏览器验收待用户查看。详见 wallet/docs/learning-bridge.md 第 20 TelegramSharing.md 不改。**
 
-**当前安排（2026-10-30，自选源代币与包装元数据）：选择并验证 TBC Testnet token → 选择 HyperEVM Testnet → 复用当前 TBC 身份的包装合约或设置新 name／symbol → 明确钱包确认并继续付款／mint。新增独立 BridgeWrappedFT artifact，旧 MT／lwFT 部署兼容保留；精度、源合约、订单、入金／返回和对账按各记录绑定，MetaMask 导入采用实际 symbol／decimals。仅支持通过原始 genesis 和 SDK 普通 legacy FT v1–v4 布局验证的代币；不代表所有 FT 变种或 Sepolia 已接通。包装部署复用按当前 TBC 身份，跨身份共享和共享 escrow／重复返回仍未实现。Solidity 和前后端构建通过，Docker backend ready 且 API schema 已加载新字段；未运行自动化测试、migration 或真实链上交易。新 token 浏览器及完整往返验收待用户操作。详见 wallet/docs/learning-bridge.md 第 21 节；STUDY2.md 只读。**
+**当前安排（2026-10-30，自选源代币与包装元数据）：选择并验证 TBC Testnet token → 选择 HyperEVM Testnet → 复用当前 TBC 身份的包装合约或设置新 name／symbol → 明确钱包确认并继续付款／mint。新增独立 BridgeWrappedFT artifact，旧 MT／lwFT 部署兼容保留；精度、源合约、订单、入金／返回和对账按各记录绑定，MetaMask 导入采用实际 symbol／decimals。仅支持通过原始 genesis 和 SDK 普通 legacy FT v1–v4 布局验证的代币；不代表所有 FT 变种或 Sepolia 已接通。包装部署复用按当前 TBC 身份，跨身份共享和共享 escrow／重复返回仍未实现。Solidity 和前后端构建通过，Docker backend ready 且 API schema 已加载新字段；未运行自动化测试、migration 或真实链上交易。新 token 浏览器及完整往返验收待用户操作。详见 wallet/docs/learning-bridge.md 第 21 TelegramSharing.md 只读。**
 
-**当前安排（2026-10-30，钱包付款自动填入）：正向付款改为 Pay [amount] [symbol] with Turing Wallet，自动使用冻结的 token／数量字符串／保管地址，捕获 SDK 返回 TXID 后自动进入原入金与确认检查。服务端现有 append-only audit journal 保留付款请求，订单锁阻止重复 begin；未知钱包结果保留恢复状态，不自动重复付款。旧手动付款／无 TXID 等情况折叠到 Already paid or need recovery。六确认和钱包逐笔批准保留。前后端构建通过，backend ready 且新 payment routes 已加载；未运行自动化测试、migration 或真实签名／付款，钱包实际验收待用户操作。详见 wallet/docs/learning-bridge.md 第 22 节；STUDY2.md 只读。**
+**当前安排（2026-10-30，钱包付款自动填入）：正向付款改为 Pay [amount] [symbol] with Turing Wallet，自动使用冻结的 token／数量字符串／保管地址，捕获 SDK 返回 TXID 后自动进入原入金与确认检查。服务端现有 append-only audit journal 保留付款请求，订单锁阻止重复 begin；未知钱包结果保留恢复状态，不自动重复付款。旧手动付款／无 TXID 等情况折叠到 Already paid or need recovery。六确认和钱包逐笔批准保留。前后端构建通过，backend ready 且新 payment routes 已加载；未运行自动化测试、migration 或真实签名／付款，钱包实际验收待用户操作。详见 wallet/docs/learning-bridge.md 第 22 TelegramSharing.md 只读。**
 
 **当前安排（2026-10-30，完成记录折叠）：正向 Transfer 的 completed／cancelled 订单默认放入 Completed and closed transfers，不再整页展开旧收据及 Add token。展开仍可查看详情和导入，折叠不挂载历史结算组件；Reconciliation 搜索与返回方向保留。前端构建通过，未运行自动化测试或真实交易，无数据删除／状态变更。详见 wallet/docs/learning-bridge.md 第 23 节；新显示待浏览器验收。**
 
-**当前安排（2026-10-30，未使用代码清理）：移除旧独立 preview hook／请求 helper、固定旧 route 转接配置及无引用的旧 Prisma 生成目录（17 文件约 600 KB）。角色表单简化为 useBridgeDeploymentRoles；CSS 清理 24 个未使用 selector 和 17 个已被覆盖的属性，保留动态 class。维护源码入口引用复查、前后端构建及 diff whitespace 检查通过，未运行自动化测试或真实交易；浏览器样式验收待查看。当前 Prisma client／历史合约 artifacts／migration／recovery／HTML 入口仍需保留。详见 wallet/docs/learning-bridge.md 第 24 节；STUDY2.md 只读。**
+**当前安排（2026-10-30，未使用代码清理）：移除旧独立 preview hook／请求 helper、固定旧 route 转接配置及无引用的旧 Prisma 生成目录（17 文件约 600 KB）。角色表单简化为 useBridgeDeploymentRoles；CSS 清理 24 个未使用 selector 和 17 个已被覆盖的属性，保留动态 class。维护源码入口引用复查、前后端构建及 diff whitespace 检查通过，未运行自动化测试或真实交易；浏览器样式验收待查看。当前 Prisma client／历史合约 artifacts／migration／recovery／HTML 入口仍需保留。详见 wallet/docs/learning-bridge.md 第 24 TelegramSharing.md 只读。**
 
 **当前安排（2026-10-30，按钮不可用提示）：Prepare next wallet step 现在显示会话／忙碌状态／MetaMask 读取、账户或网络的具体阻止原因，读失败时就地提供刷新／重连／切网；不因入金达到 6 确认而跳过钱包检查。前端构建通过，未运行自动化测试或真实交易，实际钱包恢复待用户查看。详见 wallet/docs/learning-bridge.md 第 25 节。**
 
