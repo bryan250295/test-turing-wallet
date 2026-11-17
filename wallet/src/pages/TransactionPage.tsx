@@ -6,7 +6,7 @@ import type { TransactionRow } from '../types/transaction';
 import WalletConnection from '../components/WalletConnection';
 import useTransactionHistory from '../hooks/useTransactionHistory';
 import useLinkedTransaction from '../hooks/useLinkedTransaction';
-import { statusOf, shortId, timeOf, dateOf, formatFeeTbc, transactionParties, transactionAmount } from '../utils/transactions';
+import { statusOf, shortId, timeOf, dateOf, formatFeeTbc, transactionParties, transactionAmount, transactionTokenName } from '../utils/transactions';
 import { formatTime } from '../utils/dateTime';
 
 function AddressList({ entries }: { entries: TransactionEntry[] }) {
@@ -126,6 +126,23 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 	const pageCount = Math.max(1, Math.ceil(filtered.length / 15));
 	const currentPage = Math.min(page, pageCount);
 	const visible = filtered.slice((currentPage - 1) * 15, currentPage * 15);
+	const visibleTokenTxids = visible.filter((row) => row.records.some(({ source }) => source === 'FT tokens')).map((row) => row.txid).join(',');
+	const detailLoader = useRef(loadTransactionDetails);
+	detailLoader.current = loadTransactionDetails;
+	useEffect(() => {
+		if (hidden || !address || !networkIsDevnet) return;
+		let cancelled = false;
+		// Load the current page sequentially so names appear without opening Details.
+		const txids = visibleTokenTxids ? visibleTokenTxids.split(',') : [];
+		void (async () => {
+			for (const txid of txids) {
+				if (cancelled) return;
+				const row = state.rows.find((item) => item.txid === txid) ?? (linked.row?.txid === txid ? linked.row : undefined);
+				if (row) await detailLoader.current(row);
+			}
+		})();
+		return () => { cancelled = true; };
+	}, [address, networkIsDevnet, hidden, visibleTokenTxids, checkedAt]);
 	const confirmed = rows.filter((row) => statusOf(row) === 'Confirmed').length;
 	const pending = rows.filter((row) => statusOf(row) === 'Pending').length;
 
@@ -183,7 +200,7 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 						<td><div className="history-txid"><code title={row.txid}>{shortId(row.txid)}</code><button type="button" className="copy-txid" aria-label={`Copy transaction ID ${row.txid}`} onClick={() => copyTxid(row.txid)}>Copy</button></div></td>
 						<td>{[...new Set(row.records.map(({ source }) => source))].join(' / ')}</td>
 						<td><span className={`status-badge status-${status.toLowerCase()}`}><span aria-hidden="true">●</span> {status}</span></td>
-						<td className="history-amount">{transactionAmount(row, address)}</td>
+						<td className="history-amount"><span>{transactionAmount(row, address)}</span><div className="history-note">{row.loading && !row.tokenInfo ? 'Loading token name…' : transactionTokenName(row)}</div></td>
 						<td className="history-fee" title={fees.length ? `${fees.join(' / ')} satoshis` : undefined}>{fees.length ? fees.map(formatFeeTbc).join(' / ') : '—'}</td>
 						<td className="history-date">{dateOf(timeOf(row))}</td>
 						<td>{confirmations.length ? Math.min(...confirmations).toLocaleString() : '—'}</td>

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { getTokenTransaction, getTokenInfo } from '../services/tbcApi';
-import { detectConfirmations } from '../utils/transactions';
+import { detectConfirmations, statusOf } from '../utils/transactions';
 import { getErrorMessage } from '../utils/errors';
 import type { TransactionData } from '../types/api';
 import type { TransactionRow, TransactionDetails, ConfirmationTracking } from '../types/transaction';
 
 type RealtimeState = 'off' | 'connecting' | 'connected' | 'reconnecting';
+const detailVersion = (row: TransactionRow) => `${statusOf(row)}:${row.records.find(({ source }) => source === 'FT tokens')?.data.contract_id ?? ''}`;
 interface HistorySnapshot {
 	type: 'history';
 	address: string;
@@ -36,6 +37,7 @@ function parseSnapshot(value: unknown): HistorySnapshot {
 
 export default function useTransactionHistory(address: string, networkIsDevnet: boolean, hidden: boolean | undefined, notifyConfirmation: (txid: string) => void) {
 	const detailRequests = useRef(new Map<string, AbortController>());
+	const detailVersions = useRef(new Map<string, string>());
 	const [detailsByTxid, setDetailsByTxid] = useState<Record<string, TransactionDetails>>({});
 	const observed = useRef<ConfirmationTracking>({ address: '', statuses: new Map(), notified: new Set() });
 	const [state, setState] = useState<{ address: string; loading: boolean; rows: TransactionRow[]; errors: string[] }>({ address: '', loading: true, rows: [], errors: [] });
@@ -45,6 +47,7 @@ export default function useTransactionHistory(address: string, networkIsDevnet: 
 	useEffect(() => {
 		for (const controller of detailRequests.current.values()) controller.abort();
 		detailRequests.current.clear();
+		detailVersions.current.clear();
 		setDetailsByTxid({});
 		setCheckedAt('');
 		if (hidden || !address || !networkIsDevnet) {
@@ -76,6 +79,13 @@ export default function useTransactionHistory(address: string, networkIsDevnet: 
 				try {
 					const snapshot = parseSnapshot(JSON.parse(event.data));
 					if (snapshot.address !== address) throw new Error('Live history identity mismatch.');
+					const stale = snapshot.rows.filter((row) => detailVersions.current.has(row.txid) && detailVersions.current.get(row.txid) !== detailVersion(row)).map((row) => row.txid);
+					for (const txid of stale) {
+						detailRequests.current.get(txid)?.abort();
+						detailRequests.current.delete(txid);
+						detailVersions.current.delete(txid);
+					}
+					if (stale.length) setDetailsByTxid((previous) => Object.fromEntries(Object.entries(previous).filter(([txid]) => !stale.includes(txid))));
 					const confirmedTxids = detectConfirmations(snapshot.rows, observed.current);
 					confirmedTxids.forEach(notifyConfirmation);
 					setState({ address, loading: false, rows: snapshot.rows, errors: snapshot.errors });
@@ -105,18 +115,23 @@ export default function useTransactionHistory(address: string, networkIsDevnet: 
 
 	async function loadTransactionDetails(row: TransactionRow) {
 		if (!row.records.some((record) => record.source === 'FT tokens') ||
-			detailsByTxid[row.txid]?.loaded || detailRequests.current.has(row.txid)) return;
+			(detailsByTxid[row.txid]?.loaded && detailVersions.current.get(row.txid) === detailVersion(row)) || detailRequests.current.has(row.txid)) return;
 		const controller = new AbortController();
 		detailRequests.current.set(row.txid, controller);
+		detailVersions.current.set(row.txid, detailVersion(row));
 		setDetailsByTxid((previous) => ({ ...previous, [row.txid]: { ...previous[row.txid], loading: true, error: '' } }));
 		let tokenDetails: TransactionData | undefined;
 		try {
 			tokenDetails = await getTokenTransaction(row.txid, { signal: controller.signal });
-			const tokenInfo = tokenDetails.contract_id
-				? await getTokenInfo(tokenDetails.contract_id, { signal: controller.signal })
+			const contractId = tokenDetails.contract_id ?? row.records.find((record) => record.source === 'FT tokens')?.data.contract_id;
+			const tokenInfo = contractId
+				? await getTokenInfo(contractId, { signal: controller.signal })
 				: null;
+			const precision = tokenDetails.decimal ?? tokenInfo?.decimal;
+			const decimals = precision == null || String(precision).trim() === '' ? NaN : Number(precision);
+			const complete = Boolean((tokenDetails.output ?? tokenDetails.vout)?.length && Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 && tokenInfo?.name);
 			if (!controller.signal.aborted) setDetailsByTxid((previous) => ({
-				...previous, [row.txid]: { loaded: true, loading: false, tokenDetails, tokenInfo },
+				...previous, [row.txid]: { loaded: complete, loading: false, tokenDetails, tokenInfo },
 			}));
 		} catch (error) {
 			if (!controller.signal.aborted) setDetailsByTxid((previous) => ({
