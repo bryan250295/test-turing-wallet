@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import useRecipientHistory from '../hooks/useRecipientHistory';
 import useRecipientSuggestions from '../hooks/useRecipientSuggestions';
 
 interface RecipientAddressInputProps {
@@ -16,6 +17,7 @@ export default function RecipientAddressInput({ id, owner, value, disabled, onCh
 	const [highlight, setHighlight] = useState(-1);
 	const [browseAll, setBrowseAll] = useState(false);
 	const cache = useRecipientSuggestions(owner);
+	const history = useRecipientHistory(owner);
 	const query = value.trim().toLowerCase();
 	const matches = cache.addresses.filter((address) => browseAll || !query || address.toLowerCase().includes(query));
 	const listId = `${id}-suggestions`;
@@ -24,6 +26,8 @@ export default function RecipientAddressInput({ id, owner, value, disabled, onCh
 	useEffect(() => {
 		if (expanded && highlight >= 0) list.current?.children[highlight]?.scrollIntoView({ block: 'nearest' });
 	}, [highlight, expanded]);
+
+	useEffect(() => { setOpen(false); setHighlight(-1); setBrowseAll(false); }, [owner]);
 
 	function choose(address: string) {
 		onChange(address);
@@ -59,10 +63,11 @@ export default function RecipientAddressInput({ id, owner, value, disabled, onCh
 				<ul ref={list} id={listId} role="listbox" aria-label="Recent recipients">{matches.map((address, index) => <li key={address} role="presentation">
 					<button id={`${listId}-${index}`} type="button" role="option" aria-selected={highlight === index} tabIndex={-1} className={highlight === index ? 'is-highlighted' : ''} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(address)}><code>{address}</code></button>
 				</li>)}</ul>
-				{!matches.length && <p>{cache.addresses.length ? 'No matching recipients. Enter a new address to continue.' : 'No recent recipients yet. Enter a new address to continue.'}</p>}
+				{!matches.length && <p>{history.loading ? 'Loading recent recipients…' : cache.addresses.length ? 'No matching recipients. Enter a new address to continue.' : 'No recent recipients yet. Enter a new address to continue.'}</p>}
 			</div>}
 		</div>
-		<p id={`${id}-hint`} className="history-note">New recipients are remembered in this browser after a lock is successfully submitted.</p>
+		<p id={`${id}-hint`} className="history-note">Recent recipients for this wallet, shared across Send token and Create lock. Choose one or enter a new address.</p>
+		{history.error && <p className="amount-error" role="status">{history.error}</p>}
 		{cache.error && <p className="amount-error" role="status">{cache.error}</p>}
 	</div>;
 }

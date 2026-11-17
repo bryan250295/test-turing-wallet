@@ -124,7 +124,7 @@ export default function useHtlcTokenLock(session: WalletSession) {
 				const receipt = await broadcastTokenHtlc(transaction.buildId!, signed.txid, checkOnly, signal);
 				await rememberHtlcSubmission(transaction, signed.txid, receipt);
 				if (receipt.status === 'submitted') {
-					const warning = rememberLockRecipient(transaction.plan.terms.receiver);
+					const warning = rememberLockRecipient(transaction.plan.terms.sender, transaction.plan.terms.receiver);
 					if (warning) receipt.message += ` ${warning}`;
 				}
 				return receipt;

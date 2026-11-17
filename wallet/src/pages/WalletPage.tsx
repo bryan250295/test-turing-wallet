@@ -6,6 +6,7 @@ import type { WalletPageProps } from '../types/wallet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { logAction } from '../services/actionLog';
+import RecipientAddressInput from '../components/RecipientAddressInput';
 import WalletConnection from '../components/WalletConnection';
 import { DEVNET_DOMAIN } from '../config/constants';
 import { getTokens } from '../services/tbcApi';
@@ -31,6 +32,8 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 		setTokenList({ address: '', tokens: [], loading: false, error: '' });
 		return () => tokenRequest.current?.abort();
 	}, [address, networkIsDevnet, page, hidden]);
+
+	useEffect(() => { setRecipient(''); }, [address, networkIsDevnet]);
 
 	async function loadTokens() {
 		if (busy || !address || !networkIsDevnet) return;
@@ -274,10 +277,7 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 				{page === 'transfer' && <section className="transfer-panel" aria-labelledby="transfer-heading">
 					<h2 id="transfer-heading">Send an FT</h2>
 					<form onSubmit={transfer}>
-						<label>
-							Recipient TBC address
-							<input value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="Recipient address" autoComplete="off" required />
-						</label>
+						<RecipientAddressInput key={`${address}:${networkIsDevnet}`} id="transfer-recipient" owner={networkIsDevnet && !hidden ? address : ''} value={recipient} disabled={busy || !address || !networkIsDevnet} onChange={setRecipient} />
 						<p className="field-label" id="token-picker-label">FT contract address</p>
 						<details className="token-picker" onToggle={(event) => {
 							if (event.currentTarget.open) void loadTokens();

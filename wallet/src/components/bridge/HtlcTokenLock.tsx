@@ -47,7 +47,7 @@ export default function HtlcTokenLock({ session, onViewRequests }: WalletPagePro
 				</div>
 			</details>
 			{token && <p className="selected-contract">Balance: {formatTokenBalance(token)} {token.symbol} · Decimals: {token.decimal ?? 'Unknown'}<br /><small>Contract: <code>{token.contract_id}</code></small></p>}
-			<RecipientAddressInput id="htlc-receiver" owner={session.address} value={receiver} disabled={!canEdit} onChange={setReceiver} />
+			<RecipientAddressInput key={`${session.address}:${session.networkIsDevnet}`} id="htlc-receiver" owner={session.networkIsDevnet ? session.address : ''} value={receiver} disabled={!canEdit} onChange={setReceiver} />
 			<label htmlFor="htlc-lock-amount" className="amount-label"><span>Amount {token?.symbol ? `(${token.symbol})` : ''}</span>{token && <span className="amount-available" aria-live="polite">Available {preview.remaining} {token.symbol}</span>}</label>
 			<input id="htlc-lock-amount" value={amount} disabled={!canEdit || !token} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="Enter token amount" aria-invalid={!!preview.error} aria-describedby={preview.error ? 'htlc-amount-error' : undefined} required />
 			{preview.error && <p id="htlc-amount-error" className="amount-error" role="status">{preview.error}</p>}
