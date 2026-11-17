@@ -323,7 +323,7 @@ no backend EVM signing key, automatic mint worker or reverse redemption. Fixed
 node/indexer trust remains explicit. The user accepted the first funded forward
 transfer and 1,000,000 lwFT balance on 2026-10-29. Comprehensive error handling,
 backup restoration and reverse redemption remain unverified. See learning-bridge.md
-sections 9–10 for evidence and reverse-flow compatibility. `STUDY2.md` remains unchanged.
+sections 9–10 for evidence and reverse-flow compatibility. `TelegramSharing.md` remains unchanged.
 
 ### Reverse bridge preparation — existing token escrow
 
@@ -362,7 +362,7 @@ is exported, and no new EVM signing key is introduced.
 - PostgreSQL 与 NestJS 容器 healthy，React 已运行于 `http://localhost:5173`。
 - 数据库读取核对：`htlc_requests` **5**、`claim_secrets` **4**、`storage_imports` **9**。
   导入过程中每份密文使用原 key 验证认证标签与 hashlock；重复运行导入成功且新增数为 0。
-- 原 storage、独立 key 和迁移前备份保留，`STUDY2.md` 未修改。
+- 原 storage、独立 key 和迁移前备份保留，`TelegramSharing.md` 未修改。
 - 尚未替用户进行钱包登录、签名、secret 取回或资金交易；未运行自动化测试或恢复演练。
 
 ### Fixed source-chain redemption release (2026-10-29)

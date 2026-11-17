@@ -8,7 +8,7 @@
 
 本项目参考 Turing Bridge 的产品流程，自行实现一个托管式 Lock and Mint 实验。
 它不代表官方桥的协议或资产。现有单链 FT HTLC 继续独立存在。
-`STUDY2.md` 是老师的原始资料，始终只读。
+`TelegramSharing.md` 是老师的原始资料，始终只读。
 
 已实现：两侧钱包连接、路由规格、目标链代币合约源码、本地编译入口、首个 FT 的后端 genesis 核验／PostgreSQL 登记、部署预览、MetaMask 确认部署与后端合约核验／持久化、准备订单与每订单独立的加密保管记录。
 已接入显式付款详情、普通 MT 入金验证、MetaMask 确认 unpause／mint 和双链结果核验（第 8 节）。自动 mint worker 和自动退款未实现；反向赎回的 fee、固定释放计划、MetaMask 永久锁定与释放控件已接入（第 12–14 节），首笔反向返回已由 2026-10-29 22:03 MYT 用户截图确认，源链 6/6 确认，见第 16 节。用户于 2026-10-28 确认部署与准备订单，2026-10-29 确认真实入金、unpause、mint、Completed 及 MetaMask 的 1,000,000 lwFT 余额（第 9 节）。首笔往返正常交易已走通；用户随后明确确认 Turing Wallet 已收到返回的 1,000,000 MT，完整异常场景尚未验收。
@@ -19,7 +19,7 @@
 This project implements an experimental custodial Lock and Mint bridge, taking
 inspiration from the Turing Bridge product flow. It does not represent the official
 bridge protocol or its assets. The existing single-chain FT HTLC remains separate.
-`STUDY2.md` contains the teacher's original material and must always remain read-only.
+`TelegramSharing.md` contains the teacher's original material and must always remain read-only.
 
 The proof-oriented successor is currently a design only. Its accepted Phase 0
 scope, trust boundary, encoding rules and launch gates are recorded in

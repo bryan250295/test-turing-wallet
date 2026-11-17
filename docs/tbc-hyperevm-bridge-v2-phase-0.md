@@ -11,7 +11,7 @@ TBCNODE review baseline: [`6ddea88c57e9bc9390c1730657ac766b56c4a670`](https://gi
 This document freezes the intended v2 scope before implementation. It is not a
 claim that the bridge is trustless today. The existing Learning Bridge remains a
 separate custodial test system until every applicable phase gate is satisfied.
-`STUDY2.md` remains read-only source material.
+`TelegramSharing.md` remains read-only source material.
 
 Normative words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** describe v2
 requirements. Field names, formulas and normative statements are the protocol

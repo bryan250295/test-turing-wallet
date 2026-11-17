@@ -183,7 +183,7 @@ Hyperliquid
 
 ### 6. 新主线：TBC Testnet ↔ HyperEVM Testnet 自建学习桥
 
-目标：自己实现一个可以理解和解释的跨链项目，参考 Turing Bridge 的网络选择、订单、付款、进度和双链交易记录流程。老师的 STUDY2.md 作为只读参考，不能改动。现有单链 HTLC 保留为独立学习成果。
+目标：自己实现一个可以理解和解释的跨链项目，参考 Turing Bridge 的网络选择、订单、付款、进度和双链交易记录流程。老师的 TelegramSharing.md 作为只读参考，不能改动。现有单链 HTLC 保留为独立学习成果。
 
 - [x] 已确定两侧网络：TBC Testnet 与 HyperEVM Testnet，使用测试资产学习。
 - [x] 已明确是自建学习桥，不是调用官方桥完成全部流程，也不宣称复制官方底层协议。官方教程展示 TBC 主网 → HyperEVM 的订单流程；仅凭该教程，尚不能确认其采用 Lock and Mint 或其他结算机制。
@@ -405,7 +405,7 @@ https://faucet.zalalena.com/hyperliquid
 
 **当前安排（2026-10-30）：首笔 1,000,000 MT 往返及 Turing Wallet 返回余额已由用户确认。已实现 Bridge Lab → Reconciliation：本钱包按 lwFT 合约查看正反向记录、确认金额、公开 TXID 与已保存实际费用；独立手动读取登记保管地址 MT 储备和 HyperEVM totalSupply／永久 escrow locks，显示观察范围、时间与差额，失败不按零处理。无 migration、不签名或广播，不改变原结算状态。前后端构建通过，Docker API schema 已加载对账路径；未运行自动化测试。新页面浏览器验收仍待用户查看；异常和恢复演练未自动完成。说明见 wallet/docs/learning-bridge.md 第 17 节；STUDY2.md 保持只读。**
 
-**当前安排（2026-10-30，流程简化）：按用户要求先简化桥页面，再继续备份恢复。Testnet Bridge 按发送／返回分方向；当前步骤突出，设置和历史折叠。已保存待确认交易可每约 30 秒自动检查，错误或页面隐藏时暂停，不自动付款／报价／签名／广播。Prepare next wallet step 合并查下一步与准备费率，仍明确检查后逐笔在钱包确认；返回数量预填完整原始数量，完成后显示收据和对账入口。原往返验收保留；前后端构建通过，Docker ready 且已加载 next 报价选项，未运行自动化测试，新 UI 验收待用户查看。详见 wallet/docs/learning-bridge.md 第 18 节；未自动执行备份恢复或改动 STUDY2.md。**
+**当前安排（2026-10-30，流程简化）：按用户要求先简化桥页面，再继续备份恢复。Testnet Bridge 按发送／返回分方向；当前步骤突出，设置和历史折叠。已保存待确认交易可每约 30 秒自动检查，错误或页面隐藏时暂停，不自动付款／报价／签名／广播。Prepare next wallet step 合并查下一步与准备费率，仍明确检查后逐笔在钱包确认；返回数量预填完整原始数量，完成后显示收据和对账入口。原往返验收保留；前后端构建通过，Docker ready 且已加载 next 报价选项，未运行自动化测试，新 UI 验收待用户查看。详见 wallet/docs/learning-bridge.md 第 18 节；未自动执行备份恢复或改动 TelegramSharing.md。**
 
 **当前安排（2026-10-30，操作界面）：按用户要求移除用户界面的学习／开发解释，资料继续保留在文档。导航为 Bridge，默认 Transfer；操作页保留逐步指引、数量／地址、费用、确认状态及必要的不可逆／重复付款提示。移除 genesis、fingerprint、nonce、冻结 hash、raw bridge amount、数据库迁移等显示以及独立估算面板，实际报价和签名前核验保持。前端构建通过，未执行真实交易或 migration；新浏览器验收待用户查看。详见 wallet/docs/learning-bridge.md 第 19 节；STUDY2.md 不改。**
 
@@ -420,3 +420,47 @@ https://faucet.zalalena.com/hyperliquid
 **当前安排（2026-10-30，未使用代码清理）：移除旧独立 preview hook／请求 helper、固定旧 route 转接配置及无引用的旧 Prisma 生成目录（17 文件约 600 KB）。角色表单简化为 useBridgeDeploymentRoles；CSS 清理 24 个未使用 selector 和 17 个已被覆盖的属性，保留动态 class。维护源码入口引用复查、前后端构建及 diff whitespace 检查通过，未运行自动化测试或真实交易；浏览器样式验收待查看。当前 Prisma client／历史合约 artifacts／migration／recovery／HTML 入口仍需保留。详见 wallet/docs/learning-bridge.md 第 24 节；STUDY2.md 只读。**
 
 **当前安排（2026-10-30，按钮不可用提示）：Prepare next wallet step 现在显示会话／忙碌状态／MetaMask 读取、账户或网络的具体阻止原因，读失败时就地提供刷新／重连／切网；不因入金达到 6 确认而跳过钱包检查。前端构建通过，未运行自动化测试或真实交易，实际钱包恢复待用户查看。详见 wallet/docs/learning-bridge.md 第 25 节。**
+
+
+
+TBCNODE 的主要职责
+1. 执行 TBC 共识规则
+TBCNODE决定：
+- 区块的 SHA256 PoW 是否正确；
+- 难度 nBits 是否符合规则；
+- 哪条链拥有最多累计工作量；
+- 区块重组后哪些交易被撤销；
+- 交易输入是否仍然是可用 UTXO；
+- 交易是否重复花费；
+- 交易版本是否正确。
+例如 TBC 分叉后的普通交易需要使用 version 10，而 version 10 会使用分层 Turing TXID。
+2. 执行 TBC/BVM 合约
+当一个 FT、HTLC 或其他 TuringContract UTXO 被花费时，TBCNODE执行其锁定脚本和解锁脚本，包括：
+- OP_PUSH_META
+- OP_PARTIAL_HASH
+- OP_CHECKSIG
+- OP_CHECKDATASIG
+- OP_CHECKLOCKTIMEVERIFY
+- 其他 BVM Script 指令
+因此，你项目里的 HTLC 是否真的能够 claim/refund，最终不是由 tbc-contract SDK 决定，而是由矿工和全节点运行的 TBCNODE 决定。
+tbc-contract 负责帮助你构造交易；TBCNODE才是最终裁判。
+3. 维护区块链和 UTXO 状态
+TBCNODE保存或计算：
+- 区块和区块头；
+- 原始交易；
+- 当前 UTXO 集；
+- Mempool；
+- 链高度；
+- 确认数；
+- 主链和分叉；
+- 累计 PoW。
+但是 FT 的名称、余额列表、合约分类等高级查询，通常是额外的 FT indexer 提供，不完全属于 TBCNODE本身。TBCNODE主要把 FT 看作遵守特定 Script 规则的 UTXO。
+4. 提供 RPC 和证明资料
+如果你自己运行 TBCNODE，可以通过 RPC取得：
+- 原始交易；
+- 区块和80字节区块头；
+- 当前链状态；
+- gettxoutproof Merkle inclusion proof；
+- verifytxoutproof 验证结果；
+- 配合 -txindex 查询历史交易。
+这些资料可以作为将来开发 TBC light client 和 HyperEVM 链上证明系统的输入。

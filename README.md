@@ -51,7 +51,7 @@ path. Testnet-v3 is still experimental, not audited, and does not claim a
 production cryptographic unspent proof or production-ready bridge status.
 This work does not install TBCNODE or modify the running custodial Learning Bridge.
 
-`STUDY2.md` is teacher-provided, read-only source material.
+`TelegramSharing.md` is teacher-provided, read-only source material.
 
 
 ## Tools & SDK
