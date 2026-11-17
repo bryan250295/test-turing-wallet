@@ -45,15 +45,24 @@ export function formatFeeTbc(satoshis: Amount) {
 }
 
 export function transactionParties(row: TransactionRow) {
-	const data = row.tokenDetails || row.records.find((record) => record.source === 'FT tokens')?.data || row.records[0].data;
-	return { inputs: data.input || data.vin || [], outputs: data.output || data.vout || [] };
+	const history = row.records.find((record) => record.source === 'FT tokens')?.data || row.records[0].data;
+	const data = row.tokenDetails;
+	return { inputs: data?.input ?? data?.vin ?? history.input ?? history.vin ?? [], outputs: data?.output ?? data?.vout ?? history.output ?? history.vout ?? [] };
+}
+
+export function transactionTokenName(row: TransactionRow) {
+	const token = row.records.find((record) => record.source === 'FT tokens');
+	if (!token) return 'Native TBC';
+	const name = row.tokenInfo?.name ?? row.tokenDetails?.name ?? token.data.name;
+	return typeof name === 'string' && name.trim() ? name.trim() : 'FT token';
 }
 
 export function transactionAmount(row: TransactionRow, address: string) {
 	const { inputs, outputs } = transactionParties(row);
-	const token = row.records.some((record) => record.source === 'FT tokens');
-	const decimals = token ? Number(row.tokenDetails?.decimal ?? row.tokenInfo?.decimal ?? row.records[0].data.decimal) : 0;
-	const unit = token ? row.tokenInfo?.symbol || 'token units' : 'satoshis';
+	const token = row.records.find((record) => record.source === 'FT tokens');
+	const precision = token ? row.tokenDetails?.decimal ?? row.tokenInfo?.decimal ?? token.data.decimal : 6;
+	const decimals = precision == null || String(precision).trim() === '' ? NaN : Number(precision);
+	const unit = token ? row.tokenInfo?.symbol || 'FT' : 'TBC';
 	const amount = (entry: TransactionEntry) => {
 		const value = entry.balance ?? entry.value;
 		if ((typeof value === 'number' && !Number.isSafeInteger(value)) || !/^\d+$/.test(String(value))) throw new Error('Invalid amount');
@@ -63,7 +72,8 @@ export function transactionAmount(row: TransactionRow, address: string) {
 		if (!Array.isArray(inputs) || !Array.isArray(outputs) || !outputs.length) return 'Unavailable';
 		const sum = (items: TransactionEntry[]) => items.filter((entry) => entry.address === address).reduce((total, entry) => total + amount(entry), 0n);
 		const net = sum(outputs) - sum(inputs);
-		if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return `${formatHistoryAmount(net, 0)} raw units`;
+		// Never present unscaled integers as a user's token balance when precision is unknown.
+		if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) return 'Unavailable';
 		return `${formatHistoryAmount(net, decimals)} ${unit}`;
 	} catch { return 'Unavailable'; }
 }
