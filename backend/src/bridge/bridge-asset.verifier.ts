@@ -48,21 +48,26 @@ export class BridgeAssetVerifier {
 			// learning route. This API reports chain="main" even for its dev network;
 			// that label or a wallet address prefix alone is not network evidence.
 			requireMatch(DEVNET_API_BASE === 'https://api.tbcdev.org/api/tbc', 'The approved TBC data source changed.');
-			const [node, metadata, decoded, raw] = await Promise.all([
-				readBridgeSource(API_URLS.nodeInfo, signal),
+			const node = await readBridgeSource(API_URLS.nodeInfo, signal);
+			requireMatch(node.chain === 'main' && Number.isSafeInteger(node.blocks), 'The TBC node does not match the approved route.');
+			if (contractId === policy.contractId && Number(node.blocks) < policy.genesisBlockHeight) {
+				throw new UnprocessableEntityException(`TBC Devnet was reset: current tip ${node.blocks} is below the pinned MT genesis ${policy.genesisBlockHeight}. Mint and review a new MT on the current Devnet before updating the V1.5 route.`);
+			}
+			requireMatch(Number(node.blocks) >= policy.currentCheckpointHeight, 'The current TBC Devnet checkpoint is not available yet.');
+			const [metadata, decoded, raw] = await Promise.all([
 				readBridgeSource(API_URLS.tokenInfo(contractId), signal),
 				readBridgeSource(API_URLS.transaction(contractId), signal),
 				readBridgeSource(API_URLS.rawTransaction(contractId), signal),
 			]);
 			signal.throwIfAborted();
-			requireMatch(node.chain === 'main' && Number.isSafeInteger(node.blocks) && Number(node.blocks) >= policy.genesisBlockHeight, 'The TBC node does not match the approved route.');
 			requireMatch(decoded.txid === contractId && typeof decoded.blockhash === 'string' && /^[0-9a-f]{64}$/.test(decoded.blockhash) && Number.isSafeInteger(decoded.blockheight) && Number(decoded.blockheight) >= 0, 'The token genesis needs a confirmed source block.');
 			const [checkpoint, genesisBlock] = await Promise.all([
-				readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${policy.genesisBlockHeight}`, signal),
+				readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${policy.currentCheckpointHeight}`, signal),
 				readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${decoded.blockheight}`, signal),
 			]);
-			requireMatch(checkpoint.hash === policy.genesisBlockHash && checkpoint.height === policy.genesisBlockHeight, 'The configured source network checkpoint changed.');
-			requireMatch(genesisBlock.hash === decoded.blockhash && genesisBlock.height === decoded.blockheight && Number.isSafeInteger(genesisBlock.confirmations) && Number(genesisBlock.confirmations) >= policy.minimumConfirmations, 'The token genesis is not in a confirmed canonical block.');
+			requireMatch(checkpoint.hash === policy.currentCheckpointHash && checkpoint.height === policy.currentCheckpointHeight, 'The configured current source-network checkpoint changed.');
+			requireMatch(genesisBlock.hash === decoded.blockhash && genesisBlock.height === decoded.blockheight, 'The token genesis is not in the current canonical block at its reported height.');
+			requireMatch(Number.isSafeInteger(genesisBlock.confirmations) && Number(genesisBlock.confirmations) >= policy.minimumConfirmations, `The token genesis needs ${policy.minimumConfirmations} source-chain confirmations; it currently has ${Number.isSafeInteger(genesisBlock.confirmations) ? genesisBlock.confirmations : 0}.`);
 			if (contractId === policy.contractId) requireMatch(decoded.blockhash === policy.genesisBlockHash && decoded.blockheight === policy.genesisBlockHeight, 'The original token checkpoint changed.');
 			requireMatch(Number.isSafeInteger(decoded.confirmations) && Number(decoded.confirmations) >= policy.minimumConfirmations, 'The FT genesis needs more source-chain confirmations.');
 			const genesis = transaction(raw.txraw, contractId);
@@ -83,9 +88,19 @@ export class BridgeAssetVerifier {
 			const symbol = metadataText(chunks[5].buf, 'symbol', 100);
 			const decimals = chunks[3].buf![0];
 			if (contractId === policy.contractId) requireMatch(name === policy.name && symbol === policy.symbol && decimals === policy.decimals, 'The genesis metadata differs from the selected asset configuration.');
-			const amount = metadata.amount;
-			requireMatch((typeof amount === 'string' && /^\d+$/.test(amount) || typeof amount === 'number' && Number.isSafeInteger(amount)) && String(amount) === totalSupply.toString(), 'The indexer supply differs from the genesis Tape.');
 			requireMatch(metadata.contract_id === contractId && metadata.name === name && metadata.symbol === symbol && metadata.decimal === decimals && metadata.code_script === code.toHex() && metadata.tape_script === tape.toHex(), 'The indexed FT metadata differs from its raw genesis.');
+			const amount = metadata.amount;
+			// The indexer may encode uint64 FT supplies as a JSON number, which loses
+			// integer guarantees above Number.MAX_SAFE_INTEGER. The exact supply is
+			// already proven by matching metadata.tape_script byte-for-byte against
+			// the raw genesis Tape, so only compare the convenience `amount` field
+			// when its JSON representation is exact.
+			if (typeof amount === 'string') {
+				requireMatch(/^\d+$/.test(amount) && amount === totalSupply.toString(), 'The indexer supply differs from the genesis Tape.');
+			} else {
+				requireMatch(typeof amount === 'number' && Number.isFinite(amount) && Number.isInteger(amount) && amount > 0, 'The indexed FT supply is invalid.');
+				if (Number.isSafeInteger(amount)) requireMatch(String(amount) === totalSupply.toString(), 'The indexer supply differs from the genesis Tape.');
+			}
 			const mintInput = genesis.inputs[0];
 			const sourceId = mintInput.prevTxId.toString('hex');
 			if (contractId === policy.contractId) requireMatch(sourceId === policy.mintSourceTxid && mintInput.outputIndex === policy.mintSourceVout, 'The FT mint source does not match the approved asset.');

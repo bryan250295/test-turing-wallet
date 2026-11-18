@@ -86,7 +86,7 @@ export default function BridgeOrders({ session, evm, asset, active, direction, o
 				<option value="">Choose a verified deployment</option>
 				{routes.map((row) => <option key={row.id} value={row.id}>{row.wrappedName} ({row.wrappedSymbol}) · {row.contractAddress}</option>)}
 			</select>
-			<label htmlFor="bridge-order-amount">Amount ({sourceSymbol})</label><input id="bridge-order-amount" type="text" inputMode="decimal" autoComplete="off" placeholder="For example 10.5" value={amount} disabled={busy || !!review} onChange={(event) => setAmount(event.target.value)} />
+			<label htmlFor="bridge-order-amount">Amount ({sourceSymbol})</label><input id="bridge-order-amount" type="text" inputMode="decimal" autoComplete="off" placeholder="Amount" value={amount} disabled={busy || !!review} onChange={(event) => setAmount(event.target.value)} />
 			<label className="bridge-role-choice"><input type="checkbox" checked={useConnected} disabled={busy || !!review} onChange={(event) => setUseConnected(event.target.checked)} /> Receive with connected MetaMask account</label>
 			<label htmlFor="bridge-order-recipient">HyperEVM receiving address</label><input id="bridge-order-recipient" type="text" spellCheck={false} autoComplete="off" value={selectedRecipient} readOnly={useConnected} disabled={busy || !!review} onChange={(event) => setRecipient(event.target.value)} placeholder="0x…" />
 			<p className="history-note">1 {sourceSymbol} = 1 {wrappedSymbol}. Check the receiving address before saving.</p>

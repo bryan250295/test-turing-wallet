@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"contracts:compile": "node scripts/compileBridgeContract.mjs",
+		"multisig:compile": "node scripts/compileBridgeContract.mjs --multisig",
 		"phase3:compile": "node scripts/compilePhase3Contracts.mjs",
 		"phase3:testnet-v2-compile": "node scripts/compilePhase3TestnetV2Contracts.mjs",
 		"phase3:testnet-v3-compile": "node scripts/compilePhase3TestnetV3Contracts.mjs",

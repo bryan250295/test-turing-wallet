@@ -15,14 +15,14 @@ export default function BridgeDeploymentActions({ session, evm, active, input, c
 	const [hashes, setHashes] = useState<Record<string, string>>({});
 	const [discard, setDiscard] = useState('');
 	const [, tick] = useState(0);
-	useEffect(() => { setReviewed(''); setHashes({}); setDiscard(''); }, [active, session.address, evm.address, evm.chainId, input?.contractId, input?.wrappedName, input?.wrappedSymbol, input?.admin, input?.minter]);
+	useEffect(() => { setReviewed(''); setHashes({}); setDiscard(''); }, [active, session.address, evm.address, evm.chainId, input?.contractId, input?.governanceMode, input?.wrappedName, input?.wrappedSymbol, input?.admin, input?.minter]);
 	useEffect(() => {
 		const times = deployment.rows.filter((row) => row.status === 'prepared').map((row) => Date.parse(row.expiresAt) - Date.now()).filter((time) => time > 0);
 		if (!times.length) return;
 		const timer = setTimeout(() => tick((value) => value + 1), Math.min(...times) + 20);
 		return () => clearTimeout(timer);
 	}, [deployment.rows]);
-	const rows = deployment.rows.filter(row => !input || row.contractId === input.contractId);
+	const rows = deployment.rows.filter(row => !input || row.contractId === input.contractId && row.governanceMode === input.governanceMode);
 	const unresolved = rows.some((row) => ['prepared', 'awaiting_wallet', 'submitted', 'confirming', 'verified'].includes(row.status));
 	const existing = rows.find(row => row.status === 'verified' && !row.lastError);
 	const busy = !!deployment.action || !!evm.pending || deployment.loading;
@@ -47,7 +47,7 @@ export default function BridgeDeploymentActions({ session, evm, active, input, c
 			const prepared = row.status === 'prepared';
 			const noHash = !row.txHash && ['prepared', 'awaiting_wallet', 'cancelled'].includes(row.status);
 			const expired = Date.parse(row.expiresAt) <= Date.now();
-			const rolesMatch = input && row.contractId === input.contractId && (row.quote.wrappedName === undefined || row.quote.wrappedName === input.wrappedName && row.quote.wrappedSymbol === input.wrappedSymbol) && [row.deployer, row.admin, row.minter].every((address, index) => address.toLowerCase() === [input.deployer, input.admin, input.minter][index].toLowerCase());
+			const rolesMatch = input && row.contractId === input.contractId && row.governanceMode === input.governanceMode && (row.quote.wrappedName === undefined || row.quote.wrappedName === input.wrappedName && row.quote.wrappedSymbol === input.wrappedSymbol) && [row.deployer, row.admin, row.minter].every((address, index) => address.toLowerCase() === [input.deployer, input.admin, input.minter][index].toLowerCase());
 			return <article className="bridge-deployment-record" key={row.id}>
 				<h4>{row.lastError?.startsWith('Status unavailable') ? 'Status unavailable' : row.status === 'verified' ? 'Deployment verified' : row.status === 'awaiting_wallet' ? 'Wallet request started · check MetaMask activity' : row.status === 'confirming' ? 'Awaiting confirmations' : row.status === 'submitted' ? 'Transaction submitted · verification pending' : row.status === 'prepared' && expired ? 'Unused preparation expired' : row.status === 'prepared' ? 'Ready for review' : row.status === 'cancelled' ? 'Preparation discarded' : row.status === 'reverted' ? 'Transaction reverted' : 'Deployment did not match'}</h4>
 				{row.lastError && <p className="result error" role="alert">{row.lastError}{row.status === 'verified' ? ' Previous result: verified.' : ''}</p>}

@@ -26,6 +26,7 @@ export interface VerifiedBridgeAsset extends BridgeFtAsset {
 
 export interface BridgeDeploymentInput {
 	destinationChainId?: 998;
+	governanceMode?: 'multisig-relayer-v1.5';
 	wrappedName?: string;
 	wrappedSymbol?: string;
 	contractId: string;
@@ -93,6 +94,38 @@ export interface BridgeDeploymentTransaction {
 	gas: string;
 	gasPrice: string;
 	nonce: string;
+}
+
+export interface V15OperatorRoles {
+	signer1: string;
+	signer2: string;
+	minter: string;
+	threshold: 2;
+}
+
+export interface V15MultisigDeploymentPreview {
+	roles: V15OperatorRoles;
+	deployer: string;
+	predictedAddress: string;
+	initCodeHash: string;
+	gasEstimate: string;
+	gasLimit: string;
+	gasPriceWei: string;
+	bufferedFeeWei: string;
+	balanceWei: string;
+	sufficientBalance: boolean;
+	confirmationsRequired: number;
+	transaction: BridgeDeploymentTransaction;
+}
+
+export interface V15MultisigDeploymentStatus {
+	status: 'pending' | 'confirming' | 'verified' | 'reverted' | 'invalid';
+	txHash: string;
+	contractAddress: string | null;
+	confirmations: number;
+	confirmationsRequired: number;
+	actualFeeWei: string | null;
+	lastError: string | null;
 }
 
 export interface BridgeOrderInput {

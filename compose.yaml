@@ -36,6 +36,9 @@ services:
       APP_DB_USER: ${APP_DB_USER}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       SESSION_HOURS: ${SESSION_HOURS:-12}
+      V15_ADMIN_SIGNER_1: ${V15_ADMIN_SIGNER_1}
+      V15_ADMIN_SIGNER_2: ${V15_ADMIN_SIGNER_2}
+      V15_MINTER_ADDRESS: ${V15_MINTER_ADDRESS}
       SECRET_KEY_FILE: /run/secrets/htlc_key
       LEGACY_STORAGE_DIR: /legacy/htlc
     secrets:

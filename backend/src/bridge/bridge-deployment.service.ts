@@ -1,18 +1,23 @@
 import { BadRequestException, ConflictException, GatewayTimeoutException, HttpException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type { Response } from 'express';
-import { createPublicClient, getAddress, http, isAddress, keccak256, zeroAddress } from 'viem';
+import { createPublicClient, getAddress, http, isAddress, keccak256, parseAbi, zeroAddress } from 'viem';
 import { LEARNING_BRIDGE_EVM as network } from '../../../shared/src/config/learningBridge';
 import { bridgeRouteId, validWrappedName, validWrappedSymbol } from '../../../shared/src/config/bridgeRoutes';
 import { deploymentBuild, deploymentData } from './bridge-build';
 import type { BridgeDeploymentInput, BridgeDeploymentPreview } from '../../../shared/src/types/learningBridge';
 import { AuthService, type Principal } from '../auth/auth.service';
-import { BRIDGE_ASSET_POLICY as policy } from './bridge.config';
+import { BRIDGE_ASSET_POLICY as policy, v15OperatorRoles } from './bridge.config';
 import { BridgeRepository } from './bridge.repository';
 
 function roleAddress(value: string) {
 	if (!isAddress(value, { strict: true }) || value.toLowerCase() === zeroAddress) throw new BadRequestException('Use valid, nonzero public EVM addresses. Check mixed-case checksums.');
 	return getAddress(value);
 }
+
+const multisigReadAbi = parseAbi([
+	'function signer1() view returns (address)', 'function signer2() view returns (address)',
+	'function threshold() view returns (uint256)', 'function TARGET_CHAIN_ID() view returns (uint256)',
+]);
 
 @Injectable()
 export class BridgeDeploymentService {
@@ -34,6 +39,9 @@ export class BridgeDeploymentService {
 		const deployer = roleAddress(input.deployer);
 		const admin = roleAddress(input.admin);
 		const minter = roleAddress(input.minter);
+		if (input.governanceMode === 'multisig-relayer-v1.5' && admin.toLowerCase() === minter.toLowerCase()) {
+			throw new BadRequestException('V1.5 requires separate multisig Admin and relayer addresses.');
+		}
 		if (this.running.has(principal.id) || this.running.size >= 4) throw new HttpException('Deployment estimates are busy. Wait for the current request to finish.', 429);
 		this.running.add(principal.id);
 		const controller = new AbortController();
@@ -54,14 +62,28 @@ export class BridgeDeploymentService {
 			const block = await client.getBlock({ blockTag: 'latest' });
 			if (block.number === null) throw new ServiceUnavailableException('HyperEVM did not return a confirmed block.');
 			const data = deploymentData({ contractName, admin, minter, contractId: asset.contractId, decimals: asset.decimals, wrappedName: input.wrappedName, wrappedSymbol: input.wrappedSymbol });
-			const [balance, gasPrice, code, gas] = await Promise.all([
+			const [balance, gasPrice, code, adminCode, minterCode, gas] = await Promise.all([
 				client.getBalance({ address: deployer, blockNumber: block.number }),
 				client.getGasPrice(),
 				client.getCode({ address: deployer, blockNumber: block.number }),
+				client.getCode({ address: admin, blockNumber: block.number }),
+				client.getCode({ address: minter, blockNumber: block.number }),
 				client.estimateGas({ account: deployer, data, value: 0n, blockNumber: block.number, prepare: false }),
 			]);
 			controller.signal.throwIfAborted();
 			if (code && code !== '0x') throw new BadRequestException('This preview supports an ordinary MetaMask account as deployer. Smart-account deployment is not configured.');
+			if (input.governanceMode === 'multisig-relayer-v1.5') {
+				if (!adminCode || adminCode === '0x') throw new BadRequestException('The V1.5 Admin address has no deployed contract code. Deploy and verify the multisig wallet first.');
+				if (minterCode && minterCode !== '0x') throw new BadRequestException('The V1.5 relayer must be a dedicated externally owned account, not a contract.');
+				const roles = v15OperatorRoles();
+				const [signer1, signer2, threshold, targetChain] = await Promise.all([
+					client.readContract({ address: admin, abi: multisigReadAbi, functionName: 'signer1', blockNumber: block.number }),
+					client.readContract({ address: admin, abi: multisigReadAbi, functionName: 'signer2', blockNumber: block.number }),
+					client.readContract({ address: admin, abi: multisigReadAbi, functionName: 'threshold', blockNumber: block.number }),
+					client.readContract({ address: admin, abi: multisigReadAbi, functionName: 'TARGET_CHAIN_ID', blockNumber: block.number }),
+				]);
+				if (signer1.toLowerCase() !== roles.signer1.toLowerCase() || signer2.toLowerCase() !== roles.signer2.toLowerCase() || threshold !== 2n || targetChain !== 998n || minter.toLowerCase() !== roles.minter.toLowerCase()) throw new BadRequestException('The V1.5 Admin multisig or Minter does not match the operator addresses configured on the backend.');
+			}
 			const gasLimit = (gas * BigInt(100 + network.gasBufferPercent) + 99n) / 100n;
 			if (gas <= 0n || gasPrice <= 0n || gasLimit > block.gasLimit) throw new ServiceUnavailableException('The estimated deployment does not fit the current block gas limit. No transaction was submitted.');
 			if (await client.getChainId() !== network.chainId) throw new ServiceUnavailableException('The HyperEVM RPC network changed during estimation.');
@@ -70,7 +92,7 @@ export class BridgeDeploymentService {
 			const bufferedFee = gasLimit * gasPrice;
 			const quotedAt = Date.now();
 			return {
-				contractId: asset.contractId, deployer, admin, minter, chainId: network.chainId,
+				contractId: asset.contractId, deployer, admin, minter, chainId: network.chainId, governanceMode: input.governanceMode,
 				contractName, ...(configurable ? { wrappedName: input.wrappedName, wrappedSymbol: input.wrappedSymbol } : {}), destinationChainId: 998, decimals: asset.decimals, initiallyPaused: true, initialSupplyRaw: '0',
 				buildInputSha256: build.buildInputSha256, sourceSha256: build.sourceSha256, initCodeHash: keccak256(data),
 				gasEstimate: gas.toString(), gasLimit: gasLimit.toString(), gasBufferPercent: network.gasBufferPercent,

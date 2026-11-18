@@ -8,9 +8,10 @@ import { bridgeRouteId, wrappedMetadata } from '../../../shared/src/config/bridg
 import { assertEscrowSenderIdle } from './redemption-escrow.repository';
 
 export function deploymentRecord(row: BridgeDeployment): BridgeDeploymentRecord {
+	const quote = row.quote as unknown as BridgeDeploymentPreview;
 	return {
 		...wrappedMetadata(row.quote), destinationChainId: 998, id: row.id, contractId: row.contractId, deployer: row.deployer, admin: row.admin, minter: row.minter, chainId: 998, decimals: row.decimals,
-		status: row.status as BridgeDeploymentRecord['status'], nonce: row.nonce.toString(), quote: row.quote as unknown as BridgeDeploymentPreview,
+		governanceMode: quote.governanceMode, status: row.status as BridgeDeploymentRecord['status'], nonce: row.nonce.toString(), quote,
 		txHash: row.txHash, contractAddress: row.contractAddress, confirmations: row.confirmations, requiredConfirmations: LEARNING_BRIDGE_EVM.deploymentConfirmations,
 		receiptBlockHash: row.receiptBlockHash, receiptBlockNumber: row.receiptBlockNumber?.toString() ?? null,
 		gasUsed: row.gasUsed?.toFixed(0) ?? null, effectiveGasPriceWei: row.effectiveGasPriceWei?.toFixed(0) ?? null, actualFeeWei: row.actualFeeWei?.toFixed(0) ?? null,
@@ -36,7 +37,8 @@ export class BridgeDeploymentsRepository {
 		try {
 			return await this.db.$transaction(async (tx) => {
 				await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`deployment:${identityId}:${routeId}`}, 0))`;
-				const existing = await tx.bridgeDeployment.findFirst({ where: { identityId, routeId, status: { in: ['prepared', 'awaiting_wallet', 'submitted', 'confirming', 'verified'] } } });
+				const candidates = await tx.bridgeDeployment.findMany({ where: { identityId, routeId, status: { in: ['prepared', 'awaiting_wallet', 'submitted', 'confirming', 'verified'] } } });
+				const existing = candidates.find((row) => (row.quote as unknown as Partial<BridgeDeploymentPreview>).governanceMode === quote.governanceMode);
 				if (existing) throw new ConflictException('An existing deployment needs attention. Refresh saved deployments before preparing another.');
 				await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`bridge-evm-sender:${quote.deployer.toLowerCase()}`}, 0))`;
 				await assertEscrowSenderIdle(tx, quote.deployer);

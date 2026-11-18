@@ -13,6 +13,7 @@ export function deploymentAddress(value: string): string {
 export function validateDeploymentPreview(value: unknown, input: BridgeDeploymentInput, allowExpired = false): BridgeDeploymentPreview {
 	const quantities = ['gasEstimate', 'gasLimit', 'gasPriceWei', 'estimatedFeeWei', 'bufferedFeeWei', 'balanceWei', 'shortfallWei', 'blockNumber'];
 	if (!isObject(value) || value.contractId !== input.contractId || value.chainId !== network.chainId || !['LearningWrappedFT', 'BridgeWrappedFT'].includes(String(value.contractName))
+		|| value.governanceMode !== input.governanceMode
 		|| ['deployer', 'admin', 'minter'].some((key) => typeof value[key] !== 'string' || (value[key] as string).toLowerCase() !== input[key as 'deployer' | 'admin' | 'minter'].toLowerCase())
 		|| typeof value.decimals !== 'number' || !Number.isInteger(value.decimals) || value.decimals < 0 || value.decimals > 255 || value.initiallyPaused !== true || value.initialSupplyRaw !== '0' || value.gasBufferPercent !== network.gasBufferPercent
 		|| ['buildInputSha256', 'sourceSha256'].some((key) => typeof value[key] !== 'string' || !/^[0-9a-f]{64}$/.test(value[key] as string))

@@ -5,9 +5,10 @@ import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../auth/auth.service';
 import { bodyPipe } from '../auth/auth.controller';
 import { SessionGuard } from '../auth/session.guard';
-import { PreviewBridgeDeploymentDto, SubmitBridgeDeploymentDto } from './bridge.dto';
+import { CheckV15MultisigDto, PreviewBridgeDeploymentDto, PreviewV15MultisigDto, SubmitBridgeDeploymentDto } from './bridge.dto';
 import { BridgeDeploymentService } from './bridge-deployment.service';
 import { BridgeDeploymentLifecycleService } from './bridge-deployment-lifecycle.service';
+import { BridgeV15MultisigService } from './bridge-v15-multisig.service';
 
 @ApiTags('Learning Bridge')
 @ApiCookieAuth()
@@ -17,7 +18,14 @@ export class BridgeDeploymentController {
 	constructor(
 		@Inject(BridgeDeploymentService) private readonly deployment: BridgeDeploymentService,
 		@Inject(BridgeDeploymentLifecycleService) private readonly lifecycle: BridgeDeploymentLifecycleService,
+		@Inject(BridgeV15MultisigService) private readonly multisig: BridgeV15MultisigService,
 	) {}
+	@Get('v15/roles')
+	async v15Roles(@Req() request: AuthenticatedRequest) { return { data: this.multisig.roles(request.principal) }; }
+	@Post('v15/multisig/preview') @HttpCode(200) @Throttle({ default: { limit: 6, ttl: 60_000 } }) @ApiBody({ type: PreviewV15MultisigDto })
+	async previewV15Multisig(@Body(bodyPipe(PreviewV15MultisigDto)) input: PreviewV15MultisigDto, @Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return { data: await this.multisig.preview(input.deployer, request.principal, response) }; }
+	@Post('v15/multisig/check') @HttpCode(200) @Throttle({ default: { limit: 30, ttl: 60_000 } }) @ApiBody({ type: CheckV15MultisigDto })
+	async checkV15Multisig(@Body(bodyPipe(CheckV15MultisigDto)) input: CheckV15MultisigDto, @Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return { data: await this.multisig.check(input.txHash as `0x${string}`, request.principal, response) }; }
 	@Get()
 	async list(@Req() request: AuthenticatedRequest, @Query('contractId') contractId?: string) { return { data: await this.lifecycle.list(request.principal, contractId) }; }
 	@Post('preview')

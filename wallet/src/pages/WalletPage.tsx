@@ -230,7 +230,7 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 				<form onSubmit={mint}>
 					<label>
 						Token name
-						<input value={tokenName} maxLength={64} onChange={(event) => setTokenName(event.target.value)} placeholder="Example Token" required />
+						<input value={tokenName} maxLength={64} onChange={(event) => setTokenName(event.target.value)} placeholder="Token name" required />
 					</label>
 					<label>
 						Symbol
@@ -301,7 +301,7 @@ export default function WalletPage({ session, hidden }: WalletPageProps) {
 						{selectedToken && <p className="selected-contract">Contract: <code>{tokenContract}</code><br />Balance: {formatTokenBalance(selectedToken)} {selectedToken.symbol}.</p>}
 						<label>
 							<span className="amount-label"><span>Amount{selectedToken ? ` (${selectedToken.symbol})` : ''}</span>{selectedToken && <span className="amount-available" aria-live="polite">Available {transferPreview.remaining} {selectedToken.symbol}</span>}</span>
-							<input value={transferAmount} inputMode="decimal" onChange={(event) => setTransferAmount(event.target.value)} placeholder="For example, 1.5" aria-invalid={Boolean(transferPreview.error)} aria-describedby={transferPreview.error ? 'transfer-amount-error' : undefined} required />
+							<input value={transferAmount} inputMode="decimal" onChange={(event) => setTransferAmount(event.target.value)} placeholder="Amount" aria-invalid={Boolean(transferPreview.error)} aria-describedby={transferPreview.error ? 'transfer-amount-error' : undefined} required />
 						</label>
 						{transferPreview.error && <p id="transfer-amount-error" className="amount-error" role="status">{transferPreview.error}</p>}
 						<aside>

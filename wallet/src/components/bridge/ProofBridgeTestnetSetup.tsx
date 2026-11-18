@@ -363,7 +363,7 @@ export default function ProofBridgeTestnetSetup({ session, evm, active }: {
 				<h4>Create the first real v2 MT deposit</h4>
 				<p>The gateway is pinned to MT v3. Review creates an unsigned transaction only. Signing does not broadcast; submission remains a separate explicit action.</p>
 				<label>MT amount
-					<input type="text" inputMode="decimal" placeholder="Example: 100" value={depositAmount} disabled={Boolean(working) || Boolean(deposit)} onChange={(event) => setDepositAmount(event.target.value)} />
+					<input type="text" inputMode="decimal" placeholder="Amount" value={depositAmount} disabled={Boolean(working) || Boolean(deposit)} onChange={(event) => setDepositAmount(event.target.value)} />
 				</label>
 				<p>Recipient: <code>{state.deployer}</code><br />Source Contract ID: <code>{PINNED_MT_CONTRACT_ID}</code></p>
 				<div className="htlc-actions">

@@ -12,6 +12,9 @@ export class PreviewBridgeDeploymentDto extends VerifyBridgeAssetDto {
 	@ApiProperty({ type: Number, required: false, enum: [998], default: 998 })
 	@IsOptional() @Equals(998)
 	destinationChainId?: 998;
+	@ApiProperty({ type: String, required: false, enum: ['multisig-relayer-v1.5'] })
+	@IsOptional() @IsIn(['multisig-relayer-v1.5'])
+	governanceMode?: 'multisig-relayer-v1.5';
 	@ApiProperty({ type: String, required: false, maxLength: 64 })
 	@IsOptional() @IsString() @Matches(/^[\x20-\x7e]{1,64}$/)
 	wrappedName?: string;
@@ -31,6 +34,19 @@ export class PreviewBridgeDeploymentDto extends VerifyBridgeAssetDto {
 
 export class SubmitBridgeDeploymentDto {
 	@ApiProperty({ type: String, description: 'Deployment transaction hash returned by MetaMask on HyperEVM Testnet.' })
+	@IsString()
+	@Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i)
+	txHash!: string;
+}
+
+export class PreviewV15MultisigDto {
+	@ApiProperty({ type: String, description: 'Public MetaMask account paying the multisig deployment gas.' })
+	@IsEthereumAddress()
+	deployer!: string;
+}
+
+export class CheckV15MultisigDto {
+	@ApiProperty({ type: String, description: 'Multisig contract-creation transaction hash returned by MetaMask.' })
 	@IsString()
 	@Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i)
 	txHash!: string;

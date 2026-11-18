@@ -95,6 +95,9 @@ h1 { margin: 8px 0; font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.05; }
 .bridge-route-card p { color: #a9bdd7; line-height: 1.5; }
 .bridge-route-card code { display: block; overflow-wrap: anywhere; color: #a8c7ff; font-size: .75rem; }
 .bridge-route-card.route-disabled { opacity: .72; }
+.bridge-route-card.route-archived { opacity: .82; border-style: dashed; }
+.route-archived { color: #fcd34d; border-color: #806b32; background: #3a3018; }
+.archived-bridge-route { margin-top: 16px; border-style: dashed; }
 .route-live { color: #6ee7b7; border-color: #34735e; background: #123c31; }
 .proof-transfer code { overflow-wrap: anywhere; }
 .testnet-bridge-wallets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
@@ -194,6 +197,7 @@ aside { margin: 18px 0; padding: 12px 14px; border-left: 3px solid #7dd3fc; colo
 .status { min-height: 2.5em; color: #c9d6e9; line-height: 1.45; }
 .result { overflow-wrap: anywhere; padding: 12px; border-radius: 10px; font-size: .86rem; }
 .success { color: #bbf7d0; background: #123326; }
+.warning { color: #fde68a; background: #3b2f16; }
 .error { color: #fecaca; background: #421d29; }
 details { color: #bdc9dd; font-size: .85rem; line-height: 1.5; }
 summary { cursor: pointer; color: #d9e7fb; font-weight: 800; }
