@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Inject, Injectable, NotFoundExc
 import type { Response } from 'express';
 import { getAddress, isAddress, zeroAddress } from 'viem';
 import { LEARNING_BRIDGE_ORDERS as rules, LEARNING_BRIDGE_EVM } from '../../../shared/src/config/learningBridge';
-import type { BridgeOrderInput, BridgeOrderSetup } from '../../../shared/src/types/learningBridge';
+import type { BridgeDeploymentPreview, BridgeOrderInput, BridgeOrderSetup } from '../../../shared/src/types/learningBridge';
 import { tokenAmountToRaw } from '../../../shared/src/utils/tokenAmounts';
 import { PrismaService } from '../database/prisma.service';
 import { AuthService, type Principal } from '../auth/auth.service';
@@ -31,7 +31,17 @@ export class BridgeOrdersService {
 		if (deployments.length > 200) throw new ConflictException('Too many registered routes to load. No partial route list was returned.');
 		return { custodyReady, paymentEnabled: custodyReady, maxOpenOrders: rules.maxOpenOrders,
 			message: custodyReady ? 'Prepare an order, then explicitly open payment details. Deposits are verified before wallet-confirmed minting.' : 'Custody setup is unavailable. Run local setup or restore the configured custody encryption key.',
-			deployments: deployments.filter((row) => row.contractAddress && row.verifiedAt).map((row) => ({ contractId: row.contractId, decimals: row.decimals, sourceSymbol: row.asset.symbol, ...wrappedMetadata(row.quote), id: row.id, contractAddress: row.contractAddress!, deployer: row.deployer, verifiedAt: row.verifiedAt!.toISOString() })),
+			deployments: deployments.filter((row) => row.contractAddress && row.verifiedAt).map((row) => ({
+				contractId: row.contractId,
+				decimals: row.decimals,
+				sourceSymbol: row.asset.symbol,
+				...wrappedMetadata(row.quote),
+				id: row.id,
+				contractAddress: row.contractAddress!,
+				deployer: row.deployer,
+				verifiedAt: row.verifiedAt!.toISOString(),
+				governanceMode: (row.quote as unknown as Partial<BridgeDeploymentPreview>).governanceMode === 'multisig-relayer-v1.5' ? 'multisig-relayer-v1.5' as const : undefined,
+			})),
 		};
 	}
 	async list(principal: Principal) { this.auth.requireTbc(principal); return this.repository.list(principal.id); }
@@ -62,6 +72,7 @@ export class BridgeOrdersService {
 			if (!custodyReady) throw new ServiceUnavailableException('Custody setup is unavailable. Restore the configured custody encryption key before preparing orders.');
 			if (recipient === deployment.contractAddress.toLowerCase()) throw new BadRequestException('The wrapped token contract cannot be the recipient. Choose a receiving wallet address.');
 			const target = await this.target.check(deployment, response);
+			if (target.paused) throw new ConflictException('This V1.5 wrapped-token route is deployed but still paused. Complete its one-time 2-of-2 Admin activation before accepting a source payment.');
 			return await this.repository.create({ identityId: principal.id, idempotencyKey: input.idempotencyKey, deployment, sender: principal.address, recipient, amountRaw: amount.toString(), sourceSymbol: asset.symbol, targetBlockNumber: target.blockNumber, targetBlockHash: target.blockHash });
 		} finally { this.preparing.delete(principal.id); }
 	}

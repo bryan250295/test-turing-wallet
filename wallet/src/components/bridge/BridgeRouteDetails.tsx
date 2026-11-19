@@ -1,4 +1,8 @@
 import { BRIDGE_ROUTE_CATALOG } from '../../../../shared/src/config/bridgeRoutes';
+import type useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
+import type { VerifiedBridgeAsset } from '../../types/learningBridge';
+import type { WalletSession } from '../../types/wallet';
+import BridgeOrders from './BridgeOrders';
 
 type Route = typeof BRIDGE_ROUTE_CATALOG[number];
 
@@ -26,23 +30,32 @@ export function ArchivedBridgeRoute({ route }: { route: Route }) {
 	</section>;
 }
 
-export function CustodialBridgeV15Transfer({ route }: { route: Route }) {
+interface CustodialBridgeV15TransferProps {
+	session: WalletSession;
+	evm: ReturnType<typeof useHyperEvmWallet>;
+	asset: VerifiedBridgeAsset | null;
+	active: boolean;
+	direction: 'forward' | 'return';
+	onReturn: () => void;
+}
+
+export function CustodialBridgeV15Transfer({ session, evm, asset, active, direction, onReturn }: CustodialBridgeV15TransferProps) {
 	return <section className="htlc-section proof-transfer" aria-labelledby="custodial-transfer-title">
 		<header className="history-titlebar">
 			<div>
-				<h3 id="custodial-transfer-title">2. Send MT and receive wMT</h3>
-				<p>V1.5 uses six source confirmations followed by one limited relayer mint. V2/V3 proof relays are not part of this route.</p>
+				<h3 id="custodial-transfer-title">V1.5 confirmation-based transfer</h3>
+				<p>V1.5 uses six source confirmations followed by one limited-relayer mint. V2/V3 proof relays are not part of this route.</p>
 			</div>
-			<span className="network-pill">V1.5 setup</span>
+			<span className="network-pill">V1.5 active route</span>
 		</header>
 		<dl className="history-detail-grid">
 			<div><dt>Source custody</dt><dd>TBC Testnet custody address · backend observes every 60 seconds</dd></div>
 			<div><dt>Contract administrator</dt><dd>Offline multisig · role changes and emergency pause only</dd></div>
 			<div><dt>Runtime minter</dt><dd>Limited relayer · mint only · no admin or custody key</dd></div>
-			<div><dt>Wrapped token</dt><dd>{route.contracts.wrappedToken ? <code>{route.contracts.wrappedToken}</code> : 'A new V1.5 wMT contract must be deployed once'}</dd></div>
+			<div><dt>Selected source</dt><dd>{asset ? <>{asset.name} ({asset.symbol}) · <code>{asset.contractId}</code></> : 'Choose and verify a TBC Testnet FT above'}</dd></div>
 		</dl>
-		{!route.contracts.wrappedToken && <p className="result warning"><strong>Operator setup required.</strong> Transfer is intentionally unavailable until Admin registers a separately deployed V1.5 wMT contract whose owner is the reviewed multisig and whose minter is the limited relayer. The archived V2/V3 wMT contracts cannot be reused because their mint authority is permanently bound to their proof Gateways.</p>}
-		<div className="htlc-actions"><button type="button" disabled>{route.contracts.wrappedToken ? 'Start V1.5 transfer' : 'Waiting for V1.5 Admin setup'}</button></div>
+		{!asset && <p className="history-feedback">Choose a source token above and wait for its canonical-chain verification. Its matching saved V1.5 deployment will then be selected automatically.</p>}
+		<BridgeOrders session={session} evm={evm} asset={asset} active={active} direction={direction} onReturn={onReturn} />
 		<p className="history-note">No user contract deployment and no user HYPE payment. The source wallet pays the TBC transaction fee; the operator relayer pays only the destination mint gas.</p>
 	</section>;
 }

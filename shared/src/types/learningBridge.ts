@@ -128,6 +128,43 @@ export interface V15MultisigDeploymentStatus {
 	lastError: string | null;
 }
 
+export type V15ActivationKind = 'propose' | 'approve';
+export interface V15ActivationState {
+	deploymentId: string;
+	contractAddress: string;
+	admin: string;
+	minter: string;
+	signer1: string;
+	signer2: string;
+	paused: boolean;
+	active: boolean;
+}
+export interface V15ActivationPreview {
+	deploymentId: string;
+	kind: V15ActivationKind;
+	actionId: string;
+	gasEstimate: string;
+	gasLimit: string;
+	gasPriceWei: string;
+	bufferedFeeWei: string;
+	balanceWei: string;
+	sufficientBalance: boolean;
+	confirmationsRequired: number;
+	transaction: BridgeCallTransaction;
+}
+export interface V15ActivationStatus {
+	deploymentId: string;
+	kind: V15ActivationKind;
+	actionId: string;
+	txHash: string;
+	status: 'pending' | 'confirming' | 'verified' | 'reverted' | 'invalid';
+	confirmations: number;
+	confirmationsRequired: number;
+	actualFeeWei: string | null;
+	paused: boolean;
+	lastError: string | null;
+}
+
 export interface BridgeOrderInput {
 	idempotencyKey: string;
 	deploymentId: string;
@@ -202,7 +239,7 @@ export interface BridgeOrderSetup {
 	paymentEnabled: boolean;
 	message: string;
 	maxOpenOrders: number;
-	deployments: { contractId: string; decimals: number; sourceSymbol: string; wrappedName: string; wrappedSymbol: string; id: string; contractAddress: string; deployer: string; verifiedAt: string }[];
+	deployments: { contractId: string; decimals: number; sourceSymbol: string; wrappedName: string; wrappedSymbol: string; id: string; contractAddress: string; deployer: string; verifiedAt: string; governanceMode?: 'multisig-relayer-v1.5' }[];
 }
 
 export interface RedemptionEscrowPreview {

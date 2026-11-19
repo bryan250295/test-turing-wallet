@@ -8,6 +8,7 @@ import type useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
 import useBridgeDeployments from '../../hooks/useBridgeDeployments';
 import { formatDateTime } from '../../utils/dateTime';
 import { formatHypeBalance } from '../../services/evmWallet';
+import V15RouteActivation from './V15RouteActivation';
 
 export default function BridgeDeploymentActions({ session, evm, active, input, canPrepare, children }: { session: WalletSession; evm: ReturnType<typeof useHyperEvmWallet>; active: boolean; input: BridgeDeploymentInput | null; canPrepare: boolean; children?: ReactNode }) {
 	const deployment = useBridgeDeployments(session, evm, active, input?.contractId);
@@ -31,7 +32,8 @@ export default function BridgeDeploymentActions({ session, evm, active, input, c
 		check: async () => { if (pending) await deployment.check(pending); } });
 	return <section className="htlc-section" aria-labelledby="bridge-deploy-title">
 		<h4 id="bridge-deploy-title">Wrapped contract</h4>
-        {existing && <p className="result success">Use your existing {existing.quote.wrappedName ?? 'Learning Wrapped Test FT'} ({existing.quote.wrappedSymbol ?? 'lwFT'}) contract: <code>{existing.contractAddress}</code>. Continue to Review and send below. Its name and symbol cannot be changed.</p>}
+        {existing && <p className="result success">Use your existing {existing.quote.wrappedName ?? 'Learning Wrapped Test FT'} ({existing.quote.wrappedSymbol ?? 'lwFT'}) contract: <code>{existing.contractAddress}</code>. Its name and symbol cannot be changed.</p>}
+		{existing?.governanceMode === 'multisig-relayer-v1.5' && <V15RouteActivation row={existing} evm={evm} active={active} />}
         {!unresolved && children}
 		{pending && <ConfirmationUpdates automatic={updates.automatic} onChange={updates.setAutomatic} paused={updates.paused} />}
 		<p>Prepare setup, review the fee and wallet addresses, then confirm in MetaMask.</p>

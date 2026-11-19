@@ -52,6 +52,27 @@ export class CheckV15MultisigDto {
 	txHash!: string;
 }
 
+export class PreviewV15ActivationDto {
+	@ApiProperty({ enum: ['propose', 'approve'] })
+	@IsString() @IsIn(['propose', 'approve'])
+	kind!: 'propose' | 'approve';
+	@ApiProperty({ type: String, required: false, description: 'Required for the second approval.' })
+	@IsOptional() @IsString() @Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i)
+	actionId?: string;
+}
+
+export class CheckV15ActivationDto {
+	@ApiProperty({ enum: ['propose', 'approve'] })
+	@IsString() @IsIn(['propose', 'approve'])
+	kind!: 'propose' | 'approve';
+	@ApiProperty({ type: String, description: 'Deterministic multisig action ID.' })
+	@IsString() @Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i)
+	actionId!: string;
+	@ApiProperty({ type: String, description: 'Transaction hash returned by MetaMask.' })
+	@IsString() @Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i)
+	txHash!: string;
+}
+
 export class PreparePhase3TestnetRelayDto {
 	@ApiProperty({ type: String, description: 'Public HyperEVM Testnet account that would pay the relay gas.' })
 	@IsEthereumAddress()

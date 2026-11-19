@@ -24,10 +24,10 @@ export default function BridgeOrders({ session, evm, asset, active, direction, o
 		setHistoryOpen(false); setAmount(''); setRecipient(''); setUseConnected(true); setReview(null); setError(''); setNotice(''); setDeploymentId('');
 	}, [orders.context, asset?.contractId, asset?.verifiedAt]);
 	useEffect(() => {
-		const routes = orders.setup?.deployments.filter(row => row.contractId === asset?.contractId) ?? [];
+		const routes = orders.setup?.deployments.filter(row => row.contractId === asset?.contractId && row.governanceMode === 'multisig-relayer-v1.5') ?? [];
 		setDeploymentId(routes.length === 1 ? routes[0].id : '');
 	}, [orders.setup, asset?.contractId, asset?.verifiedAt]);
-	const routes = orders.setup?.deployments.filter(row => row.contractId === asset?.contractId && row.decimals === asset.decimals) ?? [];
+	const routes = orders.setup?.deployments.filter(row => row.contractId === asset?.contractId && row.decimals === asset.decimals && row.governanceMode === 'multisig-relayer-v1.5') ?? [];
 	const destination = routes.find((row) => row.id === (review?.deploymentId ?? deploymentId));
 	const sourceSymbol = asset?.symbol ?? 'source token';
 	const wrappedSymbol = destination?.wrappedSymbol ?? 'wrapped token';
@@ -71,7 +71,7 @@ export default function BridgeOrders({ session, evm, asset, active, direction, o
 	}
 
 	return <section className="htlc-section bridge-orders" aria-labelledby="bridge-orders-title" aria-busy={!!orders.action || orders.loading}>
-		<header className="history-titlebar"><div><h3 id="bridge-orders-title">{direction === 'forward' ? '4. Review and send' : 'Return tokens to TBC'}</h3><p>{direction === 'forward' ? 'Create an order or continue a saved transfer.' : 'Continue from the forward order that minted your wrapped tokens.'}</p></div><span className="network-pill">Testnet · wallet confirmation</span></header>
+		<header className="history-titlebar"><div><h3 id="bridge-orders-title">{direction === 'forward' ? '2. Review and send' : 'Return tokens to TBC'}</h3><p>{direction === 'forward' ? 'Create an order or continue a saved transfer.' : 'Continue from the forward order that minted your wrapped tokens.'}</p></div><span className="network-pill">Testnet · wallet confirmation</span></header>
 		{direction === 'forward' ? <p>Save the amount and receiving wallet, pay your selected token once through Turing Wallet, then confirm minting in MetaMask.</p> : <p>Return the full original amount. Your wrapped tokens will be permanently locked before the source tokens are sent to your TBC wallet.</p>}
 		<div className="htlc-actions"><button type="button" className="history-secondary" disabled={!orders.enabled || busy} onClick={orders.refresh}>Refresh saved orders</button></div>
 		{!orders.enabled && <p>Connect Turing Wallet on TBC Testnet to load your orders. Use Reconnect if its login needs confirmation.</p>}
