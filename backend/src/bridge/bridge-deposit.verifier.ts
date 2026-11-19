@@ -2,6 +2,7 @@ import { Inject, Injectable, UnprocessableEntityException } from '@nestjs/common
 import sdk from 'tbc-contract';
 import tbc from 'tbc-lib-js';
 import type { BridgeOrder } from '../../generated/prisma/client';
+import type { VerifiedBridgeAsset } from '../../../shared/src/types/learningBridge';
 import { API_URLS, DEVNET_API_BASE } from '../../../shared/src/config/constants';
 import { readBridgeSource } from './bridge-source-read';
 import { isObject } from '../../../shared/src/services/apiValidation';
@@ -15,9 +16,15 @@ export interface DepositObservation { txid: string; vout: number; amountRaw: str
 @Injectable()
 export class BridgeDepositVerifier {
 	constructor(@Inject(BridgeAssetVerifier) private readonly asset: BridgeAssetVerifier) {}
-	async assertAvailable(signal: AbortSignal) {
-		const block = await readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${policy.genesisBlockHeight}`, signal);
-		match(block.hash === policy.genesisBlockHash && block.height === policy.genesisBlockHeight && Number.isSafeInteger(block.confirmations) && Number(block.confirmations) >= policy.minimumConfirmations, 'The source canonical-block endpoint does not match the approved checkpoint. Payment details remain closed.');
+	async assertAvailable(asset: VerifiedBridgeAsset, signal: AbortSignal) {
+		// The route may use any operator-verified TBC FT. Recheck that token's
+		// canonical genesis instead of the retired, first-route MT checkpoint.
+		// `asset` is produced server-side by BridgeAssetVerifier and is never
+		// accepted from the browser.
+		const block = await readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${asset.genesisBlockHeight}`, signal);
+		match(block.hash === asset.genesisBlockHash && block.height === asset.genesisBlockHeight
+			&& Number.isSafeInteger(block.confirmations) && Number(block.confirmations) >= policy.minimumConfirmations,
+		'The selected token genesis is not in a confirmed canonical block. Payment details remain closed.');
 	}
 	async verify(order: BridgeOrder, address: string, txid: string, signal: AbortSignal): Promise<DepositObservation> {
 		// Trust the fixed testnet node/indexer for chain inclusion and FT ancestry.

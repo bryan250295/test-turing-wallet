@@ -50,8 +50,8 @@ export class BridgeSettlementService {
 			if (order.settlement) return publicSettlement(order);
 			if (order.status !== 'prepared' || !order.custody) throw new ConflictException('This order is closed or its custody record is missing.');
 			await this.custody.assertRecoverable(order, order.custody);
-			await this.asset.verify(signal, order.contractId);
-			await this.deposits.assertAvailable(signal);
+			const asset = await this.asset.verify(signal, order.contractId);
+			await this.deposits.assertAvailable(asset, signal);
 			await this.target.check(order.deployment, response); signal.throwIfAborted();
 			await this.repository.open(order);
 			return publicSettlement(await this.repository.owned(id, principal.id));
