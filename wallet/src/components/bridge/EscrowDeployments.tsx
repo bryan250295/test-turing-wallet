@@ -43,7 +43,8 @@ export default function EscrowDeployments({ order, session, evm, active }: Props
 			<p className="history-note">Created {formatDateTime(row.createdAt)} MYT · {row.id}</p>
 			<dl className="history-detail-grid">
 				<div><dt>{order.wrappedSymbol} token</dt><dd><code>{row.quote.wrappedToken}</code></dd></div>
-				<div><dt>Setup wallet</dt><dd><code>{row.quote.admin}</code></dd></div>
+				<div><dt>Deployment fee wallet</dt><dd><code>{row.quote.deployer}</code></dd></div>
+				<div><dt>Escrow owner</dt><dd><code>{row.quote.admin}</code>{row.quote.activationMode === 'multisig-v1.5' ? ' · 2-of-2 multisig' : ''}</dd></div>
 				<div><dt>Reviewed fee budget</dt><dd>{formatHypeBalance(row.quote.budgetWei)} HYPE</dd></div>
 				<div><dt>Contract address</dt><dd><code>{row.contractAddress ?? 'Awaiting verified creation'}</code></dd></div>
 				{row.actualFeeWei !== null && <div><dt>Actual deployment fee</dt><dd>{formatHypeBalance(row.actualFeeWei)} HYPE</dd></div>}
@@ -51,7 +52,7 @@ export default function EscrowDeployments({ order, session, evm, active }: Props
 			{row.status === 'prepared' && <>
 				<p>Quote expires {formatDateTime(row.quote.expiresAt)} MYT. Prepare again if the quote expires.</p>
 				<label className="bridge-role-choice"><input type="checkbox" checked={!!reviewed[row.id]} disabled={busy} onChange={(event) => setReviewed((old) => ({ ...old, [row.id]: event.target.checked }))} /> I checked the token, wallet address and HYPE fee.</label>
-				<div className="htlc-actions"><button type="button" disabled={!canWallet || !reviewed[row.id] || now >= Date.parse(row.quote.expiresAt) || evm.address?.toLowerCase() !== row.quote.admin} onClick={() => { void flow.deploy(row); }}>Confirm setup in MetaMask</button><button type="button" className="history-secondary" disabled={busy} onClick={() => { void flow.cancel(row); }}>Discard unused preparation</button></div>
+				<div className="htlc-actions"><button type="button" disabled={!canWallet || !reviewed[row.id] || now >= Date.parse(row.quote.expiresAt) || evm.address?.toLowerCase() !== row.quote.deployer} onClick={() => { void flow.deploy(row); }}>Confirm setup in MetaMask</button><button type="button" className="history-secondary" disabled={busy} onClick={() => { void flow.cancel(row); }}>Discard unused preparation</button></div>
 			</>}
 			{row.status === 'awaiting_wallet' && !row.txHash && <>
 				<p>Open MetaMask and finish the pending request. If it was already sent, paste its transaction hash below. Do not submit again.</p>

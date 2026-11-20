@@ -13,6 +13,7 @@ import { BridgeCustodyService } from './bridge-custody.service';
 import { BridgeDepositVerifier } from './bridge-deposit.verifier';
 import { BridgeOrderTargetService } from './bridge-order-target.service';
 import { withDeploymentRpc } from './bridge-deployment-verifier';
+import { escrowQuote } from './redemption-escrow.repository';
 
 const policyVersion = 'permanent-escrow-preparation-v1' as const;
 const escrowAbi = parseAbi(['function wrappedToken() view returns (address)', 'function owner() view returns (address)',
@@ -56,6 +57,7 @@ export class RedemptionOrdersService {
 	async checkTarget(order: SettlementOrder, escrow: RedemptionEscrowDeployment, holder: string, response: Response) {
 		if (escrow.status !== 'verified' || escrow.lastError || !escrow.verifiedAt || !escrow.contractAddress || !escrow.runtimeCodeHash || !escrow.receiptBlockHash || escrow.receiptBlockNumber === null || escrow.confirmations < 6
 			|| escrow.wrappedToken !== order.destinationContract || escrow.sourceContractId !== order.contractId || escrow.decimals !== order.decimals) throw new ConflictException('Check escrow deployment status before preparing a redemption.');
+		const quote = escrowQuote(escrow);
 		await this.target.check(order.deployment, response);
 		return withDeploymentRpc(response, async (client) => {
 			const address = escrow.contractAddress as Address;
@@ -67,7 +69,7 @@ export class RedemptionOrdersService {
 				client.readContract({ address: order.destinationContract as Address, abi: tokenAbi, functionName: 'balanceOf', args: [holder as Address], blockNumber: head.number }),
 				client.readContract({ address: order.destinationContract as Address, abi: tokenAbi, functionName: 'balanceOf', args: [address], blockNumber: head.number }),
 			]);
-			if (!code || keccak256(code) !== escrow.runtimeCodeHash || token.toLowerCase() !== order.destinationContract || owner.toLowerCase() !== escrow.deployer
+			if (!code || keccak256(code) !== escrow.runtimeCodeHash || token.toLowerCase() !== order.destinationContract || owner.toLowerCase() !== quote.admin
 				|| pending !== '0x0000000000000000000000000000000000000000' || source.toLowerCase() !== `0x${order.contractId}` || decimals !== order.decimals || chain !== 998n) throw new ConflictException('Current escrow code, owner or token binding differs from the verified deployment.');
 			if (!paused || locked !== 0n || escrowBalance !== 0n) throw new ConflictException('This preparation stage requires an unused, paused escrow. Reconcile its current state before proceeding.');
 			if ((await client.getBlock({ blockNumber: head.number })).hash !== head.hash || await client.getChainId() !== 998) throw new ConflictException('The target chain changed during preparation.');

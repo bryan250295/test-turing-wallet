@@ -246,7 +246,11 @@ export interface RedemptionEscrowPreview {
 	orderId: string;
 	chainId: 998;
 	wrappedToken: string;
+	/** Ordinary EOA that pays the one-time escrow deployment gas. */
+	deployer: string;
+	/** Escrow owner. V1.5 uses the configured 2-of-2 Admin multisig. */
 	admin: string;
+	activationMode: 'eoa' | 'multisig-v1.5';
 	sourceContractId: string;
 	decimals: number;
 	reserveAmountRaw: string;
@@ -268,6 +272,22 @@ export interface RedemptionEscrowPreview {
 	expiresAt: string;
 	lockingEnabled: false;
 	sourceReleaseEnabled: false;
+}
+
+export interface RedemptionEscrowActivationState {
+	escrowId: string;
+	contractAddress: string;
+	admin: string;
+	signer1: string;
+	signer2: string;
+	paused: boolean;
+	active: boolean;
+}
+export interface RedemptionEscrowActivationPreview extends Omit<V15ActivationPreview, 'deploymentId'> {
+	escrowId: string;
+}
+export interface RedemptionEscrowActivationStatus extends Omit<V15ActivationStatus, 'deploymentId'> {
+	escrowId: string;
 }
 
 export interface RedemptionEscrowDeployment {

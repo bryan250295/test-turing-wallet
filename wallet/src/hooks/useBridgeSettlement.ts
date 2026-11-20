@@ -26,6 +26,8 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 	const reportedStatus = useRef(order.settlementStatus);
 	const changedCallback = useRef(onChanged); changedCallback.current = onChanged;
 	const live = () => enabled && current.current.context === context && current.current.epoch === epoch;
+	const realtimeComplete = order.settlementStatus === 'completed'
+		|| (state.context === context && state.value?.status === 'completed');
 	useEffect(() => {
 		const controller = new AbortController();
 		setState({ context, value: null, loading: enabled, error: '' });
@@ -47,19 +49,18 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 	}, [context, revision, enabled]);
 	useEffect(() => () => { request.current?.abort(); }, [context]);
 	useEffect(() => {
-		if (!enabled) { setRealtime('off'); return; }
+		if (!enabled || realtimeComplete) { setRealtime('off'); return; }
 		setRealtime('connecting');
 		const source = new EventSource(`/api/bridge/orders/${order.id}/settlement/events`, { withCredentials: true });
 		const invalidate = () => { if (live() && !working.current) setRevision((old) => old + 1); };
 		const connected = () => { if (live()) setRealtime('connected'); };
-		const heartbeat = () => { connected(); invalidate(); };
 		source.onopen = connected;
 		source.onerror = () => { if (live()) setRealtime('reconnecting'); };
 		source.addEventListener('ready', connected);
-		source.addEventListener('heartbeat', heartbeat);
+		source.addEventListener('heartbeat', connected);
 		source.addEventListener('progress', invalidate);
 		return () => { source.close(); setRealtime('off'); };
-	}, [context, enabled, order.id]);
+	}, [context, enabled, order.id, realtimeComplete]);
 	async function run(label: string, operation: (signal: AbortSignal) => Promise<unknown>, notify = false) {
 		if (!live() || working.current) return;
 		working.current = true; setAction(label); setState((old) => ({ ...old, error: '' }));

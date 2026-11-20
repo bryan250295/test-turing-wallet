@@ -11,6 +11,8 @@ import { RedemptionReleaseService } from './redemption-release.service';
 import { BridgeRedemptionService } from './bridge-redemption.service';
 import { RedemptionOrdersService } from './redemption-orders.service';
 import { RedemptionEscrowService } from './redemption-escrow.service';
+import { BridgeV15MultisigService } from './bridge-v15-multisig.service';
+import { CheckV15ActivationDto, PreviewV15ActivationDto } from './bridge.dto';
 
 export class RedemptionWalletQuoteDto {
 	@ApiProperty({ enum: ['unpause', 'reset', 'approve', 'lock'] }) @IsIn(['unpause', 'reset', 'approve', 'lock']) kind!: 'unpause' | 'reset' | 'approve' | 'lock';
@@ -45,7 +47,7 @@ export class CancelEscrowDeploymentDto {
 @ApiTags('Learning Bridge redemption') @ApiCookieAuth() @UseGuards(SessionGuard)
 @Controller('api/bridge/orders/:id/redemption')
 export class BridgeRedemptionController {
-	constructor(@Inject(BridgeRedemptionService) private readonly service: BridgeRedemptionService, @Inject(RedemptionEscrowService) private readonly deployments: RedemptionEscrowService, @Inject(RedemptionOrdersService) private readonly redemptions: RedemptionOrdersService, @Inject(RedemptionReleaseService) private readonly releases: RedemptionReleaseService, @Inject(RedemptionWalletService) private readonly wallet: RedemptionWalletService) {}
+	constructor(@Inject(BridgeRedemptionService) private readonly service: BridgeRedemptionService, @Inject(RedemptionEscrowService) private readonly deployments: RedemptionEscrowService, @Inject(RedemptionOrdersService) private readonly redemptions: RedemptionOrdersService, @Inject(RedemptionReleaseService) private readonly releases: RedemptionReleaseService, @Inject(RedemptionWalletService) private readonly wallet: RedemptionWalletService, @Inject(BridgeV15MultisigService) private readonly multisig: BridgeV15MultisigService) {}
 	@Get('orders') async orders(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: AuthenticatedRequest) { return { data: await this.redemptions.list(id, request.principal) }; }
 	@Post('orders') @HttpCode(200) @Throttle({ default: { limit: 4, ttl: 60_000 } }) @ApiBody({ type: PrepareRedemptionOrderDto })
 	async prepareOrder(@Param('id', new ParseUUIDPipe()) id: string, @Body(bodyPipe(PrepareRedemptionOrderDto)) input: PrepareRedemptionOrderDto, @Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return { data: await this.redemptions.prepare(id, input, request.principal, response) }; }
@@ -94,4 +96,10 @@ export class BridgeRedemptionController {
 	async cancel(@Param('id', new ParseUUIDPipe()) id: string, @Param('deployment', new ParseUUIDPipe()) deployment: string, @Body(bodyPipe(CancelEscrowDeploymentDto)) input: CancelEscrowDeploymentDto, @Req() request: AuthenticatedRequest) { return { data: await this.deployments.cancel(id, deployment, input.notSent === true, request.principal) }; }
 	@Post('deployments/:deployment/check') @HttpCode(200) @Throttle({ default: { limit: 8, ttl: 60_000 } })
 	async check(@Param('id', new ParseUUIDPipe()) id: string, @Param('deployment', new ParseUUIDPipe()) deployment: string, @Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return { data: await this.deployments.check(id, deployment, request.principal, response) }; }
+	@Get('deployments/:deployment/activation')
+	async activation(@Param('id', new ParseUUIDPipe()) id: string, @Param('deployment', new ParseUUIDPipe()) deployment: string, @Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return { data: await this.multisig.redemptionActivationState(id, deployment, request.principal, response) }; }
+	@Post('deployments/:deployment/activation/preview') @HttpCode(200) @Throttle({ default: { limit: 12, ttl: 60_000 } }) @ApiBody({ type: PreviewV15ActivationDto })
+	async previewActivation(@Param('id', new ParseUUIDPipe()) id: string, @Param('deployment', new ParseUUIDPipe()) deployment: string, @Body(bodyPipe(PreviewV15ActivationDto)) input: PreviewV15ActivationDto, @Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return { data: await this.multisig.previewRedemptionActivation(id, deployment, input.kind, input.actionId as `0x${string}` | undefined, request.principal, response) }; }
+	@Post('deployments/:deployment/activation/check') @HttpCode(200) @Throttle({ default: { limit: 30, ttl: 60_000 } }) @ApiBody({ type: CheckV15ActivationDto })
+	async checkActivation(@Param('id', new ParseUUIDPipe()) id: string, @Param('deployment', new ParseUUIDPipe()) deployment: string, @Body(bodyPipe(CheckV15ActivationDto)) input: CheckV15ActivationDto, @Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) { return { data: await this.multisig.checkRedemptionActivation(id, deployment, input.kind, input.actionId as `0x${string}`, input.txHash as `0x${string}`, request.principal, response) }; }
 }

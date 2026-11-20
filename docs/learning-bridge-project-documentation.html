@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Learning Bridge 项目技术文档</title>
+<style>
+  :root{--navy:#0b1730;--navy2:#102342;--cyan:#55c8ef;--mint:#42d6aa;--gold:#f3bf55;--red:#ef6a78;--ink:#182235;--muted:#5c687a;--line:#d9e2ed;--paper:#fff;--soft:#f3f7fb;--green:#0d7b61}
+  *{box-sizing:border-box} html{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif;color:var(--ink);background:#d9dee7}
+  body{margin:0} @page{size:A4;margin:0} .page{width:210mm;min-height:297mm;margin:10mm auto;background:var(--paper);padding:16mm 17mm 15mm;position:relative;page-break-after:always;overflow:hidden}
+  .page:last-child{page-break-after:auto}.page-no{position:absolute;right:17mm;bottom:8mm;color:#7d8899;font-size:8.5pt}.doc-id{position:absolute;left:17mm;bottom:8mm;color:#7d8899;font-size:8.5pt}
+  h1,h2,h3,h4{color:var(--navy);margin:0 0 4mm;line-height:1.22}h1{font-size:28pt}h2{font-size:20pt;border-bottom:2px solid var(--cyan);padding-bottom:2.5mm}h3{font-size:13.5pt;margin-top:5mm}h4{font-size:10.8pt;margin-top:3mm}p,li,td,th{font-size:9.3pt;line-height:1.55}p{margin:2mm 0 3mm}ul,ol{margin:2mm 0 3mm;padding-left:6mm}li{margin:1mm 0}code{font-family:"SFMono-Regular",Consolas,monospace;font-size:8pt;background:#edf2f7;padding:.2mm 1mm;border-radius:1mm;overflow-wrap:anywhere}.small{font-size:8.2pt}.tiny{font-size:7.2pt}.muted{color:var(--muted)}.strong{font-weight:700}.nowrap{white-space:nowrap}
+  table{width:100%;border-collapse:collapse;margin:3mm 0 5mm;page-break-inside:avoid}th{background:var(--navy);color:#fff;text-align:left;font-weight:650}th,td{border:1px solid var(--line);padding:2mm 2.3mm;vertical-align:top}tr:nth-child(even) td{background:#f8fafc}.dense th,.dense td{padding:1.35mm 1.7mm;font-size:7.7pt;line-height:1.38}
+  .cover{background:linear-gradient(145deg,#071326 0%,#10284a 60%,#0d4655 100%);color:#fff;padding:25mm 20mm}.cover h1{color:#fff;font-size:34pt;margin-top:35mm}.cover h2{color:#bcecff;border:0;font-size:18pt;font-weight:450}.cover .tag{display:inline-block;border:1px solid #63d5f7;border-radius:20mm;padding:2mm 5mm;color:#bfefff;margin-top:8mm}.cover .meta{position:absolute;left:20mm;bottom:30mm;display:grid;grid-template-columns:32mm 1fr;gap:3mm 8mm;font-size:10pt}.cover .line{width:42mm;height:1.2mm;background:linear-gradient(90deg,var(--cyan),var(--mint));margin:9mm 0}.cover .page-no,.cover .doc-id{color:#a9bed3}
+  .callout{border-left:4px solid var(--cyan);background:#edf8fd;padding:3mm 4mm;margin:3mm 0 4mm;page-break-inside:avoid}.callout.warn{border-color:var(--gold);background:#fff8e8}.callout.danger{border-color:var(--red);background:#fff0f2}.callout.good{border-color:var(--mint);background:#ecfbf6}.callout p:last-child{margin-bottom:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4mm}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.card{border:1px solid var(--line);border-radius:2.5mm;padding:3mm;background:#fff;page-break-inside:avoid}.card h3,.card h4{margin-top:0}.pill{display:inline-block;background:#e6f7fd;color:#0c6688;border-radius:8mm;padding:1mm 3mm;font-size:7.8pt;font-weight:650}.pill.green{background:#e4f8f1;color:#087057}.pill.gold{background:#fff1d3;color:#845900}.pill.red{background:#ffe7eb;color:#9b2c3e}
+  .flow{display:flex;align-items:stretch;gap:2mm;margin:4mm 0 5mm;page-break-inside:avoid}.flow.vertical{flex-direction:column}.node{flex:1;border:1px solid #adc1d6;border-radius:2.3mm;padding:3mm;text-align:center;background:#f7fafc;font-size:8.3pt;line-height:1.35;min-width:0}.node strong{display:block;color:var(--navy);font-size:9.5pt;margin-bottom:1mm}.node.user{border-color:#67bfe2;background:#eaf8fe}.node.backend{border-color:#6b86ad;background:#eef3fa}.node.chain{border-color:#57c9a8;background:#eafbf6}.node.warn{border-color:#e1b253;background:#fff7e6}.node.dark{background:var(--navy);color:#fff;border-color:var(--navy)}.node.dark strong{color:#fff}.arrow{display:flex;align-items:center;justify-content:center;color:#3b7899;font-size:17pt;font-weight:700;min-width:5mm}.vertical .arrow{transform:rotate(90deg);height:4mm}.flow-label{font-size:7.2pt;color:var(--muted);display:block;margin-top:1mm}
+  .swim{display:grid;grid-template-columns:24mm repeat(4,1fr);border:1px solid var(--line);margin:4mm 0 5mm;page-break-inside:avoid}.swim>div{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:2mm;font-size:7.4pt;line-height:1.3;min-height:10mm}.swim>div:nth-child(5n){border-right:0}.swim .head{background:var(--navy);color:#fff;font-weight:650;text-align:center}.swim .step{background:#edf3f8;color:var(--navy);font-weight:650}.swim .hit{background:#e9faf5}.swim .wallet{background:#eaf7fd}.swim .risk{background:#fff4dd}.swim .empty{background:#fafbfd}
+  .tree{font-family:"SFMono-Regular",Consolas,monospace;font-size:8pt;line-height:1.55;white-space:pre-wrap;background:#0c172b;color:#d7e7f7;border-radius:2mm;padding:4mm;margin:3mm 0}.state{display:flex;flex-wrap:wrap;gap:1.5mm;align-items:center;margin:3mm 0}.state span{padding:1.4mm 2.3mm;border:1px solid #aebfd0;border-radius:8mm;background:#f5f8fb;font-size:7.7pt}.state b{color:#4a89a9}.legend{display:flex;gap:4mm;flex-wrap:wrap;font-size:7.5pt;color:var(--muted)}.dot{width:2.5mm;height:2.5mm;display:inline-block;border-radius:50%;margin-right:1mm;background:var(--cyan)}
+  .toc{columns:2;column-gap:12mm}.toc p{break-inside:avoid;border-bottom:1px dotted #a8b4c2;padding-bottom:1.5mm}.toc span{float:right;color:#607085}.kpi{font-size:19pt;color:var(--navy);font-weight:750}.caption{text-align:center;color:var(--muted);font-size:7.6pt;margin-top:-2mm}.mono{font-family:"SFMono-Regular",Consolas,monospace;overflow-wrap:anywhere}.check li::marker{color:var(--green)}
+  .compact-sm{padding-top:14mm;padding-bottom:13mm}.compact-sm h3{margin-top:3.5mm}.compact-sm p,.compact-sm li,.compact-sm td,.compact-sm th{font-size:8.8pt;line-height:1.43}.compact-sm table{margin:2.2mm 0 3.5mm}.compact-sm .flow{margin:3mm 0 3.5mm}.compact-sm .callout{margin:2mm 0 3mm;padding:2.5mm 3.5mm}
+  .compact-lg{padding-top:13mm;padding-bottom:12mm}.compact-lg h2{margin-bottom:3mm}.compact-lg h3{margin-top:3mm;margin-bottom:2.5mm}.compact-lg p,.compact-lg li,.compact-lg td,.compact-lg th{font-size:8.3pt;line-height:1.38}.compact-lg table{margin:2mm 0 3mm}.compact-lg .flow{margin:2.5mm 0 3mm}.compact-lg .node{padding:2.2mm}.compact-lg .card{padding:2.4mm}.compact-lg .callout{margin:2mm 0 2.5mm;padding:2.3mm 3mm}
+  @media print{html,body{background:#fff}.page{margin:0;box-shadow:none}.no-print{display:none}}
+</style>
+</head>
+<body>
+
+<section class="page cover">
+  <div class="tag">SYSTEM DESIGN · API INTEGRATION · OPERATIONS</div>
+  <h1>Learning Bridge<br>项目技术文档</h1>
+  <div class="line"></div>
+  <h2>TBC Testnet ↔ HyperEVM Testnet<br>V1.5 Custodial Multisig Bridge</h2>
+  <p style="max-width:135mm;color:#c5d6e8;font-size:11pt">从 React 前端、NestJS 后端、PostgreSQL 状态，到 Turing Wallet、TBC Devnet API、HyperEVM RPC 与 Solidity 合约的端到端实现说明。</p>
+  <div class="meta">
+    <strong>文档版本</strong><span>1.0</span>
+    <strong>代码快照</strong><span>2026-11-20 · Asia/Kuala_Lumpur</span>
+    <strong>主路线</strong><span>V1.5 · confirmation-based custody</span>
+    <strong>适用环境</strong><span>Testnet / Learning / Not audited</span>
+  </div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">1</div>
+</section>
+
+<section class="page compact-sm">
+  <h2>文档控制与阅读指引</h2>
+  <div class="grid2">
+    <div class="card"><h3>目的</h3><p>让开发、审查、部署与运维人员能从同一份文档理解当前代码真实行为，特别是前端动作、后端验证、链上交易与自动观察之间的边界。</p></div>
+    <div class="card"><h3>事实来源</h3><p>以当前仓库源码、Prisma schema、Compose 配置、Solidity 合约与本机数据库公开记录为准；历史 Markdown 只作补充。</p></div>
+  </div>
+  <h3>范围</h3>
+  <table>
+    <tr><th>包含</th><th>不作保证</th></tr>
+    <tr><td>V1.5 正向与反向桥、2-of-2 Admin、多钱包角色、REST/SSE/WebSocket、数据库、费用、安全与运维。</td><td>主网可用性、第三方 API SLA、形式化验证、合约审计、无信任桥性质、经济安全保证。</td></tr>
+  </table>
+  <div class="callout danger"><strong>重要定位</strong><p>V1.5 是托管桥，不是 trustless light-client bridge。HyperEVM 合约不会验证 TBC PoW、DAA、Merkle proof 或 canonical chain；这些来源事实由后端通过固定 API 验证，再由独立 Minter 执行 mint。</p></div>
+  <h3>版本边界</h3>
+  <table class="dense">
+    <tr><th>版本</th><th>状态</th><th>核心机制</th><th>本文件处理方式</th></tr>
+    <tr><td>V1 legacy</td><td><span class="pill red">Disabled</span></td><td>旧托管路线，Admin/Minter 权限较集中</td><td>仅用于演进背景</td></tr>
+    <tr><td>V1.5</td><td><span class="pill green">Active</span></td><td>后端确认 + 2-of-2 offline Admin + 独立 Minter</td><td>主文档</td></tr>
+    <tr><td>V2/V3</td><td><span class="pill gold">Read only</span></td><td>header relay、PoW/DAA、Merkle/FT proof 实验</td><td>附录比较；新 transfer 已禁用</td></tr>
+  </table>
+  <h3>目录</h3>
+  <div class="toc">
+    <p>1. 执行摘要 <span>3</span></p><p>2. 系统全景架构 <span>4</span></p><p>3. 部署拓扑 <span>5</span></p><p>4. 前端架构 <span>6</span></p><p>5. 后端架构 <span>7</span></p><p>6. 身份与 Session <span>8</span></p><p>7. V1.5 权限模型 <span>9</span></p><p>8. 合约设计 <span>10</span></p><p>9. 正向桥流程 <span>11–12</span></p><p>10. 反向桥流程 <span>13–14</span></p><p>11. API integration <span>15–17</span></p><p>12. 数据模型 <span>18</span></p><p>13. 实时更新 <span>19</span></p><p>14. Gas 与费用 <span>20</span></p><p>15. 安全模型 <span>21</span></p><p>16. 部署与运维 <span>22</span></p><p>17. 当前路线快照 <span>23</span></p><p>18. 故障排查 <span>24</span></p><p>附录 <span>25</span></p>
+  </div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">2</div>
+</section>
+
+<section class="page">
+  <h2>1. 执行摘要</h2>
+  <p>Learning Bridge 把 TBC Testnet 上的 legacy FT 以 1:1 方式映射成 HyperEVM Testnet ERC-20。正向时，用户把源 FT 转入每订单独立的 TBC custody 地址；后端验证资产身份、完整输入祖先、UTXO、规范区块和至少 6 次确认；V1.5 Minter 随后在 HyperEVM mint 对应 wrapped token。反向时，wrapped token 被永久锁入不可提取的 escrow，后端确认锁仓后使用 TBC custody reserve 构建并签署源 FT 返还交易。</p>
+  <div class="grid3">
+    <div class="card"><div class="kpi">1:1</div><p>源 FT raw amount 与 wrapped ERC-20 raw amount固定对应。</p></div>
+    <div class="card"><div class="kpi">6 + 6</div><p>TBC 和 HyperEVM 关键交易均要求 6 次确认。</p></div>
+    <div class="card"><div class="kpi">2-of-2</div><p>Admin 高权限动作必须由两名 signer 共同批准。</p></div>
+  </div>
+  <h3>关键设计结论</h3>
+  <ol>
+    <li><strong>低 gas 来自把 TBC 共识证明移出 EVM。</strong>每笔 mint 只执行固定 ABI 的 ERC-20 mint 与 replay protection，不在链上跑 header/PoW/DAA/Merkle 验证。</li>
+    <li><strong>Admin 与 Minter 分离。</strong>Admin multisig 只负责 pause/unpause、轮换 minter 等低频治理；Minter 只负责高频 mint，不能更改 Admin。</li>
+    <li><strong>后端不保存 MetaMask 私钥。</strong>报价、calldata、nonce 和 gas budget 由后端准备并验证；最终 EVM 发送必须由对应 MetaMask 账户确认。</li>
+    <li><strong>TBC custody key 存于 Compose secret。</strong>它用于 custody 地址恢复和反向源链签名，是 V1.5 的主要托管风险之一。</li>
+    <li><strong>自动化只观察，不擅自签名。</strong>后台每约 60 秒检查 TBC，每约 12 秒检查已提交的 HyperEVM transaction；自动刷新不会生成新的资金交易。</li>
+    <li><strong>重复发送保护优先。</strong>订单、付款 attempt、outpoint、EVM nonce、orderId/depositId 与 redemptionId 都有数据库或合约级唯一约束。</li>
+  </ol>
+  <div class="callout good"><strong>当前主路线</strong><p>V1.5 支持从 Turing Wallet 动态读取当前 TBC FT，逐 token 建立独立 wrapped route。每个 source token 不共享 ERC-20、reserve accounting 或 replay namespace。</p></div>
+  <div class="callout warn"><strong>生产前缺口</strong><p>需要第三方审计、密钥隔离/HSM、正式监控与告警、灾难恢复演练、限额与人工审批策略、API 多源交叉验证，以及对 Minter/custody compromise 的应急预案。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">3</div>
+</section>
+
+<section class="page">
+  <h2>2. 系统全景架构</h2>
+  <div class="flow">
+    <div class="node user"><strong>用户浏览器</strong>React UI<br>Turing Wallet Provider<br>MetaMask / EIP-1193</div><div class="arrow">→</div>
+    <div class="node backend"><strong>同源入口</strong>Vite dev proxy<br>或 Nginx production<br><code>/api</code> / <code>/__htlc</code></div><div class="arrow">→</div>
+    <div class="node dark"><strong>NestJS API</strong>Auth · Bridge · HTLC<br>Validation · Verifier<br>Observer · Reconciliation</div>
+  </div>
+  <div class="flow">
+    <div class="node chain"><strong>TBC Devnet</strong>Turing Wallet 签名<br>legacy FT / native TBC<br>api.tbcdev.org</div><div class="arrow">↔</div>
+    <div class="node backend"><strong>Backend trust boundary</strong>固定 endpoint / policy<br>canonical block check<br>custody crypto / tx build</div><div class="arrow">↔</div>
+    <div class="node chain"><strong>HyperEVM Testnet</strong>Chain ID 998<br>固定 RPC<br>WrappedFT / Multisig / Escrow</div>
+  </div>
+  <div class="flow">
+    <div class="node warn"><strong>Compose Secrets</strong>htlc.key<br>bridge-custody.key<br>phase3-relayer.key</div><div class="arrow">→</div>
+    <div class="node backend"><strong>PostgreSQL 17</strong>身份 · session · routes<br>orders · receipts · audit<br>encrypted custody</div><div class="arrow">←</div>
+    <div class="node backend"><strong>Prisma 7</strong>typed repository<br>transactions / uniqueness<br>runtime role restrictions</div>
+  </div>
+  <p class="caption">图 2-1：系统 context flow。钱包签名发生在浏览器；验证、状态与 custody 编排发生在后端；最终事实落在两条测试链。</p>
+  <h3>职责边界</h3>
+  <table class="dense">
+    <tr><th>区域</th><th>负责</th><th>明确不负责</th></tr>
+    <tr><td>React 前端</td><td>选择 route、展示报价、核对账户、调用钱包、恢复公开 TXID/hash、显示状态</td><td>保存私钥、单方面判定链上成功、代用户签名</td></tr>
+    <tr><td>NestJS 后端</td><td>认证、DTO 验证、固定 policy、构建交易、验证链证据、持久化、自动观察</td><td>自动批准 MetaMask；把第三方 API 响应直接视为无信任证明</td></tr>
+    <tr><td>PostgreSQL</td><td>幂等、唯一 outpoint、状态恢复、审计、加密 custody metadata</td><td>保存明文 WIF/MetaMask key</td></tr>
+    <tr><td>Turing Wallet</td><td>登录签名、FT/native TBC 交易签名与广播</td><td>HyperEVM 合约治理</td></tr>
+    <tr><td>MetaMask</td><td>部署、multisig、mint、approve、lock 的 EVM 签名</td><td>TBC 源链签名</td></tr>
+  </table>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">4</div>
+</section>
+
+<section class="page compact-sm">
+  <h2>3. 部署拓扑</h2>
+  <div class="flow vertical">
+    <div class="node user"><strong>localhost:5173 / HTTPS origin</strong>开发：Vite dev server　·　生产：Nginx static SPA</div><div class="arrow">→</div>
+    <div class="node backend"><strong>frontend container</strong>同源 proxy API、SSE 与 WebSocket；禁止暴露 <code>.env</code>、<code>.secrets</code>、<code>backend</code>、<code>storage</code></div><div class="arrow">→</div>
+    <div class="node dark"><strong>backend container :3001</strong>NestJS；不直接映射 host port；healthcheck <code>/api/health/ready</code></div><div class="arrow">→</div>
+    <div class="node backend"><strong>postgres container :5432</strong>host 仅绑定 <code>127.0.0.1:5433</code>；named volume 持久化</div>
+  </div>
+  <h3>Compose 启动顺序</h3>
+  <div class="state"><span>postgres healthy</span><b>→</b><span>migrate</span><b>→</b><span>Prisma migrations</span><b>→</b><span>grant app role</span><b>→</b><span>legacy import</span><b>→</b><span>backend healthy</span><b>→</b><span>frontend</span></div>
+  <h3>开发与生产差异</h3>
+  <table>
+    <tr><th>项目</th><th>开发 compose.yaml</th><th>生产 compose.production.yaml</th></tr>
+    <tr><td>前端</td><td>Vite，源码只读 bind mount，热更新</td><td>编译产物由 Nginx :8080 提供</td></tr>
+    <tr><td>后端</td><td>development image，源码 mount</td><td>production image，预编译 JS</td></tr>
+    <tr><td>Origin</td><td>默认 <code>http://localhost:5173</code></td><td>必须显式 HTTPS <code>APP_ORIGIN</code></td></tr>
+    <tr><td>Swagger</td><td><code>/api/docs</code> 可用</td><td>不启用</td></tr>
+    <tr><td>DB host port</td><td>127.0.0.1:5433</td><td>不对 host 暴露</td></tr>
+  </table>
+  <h3>环境配置类别</h3>
+  <div class="grid2">
+    <div class="card"><h4>非秘密公开配置</h4><p><code>APP_ORIGIN</code>、<code>SESSION_HOURS</code>、V1.5 三个公开角色地址、frontend port。</p></div>
+    <div class="card"><h4>秘密配置</h4><p>PostgreSQL passwords、HTLC key、bridge custody key、Phase3 relayer key。通过本机文件与 Compose secret 挂载，不进入前端 bundle。</p></div>
+  </div>
+  <div class="callout warn"><strong>备份原则</strong><p>数据库 dump 必须与匹配的 <code>bridge-custody.key</code>、<code>htlc.key</code> 分开备份并一起恢复。只恢复数据库或只恢复新密钥都会使旧 custody/secret 不可解密。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">5</div>
+</section>
+
+<section class="page">
+  <h2>4. 前端架构</h2>
+  <div class="tree">wallet/src/
+├── pages/BridgeLabPage.tsx           # Transfer / Reconciliation / Token locks / Admin
+├── components/bridge/
+│   ├── TestnetBridge.tsx             # route + token selection
+│   ├── BridgeOrders.tsx              # forward order creation/list
+│   ├── BridgeSettlement.tsx          # deposit → mint orchestration
+│   ├── BridgeSourcePayment.tsx       # automatic FT_TRANSFER + TXID recovery
+│   ├── V15RouteActivation.tsx        # 2-of-2 wrapped token unpause
+│   ├── RedemptionOrders.tsx          # reverse order creation
+│   ├── RedemptionRelease.tsx         # TBC fee → release orchestration
+│   ├── V15EscrowActivation.tsx       # 2-of-2 escrow unpause
+│   └── RedemptionWalletCalls.tsx     # approve/reset/lock
+├── hooks/
+│   ├── useWalletSession.ts           # Turing Wallet + backend auth
+│   ├── useHyperEvmWallet.ts          # MetaMask / chain 998
+│   ├── useBridgeSettlement.ts        # REST + SSE refresh
+│   └── useTransactionHistory.ts      # authenticated WebSocket
+└── services/                          # API validation, recovery receipts, wallet adapters</div>
+  <h3>页面路由与 UI tabs</h3>
+  <table class="dense">
+    <tr><th>Tab</th><th>功能</th><th>主要组件</th></tr>
+    <tr><td>Transfer</td><td>选择 TBC FT、V1.5 route、正向/反向订单</td><td>TestnetBridge、BridgeOrders、RedemptionOrders</td></tr>
+    <tr><td>Reconciliation</td><td>请求、交易、余额和费用对账</td><td>BridgeReconciliation</td></tr>
+    <tr><td>Token locks / My locks</td><td>独立 HTLC 教学功能</td><td>HtlcTestnet、HtlcRequests</td></tr>
+    <tr><td>Markets</td><td>BitBus 只读资产/交易对</td><td>BridgeOverview</td></tr>
+    <tr><td>Admin</td><td>V1.5 multisig、wrapped route、归档 V2/V3</td><td>BridgeAdmin、V15AdminSetup</td></tr>
+  </table>
+  <h3>前端安全型发送模式</h3>
+  <div class="flow">
+    <div class="node backend"><strong>1. Preview / Quote</strong>后端固定 calldata、nonce、gas、from/to</div><div class="arrow">→</div>
+    <div class="node user"><strong>2. Browser compare</strong>核对 chain/account/ABI/余额/过期时间</div><div class="arrow">→</div>
+    <div class="node user"><strong>3. Wallet confirm</strong>恰好一次显式请求</div><div class="arrow">→</div>
+    <div class="node backend"><strong>4. Submit / Check</strong>保存 hash；再验 receipt 与 6 confirms</div>
+  </div>
+  <h3>恢复策略</h3>
+  <ul>
+    <li>Turing Wallet 返回的 TXID 与 MetaMask transaction hash 都先作为<strong>公开恢复指针</strong>保存，不能仅凭前端“成功”提示认定结算。</li>
+    <li>刷新页面不会再次发送；若后端保存失败，可从钱包 Activity/history 输入原 hash 恢复。</li>
+    <li>自动 native TBC fee 使用 <code>P2PKH</code>，自动 FT 入金使用 <code>FT_TRANSFER</code>；金额和地址由冻结订单填入，用户仍必须确认钱包签名。</li>
+  </ul>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">6</div>
+</section>
+
+<section class="page">
+  <h2>5. 后端架构</h2>
+  <div class="flow">
+    <div class="node user"><strong>Controller + DTO</strong>route、SessionGuard、ValidationPipe、Throttle</div><div class="arrow">→</div>
+    <div class="node backend"><strong>Application Service</strong>状态门、policy、幂等、orchestration</div><div class="arrow">→</div>
+    <div class="node backend"><strong>Verifier / Engine</strong>TBC raw/ancestor/script<br>HyperEVM code/receipt/ABI</div><div class="arrow">→</div>
+    <div class="node backend"><strong>Repository</strong>Prisma transaction<br>unique constraints<br>audit event</div>
+  </div>
+  <h3>NestJS 模块</h3>
+  <table class="dense">
+    <tr><th>模块</th><th>关键职责</th></tr>
+    <tr><td><code>AuthModule</code></td><td>Turing Wallet challenge/signature 登录、cookie session、CSRF、identity scope。</td></tr>
+    <tr><td><code>BridgeModule</code></td><td>asset verification、deployment、orders、settlement、redemption、reconciliation、V1.5 multisig、V2/V3 实验。</td></tr>
+    <tr><td><code>HtlcModule</code></td><td>独立 TBC token HTLC 构建、签名请求、广播、secret recovery。</td></tr>
+    <tr><td><code>DatabaseModule</code></td><td>Prisma client 生命周期与 PostgreSQL access。</td></tr>
+  </table>
+  <h3>V1.5 服务分工</h3>
+  <div class="grid2">
+    <div class="card"><h4>正向</h4><ul><li><code>BridgeAssetVerifier</code>：FT genesis/metadata/canonical chain</li><li><code>BridgeCustodyService</code>：每订单 custody key 加密</li><li><code>BridgeDepositVerifier</code>：付款输出、祖先、脚本与 UTXO</li><li><code>BridgeCallVerifier</code>：unpause/mint receipt 与 event</li><li><code>BridgeAutomationService</code>：观察确认数</li></ul></div>
+    <div class="card"><h4>反向</h4><ul><li><code>RedemptionEscrowVerifier</code>：escrow runtime/binding/owner</li><li><code>RedemptionWalletService</code>：approve/reset/lock wallet call</li><li><code>RedemptionLockVerifier</code>：永久锁事件</li><li><code>RedemptionReleaseEngine</code>：TBC fee、unsigned release、签名/广播</li><li><code>BridgeV15MultisigService</code>：2-of-2 activation</li></ul></div>
+  </div>
+  <h3>并发与失败原则</h3>
+  <ul>
+    <li>按 identity、sender、order 或 redemption 使用 advisory/application locks，避免并发 nonce 和重复 reserve。</li>
+    <li>外部 read 有限重试；钱包 send、签名与 broadcast 不自动重试。</li>
+    <li>超时/上游 unavailable 保留已保存证据；错误不等同于“交易未发送”。</li>
+    <li>所有 API JSON response 采用 <code>{ data }</code> 或标准化错误，附 <code>X-Request-Id</code>。</li>
+  </ul>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">7</div>
+</section>
+
+<section class="page">
+  <h2>6. 身份、Session 与请求保护</h2>
+  <h3>登录 sequence flow</h3>
+  <div class="swim">
+    <div class="head">步骤</div><div class="head">React</div><div class="head">Turing Wallet</div><div class="head">NestJS Auth</div><div class="head">PostgreSQL</div>
+    <div class="step">1 Connect</div><div class="wallet">读取 TBC address/network</div><div class="wallet">用户选择 TBC Testnet account</div><div class="empty"></div><div class="empty"></div>
+    <div class="step">2 Challenge</div><div>POST <code>/api/auth/challenge</code></div><div class="empty"></div><div class="hit">产生 origin/address/expiry 绑定 message</div><div>写 auth_challenges</div>
+    <div class="step">3 Sign</div><div>调用 <code>signMessage</code></div><div class="wallet">用户确认登录签名</div><div class="empty"></div><div class="empty"></div>
+    <div class="step">4 Verify</div><div>POST <code>/api/auth/verify</code></div><div class="empty"></div><div class="hit">验签、consume challenge、建 session</div><div>identity + tokenHash + csrfToken</div>
+    <div class="step">5 Use API</div><div>cookie + X-CSRF-Token</div><div class="empty"></div><div>SessionGuard + identity scope</div><div>只读/事务写入</div>
+  </div>
+  <h3>保护层</h3>
+  <table class="dense">
+    <tr><th>控制</th><th>实现</th><th>目的</th></tr>
+    <tr><td>Same-origin</td><td>严格匹配 <code>APP_ORIGIN</code>；拒绝 cross-site；production 要求 HTTPS</td><td>防止跨站携带 cookie</td></tr>
+    <tr><td>Cookie session</td><td>服务端只存 token hash，默认 12 小时</td><td>浏览器恢复 session，不暴露 DB token</td></tr>
+    <tr><td>CSRF</td><td>非 GET 请求加入 <code>X-CSRF-Token</code></td><td>阻止恶意站点写操作</td></tr>
+    <tr><td>DTO whitelist</td><td><code>forbidNonWhitelisted</code> + strict 16 KB JSON</td><td>拒绝未声明字段与大 payload</td></tr>
+    <tr><td>Rate limit</td><td>全局 120/min；高成本 route 独立 3–30/min</td><td>保护 RPC、TBC API 与 CPU</td></tr>
+    <tr><td>Identity scope</td><td>所有订单与 deployment 按登录 TBC identity 查询</td><td>防止 IDOR</td></tr>
+  </table>
+  <div class="callout"><strong>登录签名 ≠ 资金授权</strong><p>登录只证明当前 TBC address 的控制权，不允许后端替用户发送 FT，也不授权 MetaMask 交易。每个资金动作仍有独立钱包确认。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">8</div>
+</section>
+
+<section class="page">
+  <h2>7. V1.5 权限与密钥模型</h2>
+  <div class="flow">
+    <div class="node user"><strong>Signer 1</strong><code>0xc589…aC4a</code><br>离线/低频</div><div class="arrow">↘</div>
+    <div class="node dark"><strong>BridgeAdminMultisig</strong><code>0xfE34…5b7F</code><br>threshold 2 of 2</div><div class="arrow">→</div>
+    <div class="node chain"><strong>Wrapped / Escrow owner</strong>pause · unpause<br>setMinter（wrapped）</div>
+  </div>
+  <div class="flow">
+    <div class="node user"><strong>Signer 2</strong><code>0xdf1e…0080</code><br>离线/低频</div><div class="arrow">↗</div>
+    <div class="node warn"><strong>Minter</strong><code>0x77D0…9f91</code><br>独立 hot role</div><div class="arrow">→</div>
+    <div class="node chain"><strong>mintFromDeposit</strong>只在 wrapped unpaused<br>合约内防 order/deposit replay</div>
+  </div>
+  <h3>角色矩阵</h3>
+  <table class="dense">
+    <tr><th>角色/密钥</th><th>可做</th><th>不可做</th><th>费用承担</th></tr>
+    <tr><td>Signer 1</td><td>提出 exact Admin call</td><td>单独执行；mint；控制 custody</td><td>proposal HYPE gas</td></tr>
+    <tr><td>Signer 2</td><td>批准并原子执行相同 call</td><td>批准自己已提案的 action；mint</td><td>approval/execution HYPE gas</td></tr>
+    <tr><td>Minter</td><td>已解锁 wrapped 上 mintFromDeposit</td><td>pause/unpause、换 owner、释放 TBC reserve</td><td>mint HYPE gas</td></tr>
+    <tr><td>Deployment payer</td><td>支付部署交易</td><td>自动获得 owner/minter 权限</td><td>deployment HYPE gas</td></tr>
+    <tr><td>User/holder</td><td>FT transfer、approve、永久 lock</td><td>Admin/mint/custody signing</td><td>TBC transfer + approve/lock gas</td></tr>
+    <tr><td>Backend custody key</td><td>恢复每订单 custody key；签反向源链 release</td><td>签 MetaMask/Admin/Minter</td><td>使用用户预付 native TBC fee</td></tr>
+  </table>
+  <h3>2-of-2 action 机制</h3>
+  <div class="state"><span>Signer1 propose(target,data)</span><b>→</b><span>actionId = keccak256(chain,multisig,nonce,target,dataHash)</span><b>→</b><span>Signer2 approveAndExecute(actionId)</span><b>→</b><span>target.call(exact data)</span></div>
+  <div class="callout danger"><strong>风险解释</strong><p>Multisig 降低 Admin 单钥失陷风险，但不会把 V1.5 变成无信任桥。Minter 被攻破时仍可能对唯一但虚构的 order/deposit 执行未授权 mint；custody backend 被完全控制时源链 reserve 也处于风险中。Admin 的应急能力是 pause 和 rotate minter。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">9</div>
+</section>
+
+<section class="page">
+  <h2>8. Solidity 合约设计</h2>
+  <h3>BridgeWrappedFT</h3>
+  <table class="dense">
+    <tr><th>特性</th><th>实现</th></tr>
+    <tr><td>绑定</td><td>immutable <code>sourceContractId</code>、<code>sourceDecimals</code>、chain 998。</td></tr>
+    <tr><td>初始状态</td><td><code>paused = true</code>、<code>totalSupply = 0</code>，必须经 Admin 2-of-2 activation。</td></tr>
+    <tr><td>Mint</td><td><code>mintFromDeposit(orderId, sourceContractId, sourceTxid, vout, recipient, amountRaw)</code>，仅 minter、仅 whenNotPaused。</td></tr>
+    <tr><td>Replay</td><td><code>processedOrders</code> 与由 domain/FT/txid/vout 生成的 <code>processedDeposits</code> 双重防重。</td></tr>
+    <tr><td>治理</td><td>owner 可 pause/unpause/setMinter；Ownable2Step；禁止 renounceOwnership。</td></tr>
+  </table>
+  <h3>BridgeAdminMultisig</h3>
+  <table class="dense">
+    <tr><th>特性</th><th>实现</th></tr>
+    <tr><td>成员</td><td>两个 immutable signer，必须不同且非零；固定 threshold=2。</td></tr>
+    <tr><td>提案</td><td>保存 target + calldata；proposer 自动获得第一票；nonce 防 actionId 重用。</td></tr>
+    <tr><td>执行</td><td>另一 signer 批准时原子执行；失败整体 revert；同 signer 不能重复批准。</td></tr>
+    <tr><td>权限</td><td>合约本身不持有 mint role；仅作为 wrapped/escrow owner。</td></tr>
+  </table>
+  <h3>LearningRedemptionEscrow</h3>
+  <table class="dense">
+    <tr><th>特性</th><th>实现</th></tr>
+    <tr><td>永久锁</td><td><code>lockForRedemption</code> 用 SafeERC20 <code>transferFrom</code>；没有 withdraw/rescue/upgrade/forward。</td></tr>
+    <tr><td>绑定</td><td>immutable wrapped token、sourceContractId、decimals、chain 998。</td></tr>
+    <tr><td>精确金额</td><td>比较 escrow balance before/after；防 fee-on-transfer 异常。</td></tr>
+    <tr><td>Replay</td><td><code>processedRedemptions</code>；event 绑定 holder、recipient hash、amount。</td></tr>
+    <tr><td>经济含义</td><td>锁仓不是 burn；wrapped totalSupply 不变，但被锁 token 永久不可流通。</td></tr>
+  </table>
+  <div class="callout warn"><strong>链间事实不在 Solidity 内验证</strong><p>三个 V1.5 合约都不读取或验证 TBC header、PoW、DAA、Merkle proof、UTXO set。TBC 事实检查属于后端信任边界，这正是其 gas 接近 V1 的原因。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">10</div>
+</section>
+
+<section class="page">
+  <h2>9. 正向桥：端到端流程</h2>
+  <div class="swim">
+    <div class="head">阶段</div><div class="head">Browser / Wallet</div><div class="head">NestJS</div><div class="head">TBC</div><div class="head">HyperEVM</div>
+    <div class="step">A 选资产</div><div class="wallet">读取 Turing Wallet FT list</div><div>verify contractId/genesis</div><div class="hit">info/raw/decode/block/UTXO</div><div class="empty"></div>
+    <div class="step">B 选 route</div><div>选择 verified V1.5 wrapped</div><div>检查 deployment/runtime/roles</div><div class="empty"></div><div class="hit">eth_getCode / eth_call</div>
+    <div class="step">C 建订单</div><div>金额 + receiving EVM address</div><div class="hit">冻结条款；生成并加密 custody key</div><div class="empty"></div><div class="empty"></div>
+    <div class="step">D 付款</div><div class="wallet">Turing Wallet <code>FT_TRANSFER</code></div><div>begin/submit 保存 TXID</div><div class="hit">广播 FT payment</div><div class="empty"></div>
+    <div class="step">E 验证</div><div>页面接收 SSE 更新</div><div class="hit">每 60s 检查 raw/parents/scripts/UTXO/6 confirms</div><div class="hit">canonical inclusion</div><div class="empty"></div>
+    <div class="step">F 激活</div><div class="wallet">Signer1 propose；Signer2 approve</div><div>固定 unpause calldata + receipt check</div><div class="empty"></div><div class="hit">multisig → wrapped.unpause</div>
+    <div class="step">G Mint</div><div class="wallet">Minter MetaMask confirm</div><div>固定 mint calldata；保存/check hash</div><div class="empty"></div><div class="hit">mintFromDeposit + 6 confirms</div>
+    <div class="step">H 完成</div><div>receiver 看见 wrapped token</div><div>completed + reconciliation</div><div>reserve 留在 custody</div><div>ERC-20 balance 增加</div>
+  </div>
+  <h3>正向状态机</h3>
+  <div class="state"><span>prepared</span><b>→</b><span>awaiting_payment</span><b>→</b><span>confirming</span><b>→</b><span>ready_to_mint</span><b>→</b><span>mint_pending</span><b>→</b><span>completed</span></div>
+  <p class="small muted">异常证据、条款冲突或重组风险进入 <code>needs_review</code>；上游暂时 unavailable 保留旧状态并记录 lastError，不自动重付或重 mint。</p>
+  <h3>源链验证重点</h3>
+  <ul>
+    <li>固定 source contract ID、genesis identity、metadata、decimal 与总供应。</li>
+    <li>付款 output 必须属于该订单 custody 地址且金额精确；不同 FT、少付/多付、多组 payment 不自动接受。</li>
+    <li>检查父交易与 legacy FT Code/Tape、数量分配、发送者归属、native fee input，并本地执行解锁脚本。</li>
+    <li>固定 API 返回的 block hash/height 必须与按 height 读取的 canonical block 一致；取多处确认数的较小值。</li>
+    <li>数据库全局唯一 <code>(sourceNetwork, txid, vout)</code>，防同一 deposit 被不同订单重复 mint。</li>
+  </ul>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">11</div>
+</section>
+
+<section class="page compact-lg">
+  <h2>9.1 正向桥：调用链与恢复</h2>
+  <h3>前端 → 后端 → 钱包调用</h3>
+  <div class="flow vertical">
+    <div class="node user"><strong>BridgeOrders</strong>POST order；只传 deploymentId、idempotencyKey、amount、recipient</div><div class="arrow">→</div>
+    <div class="node backend"><strong>BridgeOrdersService</strong>从 session 决定 sender；从 verified deployment 决定 token/chain/contract；在事务内分配 custody</div><div class="arrow">→</div>
+    <div class="node user"><strong>BridgeSourcePayment</strong>payment/begin → Turing Wallet FT_TRANSFER → payment/submit(txid)</div><div class="arrow">→</div>
+    <div class="node backend"><strong>BridgeAutomationService</strong>观察 TXID；DepositVerifier 形成 BridgeDeposit；ProgressService 发布 SSE invalidation</div><div class="arrow">→</div>
+    <div class="node user"><strong>BridgeSettlement</strong>quote → begin → MetaMask send → submit hash → receipt check → completed</div>
+  </div>
+  <h3>为什么使用 begin / submit / check 三段式</h3>
+  <table class="dense">
+    <tr><th>阶段</th><th>保存内容</th><th>解决的问题</th></tr>
+    <tr><td>quote/prepare</td><td>条款、calldata、nonce、gas、有效期</td><td>用户先审阅；后端固定交易意图</td></tr>
+    <tr><td>begin</td><td><code>awaiting_wallet</code> slot</td><td>刷新/双击不会再次弹出新钱包交易</td></tr>
+    <tr><td>submit</td><td>公开 TXID / txHash</td><td>后端重启后仍可继续观察</td></tr>
+    <tr><td>check</td><td>receipt、block、confirmations、actual fee</td><td>不信任钱包“已发送”提示</td></tr>
+  </table>
+  <h3>故障恢复分支</h3>
+  <div class="grid2">
+    <div class="card"><h4>钱包已发，但 API submit 失败</h4><p>从 Turing Wallet history 或 MetaMask Activity 取原 hash，使用 recovery 输入保存；绝不再次付款。</p></div>
+    <div class="card"><h4>钱包 prompt 被拒绝</h4><p>确认 Activity 没有链上 transaction，再执行 cancel/notSent 清除 awaiting_wallet；cancel 不能取消已广播交易。</p></div>
+    <div class="card"><h4>RPC/API unavailable</h4><p>保留当前记录与 hash，稍后 check；有限重试仅适用于安全的 public read。</p></div>
+    <div class="card"><h4>确认数不足</h4><p>后台 observer 继续读取，不需重新付款；页面通过 SSE/手动 refresh 更新。</p></div>
+  </div>
+  <div class="callout"><strong>前端 TXID 自动化</strong><p>正向 FT payment 的 token、amount 与 custody address 自动传入 Turing Wallet；成功返回 TXID 后自动保存。用户仍需在钱包中确认，因为网页没有也不应拥有 TBC 私钥。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">12</div>
+</section>
+
+<section class="page">
+  <h2>10. 反向桥：端到端流程</h2>
+  <div class="swim">
+    <div class="head">阶段</div><div class="head">Browser / Wallet</div><div class="head">NestJS</div><div class="head">TBC</div><div class="head">HyperEVM</div>
+    <div class="step">A Escrow</div><div class="wallet">payer MetaMask 部署</div><div>构建/验证 bytecode、binding、owner</div><div class="empty"></div><div class="hit">LearningRedemptionEscrow paused</div>
+    <div class="step">B Return order</div><div>选择全额 + TBC recipient</div><div class="hit">冻结 redemptionId/amount/recipient</div><div>确认 reserve unspent</div><div>确认 holder/token/escrow</div>
+    <div class="step">C TBC fee</div><div class="wallet">Turing Wallet P2PKH 自动填入</div><div>保存 TXID；验单一 output/UTXO/6 confirms</div><div class="hit">native TBC fee funding</div><div class="empty"></div>
+    <div class="step">D Plan</div><div>等待自动检查</div><div class="hit">构建 immutable unsigned source release</div><div>reserve + fee input</div><div class="empty"></div>
+    <div class="step">E 激活</div><div class="wallet">Signer1 propose；Signer2 approve</div><div>固定 escrow.unpause calldata</div><div class="empty"></div><div class="hit">multisig → escrow.unpause</div>
+    <div class="step">F Approve</div><div class="wallet">holder MetaMask exact approve</div><div>quote/begin/submit/check</div><div class="empty"></div><div class="hit">allowance = exact amount</div>
+    <div class="step">G Lock</div><div class="wallet">holder MetaMask permanent lock</div><div>验 event + 6 confirms</div><div class="empty"></div><div class="hit">RedemptionLocked</div>
+    <div class="step">H Release</div><div>明确 authorize return</div><div class="hit">custody key sign → explicit broadcast</div><div class="hit">FT payout + 6 confirms</div><div>wToken 永久留在 escrow</div>
+  </div>
+  <h3>反向状态机</h3>
+  <div class="state"><span>prepared</span><b>→</b><span>awaiting_fee</span><b>→</b><span>funded</span><b>→</b><span>locked</span><b>→</b><span>signed</span><b>→</b><span>broadcasting</span><b>→</b><span>submitted</span><b>→</b><span>confirming</span><b>→</b><span>completed</span></div>
+  <div class="callout danger"><strong>不可逆点</strong><p><code>lockForRedemption</code> 后 wrapped token 永久锁住，没有 withdraw 或 rescue。只有后端验证 exact escrow event 后才允许 custody sign/broadcast 源链返还。用户必须核对 token、amount、TBC recipient 与 escrow address。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">13</div>
+</section>
+
+<section class="page">
+  <h2>10.1 反向桥：费用、签名与自动化</h2>
+  <h3>Native TBC fee 自动付款</h3>
+  <div class="flow">
+    <div class="node backend"><strong>Release open</strong>返回 fundingAddress<br>fundingRequiredRaw</div><div class="arrow">→</div>
+    <div class="node user"><strong>React</strong>核对原 TBC account<br>调用 P2PKH</div><div class="arrow">→</div>
+    <div class="node user"><strong>Turing Wallet</strong>自动填 address/satoshis<br>用户确认一次</div><div class="arrow">→</div>
+    <div class="node backend"><strong>TXID recovery</strong>localStorage 保存公开 TXID<br>每约 60s recheck</div>
+  </div>
+  <p>fee funding 必须是发往指定 custody P2PKH 的单一 native TBC output，金额足以覆盖估算 release fee 与最小 native change。当前 quote 使用 80 sat/kB、20% margin，并额外保留 1,000 sat funding buffer。多付不会自动退款。</p>
+  <h3>Release plan 绑定内容</h3>
+  <ul>
+    <li>源 FT reserve outpoint、raw transaction、TBC recipient、精确 token raw amount。</li>
+    <li>native fee funding TXID/vout/value、feeRaw 与 nativeChangeRaw。</li>
+    <li><code>planHash</code>；sign 和 broadcast 都必须提交同一 hash 且明确 <code>authorize:true</code>。</li>
+    <li>数据库对 reserve outpoint 和 funding outpoint 分别施加唯一约束。</li>
+  </ul>
+  <h3>反向 wallet calls</h3>
+  <table class="dense">
+    <tr><th>kind</th><th>from</th><th>calldata 目的</th><th>门槛</th></tr>
+    <tr><td>unpause</td><td>Admin multisig</td><td>首次激活 escrow（V1.5 走 propose/approve 两步）</td><td>2-of-2 + 6 confirms</td></tr>
+    <tr><td>reset</td><td>holder</td><td>必要时把旧 allowance 先归零</td><td>仅 allowance 状态要求时</td></tr>
+    <tr><td>approve</td><td>holder</td><td>批准 escrow 精确 amount</td><td>余额、token、spender、amount 精确</td></tr>
+    <tr><td>lock</td><td>holder</td><td><code>lockForRedemption(redemptionId,recipient,amount)</code></td><td>allowance 与 frozen terms 一致</td></tr>
+  </table>
+  <div class="callout warn"><strong>自动化边界</strong><p>网页能自动填 native TBC payment、保存 TXID、轮询确认数；但不能无提示扣款。EVM approve/lock、multisig 与源链最终 broadcast 都保持显式授权，避免刷新页面触发不可逆动作。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">14</div>
+</section>
+
+<section class="page">
+  <h2>11. API Integration：认证、资产与部署</h2>
+  <p>所有业务 REST API 由前端同源调用。写请求需要 session cookie、CSRF header、正确 Origin；response 以 <code>{data: ...}</code> 包装。</p>
+  <table class="dense">
+    <tr><th>Method</th><th>Endpoint</th><th>前端用途</th><th>后端关键动作</th></tr>
+    <tr><td>GET</td><td><code>/api/auth/session</code></td><td>恢复现有登录</td><td>读取 cookie token hash 与 expiry</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/challenge</code></td><td>开始 TBC 登录</td><td>冻结 origin/address/network message</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/verify</code></td><td>提交 Turing signature</td><td>验签并签发 cookie/CSRF</td></tr>
+    <tr><td>GET</td><td><code>/api/bridge/assets/:contractId</code></td><td>读取历史 verified FT</td><td>不重新验证链</td></tr>
+    <tr><td>POST</td><td><code>/api/bridge/assets/verify</code></td><td>验证所选 TBC FT</td><td>genesis/metadata/canonical chain/supply</td></tr>
+    <tr><td>GET</td><td><code>/api/bridge/deployments/v15/roles</code></td><td>读取固定 signer/minter</td><td>从 env 返回公开角色</td></tr>
+    <tr><td>POST</td><td><code>/api/bridge/deployments/v15/multisig/preview</code></td><td>准备 Admin multisig deployment</td><td>固定 two signers、估 gas/nonce</td></tr>
+    <tr><td>POST</td><td><code>/api/bridge/deployments/v15/multisig/check</code></td><td>保存/验证 deployment hash</td><td>runtime、signers、threshold、6 confirms</td></tr>
+    <tr><td>GET/POST</td><td><code>/api/bridge/deployments</code><br><code>/preview</code> <code>/prepare</code></td><td>列出/报价/准备 wrapped</td><td>build fingerprint、constructor、gas budget</td></tr>
+    <tr><td>POST</td><td><code>/api/bridge/deployments/:id/begin|submit|check|cancel</code></td><td>MetaMask deployment lifecycle</td><td>nonce slot、hash、receipt/runtime verification</td></tr>
+    <tr><td>GET/POST</td><td><code>/api/bridge/deployments/:id/v15/activation/*</code></td><td>wrapped route 2-of-2 unpause</td><td>exact actionId、proposal/approval receipts</td></tr>
+  </table>
+  <h3>部署 preview response 的安全字段</h3>
+  <div class="grid2">
+    <div class="card"><h4>交易身份</h4><p>chainId、from、nonce、data/initCode、value=0、expected contract address。</p></div>
+    <div class="card"><h4>费用</h4><p>estimateGas、20% buffered gas limit、gasPrice、estimated/budget fee、payer balance。</p></div>
+    <div class="card"><h4>编译身份</h4><p>buildInputSha256、runtime bytecode、immutable references、initCodeHash。</p></div>
+    <div class="card"><h4>时效</h4><p>报价通常 60 秒；过期必须重新 prepare，不能沿用旧 nonce/gas。</p></div>
+  </div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">15</div>
+</section>
+
+<section class="page">
+  <h2>11.1 API Integration：正向订单与结算</h2>
+  <table class="dense">
+    <tr><th>Method</th><th>Endpoint</th><th>Input / Output 概要</th></tr>
+    <tr><td>GET</td><td><code>/api/bridge/orders/setup</code></td><td>custody readiness、本人 verified V1.5 deployments、limits</td></tr>
+    <tr><td>GET</td><td><code>/api/bridge/orders</code></td><td>本人 prepared/completed/closed orders</td></tr>
+    <tr><td>POST</td><td><code>/api/bridge/orders</code></td><td>in: idempotencyKey, deploymentId, amount, recipient；out: frozen order</td></tr>
+    <tr><td>POST</td><td><code>/api/bridge/orders/:id/cancel</code></td><td>仅关闭未打开付款细节的 unused preparation</td></tr>
+    <tr><td>GET</td><td><code>.../:id/settlement</code></td><td>settlement、deposit、wallet attempts</td></tr>
+    <tr><td>GET/POST</td><td><code>.../:id/settlement/payment</code><br><code>/begin|submit|cancel</code></td><td>Turing Wallet FT_TRANSFER attempt；submit 绑定 TXID</td></tr>
+    <tr><td>POST</td><td><code>.../:id/settlement/open</code></td><td>确认 custody 模式后公开订单付款地址</td></tr>
+    <tr><td>POST</td><td><code>.../:id/settlement/deposit</code></td><td>挂接或重查 exact source TXID</td></tr>
+    <tr><td>POST</td><td><code>.../:id/settlement/calls</code></td><td>in: unpause/mint/next + from；out: reviewed EVM quote</td></tr>
+    <tr><td>POST</td><td><code>.../calls/:attempt/begin|submit|check|cancel</code></td><td>MetaMask call lifecycle；submit 只保存 hash，check 才验成功</td></tr>
+    <tr><td>SSE</td><td><code>.../:id/settlement/events</code></td><td>ready/progress/heartbeat invalidation；前端收到后重新 GET settlement</td></tr>
+  </table>
+  <h3>External TBC API integration</h3>
+  <table class="dense">
+    <tr><th>类别</th><th>固定 endpoint 形态</th><th>用途</th></tr>
+    <tr><td>资产</td><td><code>/ft/info/contract/:id</code></td><td>name/symbol/decimal/supply</td></tr>
+    <tr><td>交易</td><td><code>/txraw/txid/:txid</code>、<code>/decode/txid/:txid</code>、<code>/ft/decode/txid/:txid</code></td><td>raw、native decode、FT decode 交叉核对</td></tr>
+    <tr><td>UTXO</td><td><code>/utxo/address/:addr</code>、<code>/ft/utxo/address/:addr/contract/:id</code></td><td>native/FT unspent 检查</td></tr>
+    <tr><td>区块</td><td><code>/blockByHeight/height/:height</code></td><td>canonical hash/height/confirmations</td></tr>
+    <tr><td>历史/列表</td><td><code>/history/address/...</code>、<code>/ft/allhistory/address/...</code>、<code>/ft/tokenlist/address/:addr</code></td><td>交易页与 token selector</td></tr>
+    <tr><td>广播</td><td><code>/broadcasttx</code></td><td>后端显式广播已授权 source release；不自动 retry send</td></tr>
+  </table>
+  <div class="callout warn"><strong>信任说明</strong><p><code>api.tbcdev.org</code> 是固定但仍受信任的链数据来源。本项目会核对 raw/decode/block/UTXO 与脚本，但 V1.5 没有独立 SPV header chain，因此 API 被完全攻破仍可能影响判断。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">16</div>
+</section>
+
+<section class="page">
+  <h2>11.2 API Integration：反向与对账</h2>
+  <table class="dense">
+    <tr><th>Method</th><th>Endpoint suffix under <code>/api/bridge/orders/:id/redemption</code></th><th>功能</th></tr>
+    <tr><td>POST/GET</td><td><code>/preview</code>、<code>/deployments</code></td><td>escrow quote、准备、列出</td></tr>
+    <tr><td>POST</td><td><code>/deployments/:deployment/begin|submit|check|cancel</code></td><td>escrow deployment lifecycle</td></tr>
+    <tr><td>GET/POST</td><td><code>/deployments/:deployment/activation/*</code></td><td>escrow 2-of-2 unpause</td></tr>
+    <tr><td>GET/POST</td><td><code>/orders</code>、<code>/orders/:redemption/cancel</code></td><td>冻结/列出/关闭 redemption intent</td></tr>
+    <tr><td>GET/POST</td><td><code>/orders/:redemption/release</code>、<code>/open</code></td><td>读取进度；生成 native fee quote/address</td></tr>
+    <tr><td>POST</td><td><code>/orders/:redemption/release/funding</code></td><td>input TXID；要求单一 P2PKH output、unspent、6 confirms</td></tr>
+    <tr><td>GET/POST</td><td><code>/orders/:redemption/wallet</code>、<code>/state</code>、<code>/quote</code></td><td>读取 exact next call；创建 approve/reset/lock quote</td></tr>
+    <tr><td>POST</td><td><code>/orders/:redemption/wallet/:call/begin|submit|check|cancel</code></td><td>反向 EVM wallet call lifecycle</td></tr>
+    <tr><td>POST</td><td><code>/orders/:redemption/release/lock</code></td><td>恢复已有 permanent-lock hash</td></tr>
+    <tr><td>POST</td><td><code>/orders/:redemption/release/sign</code></td><td>明确授权后，custody key 对固定 plan 签名</td></tr>
+    <tr><td>POST</td><td><code>/orders/:redemption/release/broadcast</code></td><td>明确授权同一 planHash 后广播固定 raw</td></tr>
+    <tr><td>POST</td><td><code>/orders/:redemption/release/check</code></td><td>确认 source release canonical block 与 6 confirms</td></tr>
+  </table>
+  <h3>对账与实时 endpoints</h3>
+  <table class="dense">
+    <tr><th>Endpoint</th><th>Transport</th><th>用途</th></tr>
+    <tr><td><code>/api/bridge/reconciliation</code></td><td>REST GET</td><td>按 request 聚合 TBC/EVM tx、fee、status、errors</td></tr>
+    <tr><td><code>/api/bridge/reconciliation/:id/balances</code></td><td>REST GET</td><td>新鲜检查 custody / wrapped / escrow balances</td></tr>
+    <tr><td><code>/api/transaction-history/ws</code></td><td>Authenticated WebSocket</td><td>TBC wallet history snapshot；30s ping；最多 100 clients</td></tr>
+    <tr><td><code>/api/bridge/phase3/testnet-v3/ws</code></td><td>Authenticated WebSocket</td><td>归档 V3 proof progress；非 V1.5 主结算 channel</td></tr>
+  </table>
+  <h3>响应验证</h3>
+  <p>浏览器 service 层不会直接信任 JSON：UUID、txid、EVM hash、amount raw、date、chainId、status enum、address、planHash 与 relation IDs 均重新验证。任何字段与当前 frozen order 不一致都会停止 UI 操作并要求 refresh。</p>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">17</div>
+</section>
+
+<section class="page">
+  <h2>12. 数据模型与持久化</h2>
+  <div class="flow">
+    <div class="node backend"><strong>WalletIdentity</strong>1 → many sessions<br>deployments/orders</div><div class="arrow">→</div>
+    <div class="node backend"><strong>BridgeAsset</strong>1 → many verified<br>BridgeDeployment</div><div class="arrow">→</div>
+    <div class="node backend"><strong>BridgeOrder</strong>1:1 Custody<br>1:1 Settlement</div><div class="arrow">→</div>
+    <div class="node backend"><strong>BridgeDeposit / Calls</strong>source proof<br>EVM attempts</div>
+  </div>
+  <div class="flow">
+    <div class="node backend"><strong>BridgeOrder</strong>1 → many EscrowDeployment</div><div class="arrow">→</div>
+    <div class="node backend"><strong>RedemptionOrder</strong>frozen reverse intent</div><div class="arrow">→</div>
+    <div class="node backend"><strong>RedemptionRelease</strong>plan · lock · signed</div><div class="arrow">→</div>
+    <div class="node backend"><strong>WalletCalls</strong>approve/reset/lock receipts</div>
+  </div>
+  <h3>主要实体</h3>
+  <table class="dense">
+    <tr><th>实体</th><th>关键字段/约束</th><th>目的</th></tr>
+    <tr><td>BridgeAsset</td><td>unique(sourceNetwork,contractId,chainId)</td><td>保存 verified source identity</td></tr>
+    <tr><td>BridgeDeployment</td><td>unique chain+txHash / contractAddress</td><td>wrapped bytecode、quote、receipt</td></tr>
+    <tr><td>BridgeOrder</td><td>unique identity+idempotencyKey；termsHash</td><td>冻结正向条款</td></tr>
+    <tr><td>BridgeCustody</td><td>unique address；AES-GCM ciphertext</td><td>每订单 TBC custody private key</td></tr>
+    <tr><td>BridgeDeposit</td><td>unique sourceNetwork+txid+vout</td><td>全库防 deposit replay</td></tr>
+    <tr><td>BridgeCallAttempt</td><td>unique txHash；nonce/gas/data/status</td><td>MetaMask call 恢复</td></tr>
+    <tr><td>RedemptionOrder</td><td>unique redemptionId；termsHash</td><td>冻结 holder/recipient/amount</td></tr>
+    <tr><td>RedemptionReleasePlan</td><td>unique funding outpoint + reserve outpoint</td><td>固定 source release</td></tr>
+    <tr><td>RedemptionLock</td><td>unique chain+txHash+logIndex</td><td>permanent lock 证据</td></tr>
+    <tr><td>AuditEvent</td><td>identityId/action/data/timestamp</td><td>不含 secret 的动作审计</td></tr>
+  </table>
+  <h3>Custody 加密</h3>
+  <p>主密钥经 HKDF-SHA256 按 order UUID 派生 AES-256 key；每条记录使用随机 12-byte IV、16-byte GCM tag，AAD 绑定版本、网络、identity、order、termsHash、address 和 public key。数据库保存密文与 key fingerprint，不保存明文 WIF。</p>
+  <div class="callout danger"><strong>加密限制</strong><p>数据库加密保护“只泄漏数据库”的场景，但不能抵御已控制运行中 backend 与其 mounted secret 的攻击者。JavaScript runtime 也无法保证彻底擦除 SDK object 中的 key material。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">18</div>
+</section>
+
+<section class="page">
+  <h2>13. 实时更新与后台观察</h2>
+  <h3>三种更新机制</h3>
+  <table>
+    <tr><th>机制</th><th>对象</th><th>频率/触发</th><th>是否发送交易</th></tr>
+    <tr><td>SSE</td><td>正向 settlement progress</td><td>observer publish + 25s heartbeat</td><td>否，只通知前端重新 GET</td></tr>
+    <tr><td>WebSocket</td><td>TBC transaction history</td><td>服务端 snapshot；30s ping；断线指数重连</td><td>否</td></tr>
+    <tr><td>Frontend timer</td><td>部分 confirmation/reverse fee</td><td>约 30–60s，页面可见且无 error 时</td><td>否，只调用 check/read</td></tr>
+  </table>
+  <h3>Backend observer flow</h3>
+  <div class="flow">
+    <div class="node backend"><strong>Scheduler 5s tick</strong>找出到期的 active records<br>最多 4 concurrent</div><div class="arrow">→</div>
+    <div class="node chain"><strong>TBC read</strong>每条约 60s<br>重新验证 deposit</div><div class="arrow">→</div>
+    <div class="node chain"><strong>EVM read</strong>每条约 12s<br>重新验证 receipt</div><div class="arrow">→</div>
+    <div class="node backend"><strong>Persist + publish</strong>更新 DB observation<br>SSE invalidation</div>
+  </div>
+  <h3>为什么 bridge 状态不是全部 WebSocket</h3>
+  <ul>
+    <li>WebSocket 用于完整、持续的交易历史 snapshot；bridge settlement 只需要“状态可能变化”的轻量通知，因此采用 SSE。</li>
+    <li>反向 release 当前由 REST check + timer 恢复，记录持久化在数据库；页面可关闭并继续。</li>
+    <li>链本身不会向本项目可靠推送所有 TBC canonical/UTXO 变化，后台仍需 polling 上游 API。</li>
+    <li>无论 transport 是 SSE、WebSocket 还是 timer，成功判断最终都来自后端重新验证，不来自前端事件。</li>
+  </ul>
+  <div class="callout good"><strong>观察 ≠ 自动执行</strong><p>observer 只读取并保存 confirmations/receipt。它不会自动调用 Turing Wallet、MetaMask、multisig、mint、approve、lock、custody sign 或 broadcast。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">19</div>
+</section>
+
+<section class="page">
+  <h2>14. Gas 与费用模型</h2>
+  <h3>一次性与每笔费用</h3>
+  <table class="dense">
+    <tr><th>动作</th><th>链</th><th>频率</th><th>付款者</th><th>为何需要</th></tr>
+    <tr><td>Deploy Admin multisig</td><td>HyperEVM</td><td>一次/运营配置</td><td>deployment payer</td><td>建立 2-of-2 owner</td></tr>
+    <tr><td>Deploy wrapped token</td><td>HyperEVM</td><td>一次/source FT</td><td>deployment payer</td><td>建立 ERC-20 route</td></tr>
+    <tr><td>Route activation propose+approve</td><td>HyperEVM</td><td>一次/route</td><td>Signer1 + Signer2</td><td>解除初始 paused</td></tr>
+    <tr><td>Source FT payment</td><td>TBC</td><td>每笔正向</td><td>用户 Turing Wallet</td><td>把 reserve 转入 custody</td></tr>
+    <tr><td>Mint</td><td>HyperEVM</td><td>每笔正向</td><td>Minter operator</td><td>发行 wrapped token</td></tr>
+    <tr><td>Deploy/activate escrow</td><td>HyperEVM</td><td>一次/token route</td><td>payer + two signers</td><td>建立永久锁仓</td></tr>
+    <tr><td>Native return fee</td><td>TBC</td><td>每笔反向</td><td>用户 Turing Wallet</td><td>支付源 FT payout transaction fee</td></tr>
+    <tr><td>Approve + Lock</td><td>HyperEVM</td><td>每笔反向</td><td>wrapped holder</td><td>授权并永久锁定 ERC-20</td></tr>
+  </table>
+  <h3>为什么 V1.5 gas 低</h3>
+  <div class="grid2">
+    <div class="card"><h4>V1.5 每笔 mint</h4><p>固定 calldata、replay mappings、ERC-20 balance/supply 更新、event。TBC 证明在后端检查。</p></div>
+    <div class="card"><h4>V3 proof mint</h4><p>header relay、PoW、DAA、Merkle branch、bounded legacy FT ancestors/signatures 等在 EVM 验证，calldata 与 computation 都显著增加。</p></div>
+  </div>
+  <h3>费用控制</h3>
+  <ul>
+    <li>后端用 <code>eth_estimateGas</code> + 当前 gas price，gas units 增加 20% buffer；报价通常 60 秒失效。</li>
+    <li>用户审阅的是最大 budget，最终 actual fee 由 receipt 的 gasUsed × effectiveGasPrice 记录。</li>
+    <li>Admin 动作不进入每笔 transfer；仅部署、激活、pause 或 rotate minter 时使用两笔 multisig gas。</li>
+    <li>不能通过降低 gasLimit 绕过实际执行成本；过低只会导致 out-of-gas。真正降低成本的选择是减少链上验证工作或选择更低 gas price 时段。</li>
+  </ul>
+  <div class="callout warn"><strong>成本与信任交换</strong><p>V1.5 接近 V1 的费用并非“同等 trustless security 下的优化”，而是把共识证明换成 operator/backend trust。文档与 UI 必须持续清楚表达这一点。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">20</div>
+</section>
+
+<section class="page">
+  <h2>15. 安全模型与威胁分析</h2>
+  <table class="dense">
+    <tr><th>威胁</th><th>现有控制</th><th>剩余风险/建议</th></tr>
+    <tr><td>单一 Admin 私钥泄漏</td><td>2-of-2 multisig；exact calldata；signers 与 minter 分离</td><td>若两 signer 同设备/seed，隔离无效；应使用不同硬件与保管人</td></tr>
+    <tr><td>Minter 泄漏</td><td>不能治理；order/deposit replay protection；Admin 可 pause/rotate</td><td>仍可构造虚假唯一 mint；需要监控、限额、HSM/relayer policy</td></tr>
+    <tr><td>Custody backend/key 泄漏</td><td>AES-GCM、HKDF、Compose secret、DB/runtime role separation</td><td>完全控制 backend 可盗 reserve；生产应 HSM/MPC、多签 source custody</td></tr>
+    <tr><td>第三方 TBC API 欺骗</td><td>raw/decode/block/UTXO/ancestor/script 多重核对</td><td>不是独立 SPV；建议多节点 quorum 或恢复 V3 proof path</td></tr>
+    <tr><td>HyperEVM RPC 欺骗/故障</td><td>固定 RPC、chain 998、重复读取 receipt/block/code/state</td><td>单 provider 风险；建议多 RPC quorum</td></tr>
+    <tr><td>重复付款/重复 mint</td><td>begin slot、TXID recovery、DB unique outpoint、contract replay mappings</td><td>用户仍可能链外手动多付；需 reconciliation/manual review</td></tr>
+    <tr><td>CSRF/IDOR</td><td>same-origin、cookie session、CSRF、identity-scoped repositories</td><td>仍需持续安全测试</td></tr>
+    <tr><td>Supply mismatch</td><td>1:1 raw amount、source decimals immutable、exact deposit/lock checks</td><td>escrow lock 不 burn，报告需区分 totalSupply 与 circulating supply</td></tr>
+  </table>
+  <h3>安全不变量</h3>
+  <ol class="check">
+    <li>浏览器/请求不能选择任意 RPC、chain、source network 或后台 custody key。</li>
+    <li>一个 source outpoint 只能被一笔 deposit/release plan 使用。</li>
+    <li>钱包 hash 不是成功证明；必须验证 exact transaction、receipt、canonical block 与确认数。</li>
+    <li>V1.5 Admin signer 与 Minter 必须是三个不同 EVM addresses。</li>
+    <li>wrapped/escrow 初始 paused；激活必须两名 signer 对 exact <code>unpause()</code> 达成一致。</li>
+    <li>反向 payout 只能在 exact permanent lock verified 后签名与广播。</li>
+  </ol>
+  <div class="callout danger"><strong>审计状态</strong><p>项目明确为 Testnet learning system，Solidity、custody、TBC transaction verification 与 operational controls 均未完成独立生产级审计。不得直接宣称“黑客无法攻破”或“完全安全”。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">21</div>
+</section>
+
+<section class="page">
+  <h2>16. 部署、启动与运维</h2>
+  <h3>首次启动</h3>
+  <div class="tree">node scripts/setup-local.mjs
+docker compose up --build -d
+docker compose ps
+curl http://127.0.0.1:5173/api/health/ready</div>
+  <p>打开 <code>http://localhost:5173</code>。Docker Desktop 必须运行；Compose V2 的命令是 <code>docker compose</code>，不是旧的 <code>docker-compose</code>。</p>
+  <h3>日常运行</h3>
+  <table class="dense">
+    <tr><th>任务</th><th>命令/位置</th><th>注意</th></tr>
+    <tr><td>启动</td><td><code>docker compose up</code></td><td>源码 mount 会触发 dev reload</td></tr>
+    <tr><td>查看状态</td><td><code>docker compose ps</code></td><td>backend/postgres 应 healthy</td></tr>
+    <tr><td>日志</td><td><code>docker compose logs backend frontend</code></td><td>日志不应包含 cookie/signature/private key</td></tr>
+    <tr><td>前端验证</td><td><code>cd wallet && npm run build</code></td><td>包含 TypeScript typecheck</td></tr>
+    <tr><td>后端验证</td><td><code>cd backend && npm run build</code></td><td>Prisma generated client 应已存在</td></tr>
+    <tr><td>备份</td><td><code>node scripts/backup-database.mjs</code></td><td>同时异地备份 matching secrets</td></tr>
+    <tr><td>API 文档</td><td><code>/api/docs</code></td><td>只在 development</td></tr>
+  </table>
+  <h3>发布 checklist</h3>
+  <ul class="check">
+    <li>设置 HTTPS <code>APP_ORIGIN</code>；确认 cookie secure 与 proxy headers。</li>
+    <li>确认 <code>.env</code>、<code>.secrets</code>、<code>.backups</code> 未进入 Git/image/web root。</li>
+    <li>核对三个 V1.5 public addresses、chain 998、wrapped/escrow bytecode 与 paused 状态。</li>
+    <li>Signer1/Signer2/Minter 分设备并各自持有足够 Testnet HYPE。</li>
+    <li>执行数据库+secrets 恢复演练，而不只是备份。</li>
+    <li>为 Minter、custody balance、unexpected mint、pause、API/RPC unavailable 设置告警。</li>
+  </ul>
+  <div class="callout warn"><strong>禁止操作</strong><p>日常不要使用 <code>docker compose down -v</code>，它会删除 PostgreSQL volume。不要把 private key 写入 <code>.env</code> 或前端；当前 <code>.env</code> 的 V1.5 address 都只是公开地址。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">22</div>
+</section>
+
+<section class="page">
+  <h2>17. 当前路线与部署快照</h2>
+  <p class="muted">以下来自 2026-11-20 本机数据库公开链上记录；状态会随测试继续变化，不是永久配置清单。</p>
+  <h3>V1.5 operator roles</h3>
+  <table class="dense">
+    <tr><th>角色</th><th>地址</th></tr>
+    <tr><td>Admin multisig</td><td class="mono">0xfE34DB391CaB156BfeA29c569E036Bb2130A5b7F</td></tr>
+    <tr><td>Signer 1</td><td class="mono">0xc589197DbBF86Aa490D06923e421331aE349aC4a</td></tr>
+    <tr><td>Signer 2</td><td class="mono">0xdf1e552fe2e64f4aF44237a531fAC90e23b00080</td></tr>
+    <tr><td>Minter</td><td class="mono">0x77D069C3dfBbC6164676E93b5A9C7cc400B59f91</td></tr>
+  </table>
+  <h3>Active TT route</h3>
+  <table class="dense">
+    <tr><th>项目</th><th>值</th></tr>
+    <tr><td>Source FT</td><td>Turing Token (TT), decimals 2</td></tr>
+    <tr><td>Source contract ID</td><td class="mono">52b6a3d05583042d0aff73aed30c7630a11eda291f90e1aff52a9a4173c26ebb</td></tr>
+    <tr><td>Wrapped token</td><td class="mono">0xfd7d4265098f7ddd19d3ad607fe10c51bc83c546 (wTT)</td></tr>
+    <tr><td>Governance</td><td>multisig-relayer-v1.5</td></tr>
+    <tr><td>Return escrow</td><td class="mono">0xd31d4040561e86f4d522ee1d51a200d737f13e14</td></tr>
+    <tr><td>Forward completed test</td><td>1,500,000 TT → 1,500,000 wTT</td></tr>
+    <tr><td>Receiver</td><td class="mono">0x8221fae04189f1f2f50268495ed95d1a9b220432</td></tr>
+  </table>
+  <h3>已验证 source assets</h3>
+  <table class="dense">
+    <tr><th>Name</th><th>Symbol</th><th>Decimals</th><th>Route note</th></tr>
+    <tr><td>Mega Token</td><td>MT</td><td>1</td><td>历史 route</td></tr>
+    <tr><td>Mega Token</td><td>MT</td><td>0</td><td>历史 route</td></tr>
+    <tr><td>Turing Token</td><td>TT</td><td>2</td><td>当前 V1.5 multisig route</td></tr>
+  </table>
+  <div class="callout"><strong>当前反向测试</strong><p>最新 TT return record 处于 <code>awaiting_fee</code>，尚未登记 funding TXID。UI 已支持用 Turing Wallet 自动生成 native TBC P2PKH payment、保存 TXID，并每约一分钟复查 6 confirmations。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">23</div>
+</section>
+
+<section class="page">
+  <h2>18. 故障排查 Runbook</h2>
+  <table class="dense">
+    <tr><th>症状</th><th>可能原因</th><th>安全处理</th></tr>
+    <tr><td><code>Backend API unavailable</code></td><td>backend/migrate/postgres 未 healthy；proxy 问题</td><td><code>docker compose ps</code> → logs → health ready；不要重付</td></tr>
+    <tr><td><code>TBC asset verification unavailable</code></td><td>api.tbcdev.org timeout/indexer inconsistency</td><td>稍后 retry read；确认没有配置被改；不要更换任意来源绕过</td></tr>
+    <tr><td><code>genesis not canonical</code></td><td>Devnet reset、旧 genesis、block/indexer 不一致</td><td>核对 current chain 与 token genesis；不要强制登记</td></tr>
+    <tr><td><code>indexer supply differs</code></td><td>metadata/supply source 不一致</td><td>比较 genesis Tape、token info 与当前 indexer；人工 review</td></tr>
+    <tr><td>付款后仍 awaiting</td><td>TXID 未保存、0 confirmations、observer 尚未轮询</td><td>从 wallet history 取原 TXID；Check/Recovery；绝不重付</td></tr>
+    <tr><td>MetaMask wrong account</td><td>当前 account 不是 signer/minter/holder</td><td>按 UI required account 切换；refresh connection；不要改配置冒充</td></tr>
+    <tr><td>quote expired</td><td>超过 60s、nonce/gas 变化</td><td>discard unused quote，重新 prepare；不沿用旧 tx fields</td></tr>
+    <tr><td>tx sent but submit failed</td><td>网络/API interruption</td><td>从 Activity 保存原 hash；check receipt；不要 send again</td></tr>
+    <tr><td>confirmations 长时间不变</td><td>链停滞、upstream stale、交易未入块</td><td>查看链历史/receipt；保留 hash；不要伪造确认数</td></tr>
+    <tr><td>return fee paid but plan 未生成</td><td>不足 6 confirms、output 不精确/已花费</td><td>对同一 TXID check；进入 reconciliation；不要自动补第二笔</td></tr>
+  </table>
+  <h3>诊断顺序</h3>
+  <div class="state"><span>1 UI exact message</span><b>→</b><span>2 保存 TXID/hash</span><b>→</b><span>3 Docker health/log</span><b>→</b><span>4 DB status</span><b>→</b><span>5 TBC/EVM public evidence</span><b>→</b><span>6 Reconciliation/manual review</span></div>
+  <h3>绝不作为第一反应</h3>
+  <ul>
+    <li>不要再次点击付款或重新发 mint/lock，只因为 UI timeout。</li>
+    <li>不要删除数据库记录来“重新开始”；唯一约束是资金安全的一部分。</li>
+    <li>不要把旧 V2/V3 contract address 填入 V1.5；其 mint authority 永久绑定 proof Gateway。</li>
+    <li>不要把 Signer、Minter、custody private keys 放入浏览器或提交到 Git。</li>
+  </ul>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">24</div>
+</section>
+
+<section class="page">
+  <h2>附录：V1.5 与 V3、文件索引、术语</h2>
+  <h3>路线比较</h3>
+  <table class="dense">
+    <tr><th>维度</th><th>V1.5 active</th><th>V3 archived experiment</th></tr>
+    <tr><td>TBC 共识验证</td><td>后端通过固定 API 验证</td><td>Header relay + PoW/DAA + Merkle/FT proof 在 EVM</td></tr>
+    <tr><td>Mint authority</td><td>独立 hot Minter</td><td>Proof Gateway</td></tr>
+    <tr><td>每笔 gas</td><td>低，接近普通 ERC-20 mint</td><td>高，proof calldata 与验证逻辑多</td></tr>
+    <tr><td>信任</td><td>信任 backend/operator/API/RPC/custody</td><td>减少 operator mint trust，但仍有 bootstrap/UTXO proof 限制</td></tr>
+    <tr><td>UI</td><td>enabled</td><td>read only，不能发起新 transfer</td></tr>
+  </table>
+  <h3>关键文件索引</h3>
+  <table class="dense">
+    <tr><th>主题</th><th>文件</th></tr>
+    <tr><td>Route UI</td><td><code>wallet/src/components/bridge/TestnetBridge.tsx</code></td></tr>
+    <tr><td>Forward flow</td><td><code>BridgeOrders.tsx</code>、<code>BridgeSettlement.tsx</code>、<code>BridgeSourcePayment.tsx</code></td></tr>
+    <tr><td>Reverse flow</td><td><code>RedemptionOrders.tsx</code>、<code>RedemptionRelease.tsx</code>、<code>RedemptionWalletCalls.tsx</code></td></tr>
+    <tr><td>Backend bridge</td><td><code>backend/src/bridge/</code></td></tr>
+    <tr><td>Contracts</td><td><code>wallet/contracts/BridgeWrappedFT.sol</code>、<code>BridgeAdminMultisig.sol</code>、<code>LearningRedemptionEscrow.sol</code></td></tr>
+    <tr><td>Schema</td><td><code>backend/prisma/schema.prisma</code></td></tr>
+    <tr><td>Shared policy/types</td><td><code>shared/src/config/</code>、<code>shared/src/types/learningBridge.ts</code></td></tr>
+    <tr><td>Deployment</td><td><code>compose.yaml</code>、<code>compose.production.yaml</code></td></tr>
+  </table>
+  <h3>术语</h3>
+  <div class="grid2">
+    <div class="card"><h4>Canonical block</h4><p>按固定来源当前最佳链确认的 block；交易仅有 confirmations 还不够，block hash/height 也要重新对应。</p></div>
+    <div class="card"><h4>Custody</h4><p>后端控制源链 reserve key 的托管模型；用户依赖 operator 正确验证与释放。</p></div>
+    <div class="card"><h4>Raw amount</h4><p>最小单位整数。TT decimals=2 时 1,500,000 TT 对应 raw 150,000,000。</p></div>
+    <div class="card"><h4>Replay protection</h4><p>防同一 order/deposit/redemption/outpoint 被重复结算的合约 mapping 与数据库唯一约束。</p></div>
+  </div>
+  <div class="callout good"><strong>结论</strong><p>V1.5 达成了用户要求的低 gas 与可操作 flow，并通过 2-of-2 Admin、独立 Minter、严格状态持久化和 exact transaction verification 改善 V1 风险；它仍应被准确描述为托管桥，而非无需信任的跨链证明系统。</p></div>
+  <div class="doc-id">LB-ARCH-2026-11</div><div class="page-no">25</div>
+</section>
+
+</body>
+</html>

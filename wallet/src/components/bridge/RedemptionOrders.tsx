@@ -106,7 +106,7 @@ export default function RedemptionOrders({ order, escrow, session, evm, active }
 			<p>Receive {order.symbol} at: <code>{row.tbcRecipient}</code></p>
 			<p className="history-note">Saved {formatDateTime(row.createdAt)} MYT</p>
 			{row.status === 'prepared' && <>{!row.releaseStarted && <button type="button" className="history-secondary" disabled={!enabled || busy} onClick={() => { void run(async (signal) => { await cancelRedemption(order, row, signal); return 'Unused return closed. No tokens were moved.'; }); }}>Close unused return</button>}
-				<RedemptionRelease order={order} row={row} escrow={escrow} evm={evm} enabled={enabled} context={context} onOpened={() => setRevision((old) => old + 1)} />
+				<RedemptionRelease order={order} row={row} escrow={escrow} session={session} evm={evm} enabled={enabled} context={context} onOpened={() => setRevision((old) => old + 1)} />
 			</>}
 		</article>)}
 	</section>;

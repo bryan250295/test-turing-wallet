@@ -8,7 +8,7 @@ import type { RedemptionWalletCall, RedemptionWalletKind, RedemptionWalletState 
 import { withDeploymentRpc } from './bridge-deployment-verifier';
 import { RedemptionReleaseService } from './redemption-release.service';
 import { RedemptionLockVerifier } from './redemption-lock.verifier';
-import { assertEscrowSenderIdle } from './redemption-escrow.repository';
+import { assertEscrowSenderIdle, escrowQuote } from './redemption-escrow.repository';
 
 const abi = parseAbi(['function unpause()', 'function paused() view returns (bool)', 'function owner() view returns (address)',
 	'function pendingOwner() view returns (address)', 'function wrappedToken() view returns (address)', 'function sourceContractId() view returns (bytes32)',
@@ -52,6 +52,7 @@ export class RedemptionWalletService {
 	}
 	private async target(row: Redemption, response: Response) {
 		const escrow = row.escrow;
+		const quote = escrowQuote(escrow);
 		if (escrow.status !== 'verified' || escrow.lastError || !escrow.runtimeCodeHash || escrow.contractAddress !== row.escrowAddress || !escrow.receiptBlockHash || escrow.receiptBlockNumber === null) throw new ConflictException('Check the saved escrow deployment before continuing.');
 		return withDeploymentRpc(response, async (client) => {
 			const address = row.escrowAddress as Address; const token = escrow.wrappedToken as Address;
@@ -67,11 +68,12 @@ export class RedemptionWalletService {
 			]);
 			const original = await this.db.bridgeOrder.findUniqueOrThrow({ where: { id: row.orderId }, include: { deployment: true } });
 			if (!code || keccak256(code) !== escrow.runtimeCodeHash || !tokenCode || keccak256(tokenCode) !== original.deployment.runtimeCodeHash
-				|| owner.toLowerCase() !== escrow.deployer || pending !== '0x0000000000000000000000000000000000000000' || boundToken.toLowerCase() !== escrow.wrappedToken
+				|| owner.toLowerCase() !== quote.admin || pending !== '0x0000000000000000000000000000000000000000' || boundToken.toLowerCase() !== escrow.wrappedToken
 				|| source.toLowerCase() !== `0x${escrow.sourceContractId}` || decimals !== escrow.decimals || chain !== 998n) throw new ConflictException('The escrow or wrapped-token code, owner or source binding changed.');
 			if (processed || locked !== 0n || escrowBalance !== 0n) throw new ConflictException('The escrow already holds a lock. Recover its transaction hash before requesting another wallet transaction.');
 			if (balance < BigInt(row.amountRaw.toFixed(0))) throw new ConflictException('The original receiving account has insufficient wrapped token.');
 			if ((await client.getBlock({ blockNumber: head.number })).hash !== head.hash || await client.getChainId() !== 998) throw new ConflictException('The target chain changed during the wallet check.');
+			if (paused && quote.activationMode === 'multisig-v1.5') throw new ConflictException('Complete the 2-of-2 return escrow activation before preparing the token approval.');
 			const nextKind: RedemptionWalletKind = paused ? 'unpause' : allowance === BigInt(row.amountRaw.toFixed(0)) ? 'lock' : allowance > 0n ? 'reset' : 'approve';
 			return { redemptionId: row.id, paused, allowanceRaw: allowance.toString(), balanceRaw: balance.toString(), nextKind,
 				from: nextKind === 'unpause' ? escrow.deployer : row.holder, blockNumber: head.number.toString(), blockHash: head.hash } satisfies RedemptionWalletState;

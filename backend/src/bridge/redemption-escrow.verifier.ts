@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { getContractAddress, keccak256, parseAbi, TransactionNotFoundError, TransactionReceiptNotFoundError, type Address, type Hex } from 'viem';
 import type { Prisma, RedemptionEscrowDeployment } from '../../generated/prisma/client';
 import { normalizedRuntime, withDeploymentRpc } from './bridge-deployment-verifier';
+import { escrowQuote } from './redemption-escrow.repository';
 
 const abi = parseAbi([
 	'function wrappedToken() view returns (address)', 'function sourceContractId() view returns (bytes32)', 'function sourceDecimals() view returns (uint8)',
@@ -15,6 +16,7 @@ const tokenAbi = parseAbi(['function balanceOf(address) view returns (uint256)']
 export class RedemptionEscrowVerifier {
 	async check(row: RedemptionEscrowDeployment, response: Response): Promise<Prisma.RedemptionEscrowDeploymentUpdateManyMutationInput> {
 		if (!row.txHash) throw new BadRequestException('Recover the escrow deployment hash from MetaMask Activity first.');
+		const quote = escrowQuote(row);
 		return withDeploymentRpc(response, async (client) => {
 			const reset = { status: 'submitted', confirmations: 0, contractAddress: null, runtimeCodeHash: null, verifiedAt: null,
 				receiptBlockHash: null, receiptBlockNumber: null, actualFeeWei: null, checkedAt: new Date(), lastError: null };
@@ -42,7 +44,7 @@ export class RedemptionEscrowVerifier {
 				read('wrappedToken'), read('sourceContractId'), read('sourceDecimals'), read('owner'), read('pendingOwner'), read('paused'), read('totalLocked'), read('TARGET_CHAIN_ID'),
 				client.readContract({ address: row.wrappedToken as Address, abi: tokenAbi, functionName: 'balanceOf', args: [address], blockNumber: receipt.blockNumber }),
 			]);
-			if (token.toLowerCase() !== row.wrappedToken || source.toLowerCase() !== `0x${row.sourceContractId}` || decimals !== row.decimals || owner.toLowerCase() !== row.deployer
+			if (token.toLowerCase() !== row.wrappedToken || source.toLowerCase() !== `0x${row.sourceContractId}` || decimals !== row.decimals || owner.toLowerCase() !== quote.admin
 				|| pendingOwner !== '0x0000000000000000000000000000000000000000' || paused !== true || locked !== 0n || balance !== 0n || targetChain !== 998n) return { ...observed, status: 'invalid', lastError: 'The escrow token binding, owner, precision, initial pause or initial zero balance/locked state is incorrect.' };
 			if ((await client.getBlock({ blockNumber: receipt.blockNumber })).hash !== receipt.blockHash || await client.getChainId() !== 998) return { ...reset, status: 'confirming', lastError: 'The escrow creation block changed during verification.' };
 			return { ...observed, status: 'verified', contractAddress: address.toLowerCase(), runtimeCodeHash: keccak256(code), verifiedAt: new Date() };

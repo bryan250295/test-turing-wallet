@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Req, Res, Sse, UseGuards } from '@nestjs/common';
 import { ApiBody, ApiCookieAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { Equals, IsBoolean, IsEthereumAddress, IsIn, IsOptional, IsUUID, Matches } from 'class-validator';
 import type { Response } from 'express';
 import { SessionGuard } from '../auth/session.guard';
@@ -41,6 +41,7 @@ export class CancelBridgeCallDto {
 @Throttle({ default: { limit: 12, ttl: 60_000 } })
 export class BridgeSettlementController {
 	constructor(@Inject(BridgeSettlementService) private readonly service: BridgeSettlementService, @Inject(BridgeSourcePaymentService) private readonly sourcePayment: BridgeSourcePaymentService, @Inject(BridgeProgressService) private readonly progress: BridgeProgressService) {}
+	@SkipThrottle()
 	@Sse('events')
 	events(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: AuthenticatedRequest) { return this.progress.stream(id, request.principal); }
 	@Get() async get(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: AuthenticatedRequest) { return { data: await this.service.get(id, request.principal) }; }

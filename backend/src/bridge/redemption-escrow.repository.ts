@@ -6,12 +6,16 @@ import { LEARNING_REDEMPTION_ESCROW_BUILD as build, LEARNING_REDEMPTION_ESCROW_R
 import type { SettlementOrder } from './bridge-settlement.repository';
 
 export const escrowActiveStates = ['prepared', 'awaiting_wallet', 'submitted', 'confirming'];
+export function escrowQuote(row: Pick<RedemptionEscrowDeployment, 'quote' | 'deployer'>): RedemptionEscrowPreview {
+	const quote = row.quote as unknown as RedemptionEscrowPreview;
+	return { ...quote, deployer: quote.deployer ?? row.deployer, activationMode: quote.activationMode ?? 'eoa' };
+}
 export async function assertEscrowSenderIdle(tx: Prisma.TransactionClient, from: string, exceptId?: string) {
 	if (await tx.redemptionEscrowDeployment.count({ where: { deployer: from.toLowerCase(), status: { in: escrowActiveStates }, ...(exceptId ? { id: { not: exceptId } } : {}) } })) throw new ConflictException('Finish or reconcile the active escrow deployment for this MetaMask account first.');
 	if (await tx.redemptionWalletCall.count({ where: { fromAddress: from.toLowerCase(), status: { in: ['quoted', 'awaiting_wallet', 'submitted', 'confirming'] }, ...(exceptId ? { id: { not: exceptId } } : {}) } })) throw new ConflictException('Finish or reconcile the active redemption wallet request for this MetaMask account first.');
 }
 export function escrowRecord(row: RedemptionEscrowDeployment): PublicDeployment {
-	return { id: row.id, orderId: row.orderId, deploymentId: row.deploymentId, status: row.status as PublicDeployment['status'], quote: row.quote as unknown as RedemptionEscrowPreview,
+	return { id: row.id, orderId: row.orderId, deploymentId: row.deploymentId, status: row.status as PublicDeployment['status'], quote: escrowQuote(row),
 		txHash: row.txHash, contractAddress: row.contractAddress, confirmations: row.confirmations, requiredConfirmations: 6,
 		receiptBlockHash: row.receiptBlockHash, receiptBlockNumber: row.receiptBlockNumber?.toString() ?? null, actualFeeWei: row.actualFeeWei?.toFixed(0) ?? null,
 		runtimeCodeHash: row.runtimeCodeHash, verifiedAt: row.verifiedAt?.toISOString() ?? null, checkedAt: row.checkedAt?.toISOString() ?? null, lastError: row.lastError, createdAt: row.createdAt.toISOString() };
@@ -38,10 +42,10 @@ export class RedemptionEscrowRepository {
 		return this.db.$transaction(async (tx) => {
 			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`redemption-escrow-token:${order.deploymentId}`}, 0))`;
 			if (await tx.redemptionEscrowDeployment.count({ where: { deploymentId: order.deploymentId, status: { in: [...escrowActiveStates, 'verified'] } } })) throw new ConflictException('An escrow is already prepared or verified for this wrapped token contract. Refresh its original completed order.');
-			await this.senderIdle(tx, quote.admin);
+			await this.senderIdle(tx, quote.deployer);
 			if (Date.parse(quote.expiresAt) <= Date.now()) throw new ConflictException('The deployment estimate expired. Prepare again.');
 			const row = await tx.redemptionEscrowDeployment.create({ data: { orderId: order.id, deploymentId: order.deploymentId, identityId: order.identityId,
-				deployer: quote.admin, wrappedToken: quote.wrappedToken, sourceContractId: quote.sourceContractId, decimals: quote.decimals, nonce: BigInt(quote.nonce),
+				deployer: quote.deployer, wrappedToken: quote.wrappedToken, sourceContractId: quote.sourceContractId, decimals: quote.decimals, nonce: BigInt(quote.nonce),
 				quote: quote as unknown as Prisma.InputJsonValue, buildInputSha256: build.buildInputSha256, transactionData: quote.transactionData,
 				runtimeBytecode: runtime.bytecode, immutableReferences: [...runtime.immutableReferences] as Prisma.InputJsonValue, expiresAt: new Date(quote.expiresAt) } });
 			await tx.auditEvent.create({ data: { identityId: order.identityId, action: 'bridge.escrow.prepared', data: { orderId: order.id, id: row.id } } });

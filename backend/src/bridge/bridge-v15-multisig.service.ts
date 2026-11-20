@@ -3,12 +3,14 @@ import type { Response } from 'express';
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, getContractAddress, keccak256, parseAbi, parseAbiParameters, TransactionNotFoundError, TransactionReceiptNotFoundError, type Address, type Hex } from 'viem';
 import { BRIDGE_ADMIN_MULTISIG_BUILD as build, BRIDGE_ADMIN_MULTISIG_RUNTIME as runtime } from '../../../shared/src/contracts/bridgeAdminMultisig';
 import { LEARNING_BRIDGE_EVM as network } from '../../../shared/src/config/learningBridge';
-import type { BridgeCallTransaction, BridgeDeploymentPreview, BridgeDeploymentTransaction, V15ActivationKind, V15ActivationPreview, V15ActivationState, V15ActivationStatus, V15MultisigDeploymentPreview, V15MultisigDeploymentStatus } from '../../../shared/src/types/learningBridge';
+import type { BridgeCallTransaction, BridgeDeploymentPreview, BridgeDeploymentTransaction, RedemptionEscrowActivationPreview, RedemptionEscrowActivationState, RedemptionEscrowActivationStatus, V15ActivationKind, V15ActivationPreview, V15ActivationState, V15ActivationStatus, V15MultisigDeploymentPreview, V15MultisigDeploymentStatus } from '../../../shared/src/types/learningBridge';
 import { AuthService, type Principal } from '../auth/auth.service';
+import { PrismaService } from '../database/prisma.service';
 import { v15OperatorRoles } from './bridge.config';
 import { normalizedRuntime, withDeploymentRpc } from './bridge-deployment-verifier';
 import { BridgeDeploymentsRepository } from './bridge-deployments.repository';
 import { BridgeOrderTargetService } from './bridge-order-target.service';
+import { escrowQuote } from './redemption-escrow.repository';
 
 const readAbi = parseAbi([
 	'function signer1() view returns (address)',
@@ -38,6 +40,7 @@ function creationData() {
 export class BridgeV15MultisigService {
 	constructor(
 		@Inject(AuthService) private readonly auth: AuthService,
+		@Inject(PrismaService) private readonly db: PrismaService,
 		@Inject(BridgeDeploymentsRepository) private readonly deployments: BridgeDeploymentsRepository,
 		@Inject(BridgeOrderTargetService) private readonly target: BridgeOrderTargetService,
 	) {}
@@ -235,6 +238,114 @@ export class BridgeV15MultisigService {
 			const valid = kind === 'propose' ? commonMatches && !action[2] && !second && paused : commonMatches && action[2] && second && !paused;
 			if (!valid) return { ...included, paused, status: 'invalid' as const, lastError: 'The confirmed multisig state does not match this activation step.' };
 			if ((await client.getBlock({ blockNumber: receipt.blockNumber })).hash !== receipt.blockHash || await client.getChainId() !== 998) return { ...included, status: 'confirming' as const, lastError: 'The activation block changed during verification.' };
+			return { ...included, paused, status: 'verified' as const };
+		});
+	}
+
+	private async redemptionActivation(orderId: string, escrowId: string, principal: Principal) {
+		this.auth.requireTbc(principal);
+		const row = await this.db.redemptionEscrowDeployment.findFirst({ where: { id: escrowId, orderId, identityId: principal.id }, include: { deployment: true } });
+		if (!row) throw new BadRequestException('Return escrow not found for this order and TBC identity.');
+		const quote = escrowQuote(row);
+		const deploymentQuote = row.deployment.quote as unknown as Partial<BridgeDeploymentPreview>;
+		if (row.status !== 'verified' || row.lastError || !row.contractAddress || quote.activationMode !== 'multisig-v1.5'
+			|| deploymentQuote.governanceMode !== 'multisig-relayer-v1.5') throw new ConflictException('Choose a verified V1.5 return escrow.');
+		const roles = v15OperatorRoles();
+		if (quote.admin.toLowerCase() !== row.deployment.admin.toLowerCase() || row.deployment.minter.toLowerCase() !== roles.minter.toLowerCase()) throw new ConflictException('The return escrow roles differ from the configured V1.5 operator roles.');
+		return { row, quote, roles };
+	}
+
+	async redemptionActivationState(orderId: string, escrowId: string, principal: Principal, response: Response): Promise<RedemptionEscrowActivationState> {
+		const { row, quote, roles } = await this.redemptionActivation(orderId, escrowId, principal);
+		return withDeploymentRpc(response, async (client) => {
+			const block = await client.getBlock({ blockTag: 'latest' });
+			if (block.number === null || !block.hash) throw new ConflictException('No canonical HyperEVM block is available.');
+			const admin = quote.admin as Address; const escrow = row.contractAddress as Address;
+			const [adminCode, escrowCode, owner, signer1, signer2, threshold, paused] = await Promise.all([
+				client.getCode({ address: admin, blockNumber: block.number }), client.getCode({ address: escrow, blockNumber: block.number }),
+				client.readContract({ address: escrow, abi: parseAbi(['function owner() view returns (address)']), functionName: 'owner', blockNumber: block.number }),
+				client.readContract({ address: admin, abi: readAbi, functionName: 'signer1', blockNumber: block.number }),
+				client.readContract({ address: admin, abi: readAbi, functionName: 'signer2', blockNumber: block.number }),
+				client.readContract({ address: admin, abi: readAbi, functionName: 'threshold', blockNumber: block.number }),
+				client.readContract({ address: escrow, abi: wrappedAbi, functionName: 'paused', blockNumber: block.number }),
+			]);
+			if (!adminCode || adminCode === '0x' || !escrowCode || escrowCode === '0x' || owner.toLowerCase() !== quote.admin
+				|| signer1.toLowerCase() !== roles.signer1.toLowerCase() || signer2.toLowerCase() !== roles.signer2.toLowerCase() || threshold !== 2n) throw new ConflictException('The escrow owner is not the configured 2-of-2 Admin multisig.');
+			return { escrowId: row.id, contractAddress: row.contractAddress!, admin: quote.admin, signer1: roles.signer1, signer2: roles.signer2, paused, active: !paused };
+		});
+	}
+
+	async previewRedemptionActivation(orderId: string, escrowId: string, kind: V15ActivationKind, requestedActionId: Hex | undefined, principal: Principal, response: Response): Promise<RedemptionEscrowActivationPreview> {
+		const state = await this.redemptionActivationState(orderId, escrowId, principal, response);
+		if (state.active) throw new ConflictException('This return escrow is already active.');
+		const admin = state.admin as Address; const escrow = state.contractAddress as Address;
+		return withDeploymentRpc(response, async (client) => {
+			const block = await client.getBlock({ blockTag: 'latest' });
+			if (block.number === null || !block.hash) throw new ConflictException('No canonical HyperEVM block is available.');
+			let actionId: Hex; let from: Address; let data: Hex;
+			if (kind === 'propose') {
+				const actionNonce = await client.readContract({ address: admin, abi: readAbi, functionName: 'nonce', blockNumber: block.number });
+				actionId = this.actionId(admin, actionNonce, escrow); from = state.signer1 as Address;
+				data = encodeFunctionData({ abi: adminAbi, functionName: 'propose', args: [escrow, unpauseData] });
+			} else {
+				if (!requestedActionId) throw new BadRequestException('Choose the verified escrow activation proposal before preparing approval.');
+				actionId = requestedActionId;
+				const [action, first, second] = await Promise.all([
+					client.readContract({ address: admin, abi: readAbi, functionName: 'action', args: [actionId], blockNumber: block.number }),
+					client.readContract({ address: admin, abi: readAbi, functionName: 'approved', args: [actionId, state.signer1 as Address], blockNumber: block.number }),
+					client.readContract({ address: admin, abi: readAbi, functionName: 'approved', args: [actionId, state.signer2 as Address], blockNumber: block.number }),
+				]);
+				if (action[0].toLowerCase() !== escrow.toLowerCase() || action[1].toLowerCase() !== unpauseData || action[2] || !first || second) throw new ConflictException('The saved proposal is missing, executed, or does not exactly unpause this return escrow.');
+				from = state.signer2 as Address; data = encodeFunctionData({ abi: adminAbi, functionName: 'approveAndExecute', args: [actionId] });
+			}
+			const [balance, code, nonce, gasPrice, estimate] = await Promise.all([
+				client.getBalance({ address: from, blockNumber: block.number }), client.getCode({ address: from, blockNumber: block.number }),
+				client.getTransactionCount({ address: from, blockTag: 'pending' }), client.getGasPrice(),
+				client.estimateGas({ account: from, to: admin, data, value: 0n, blockNumber: block.number, prepare: false }),
+			]);
+			if (code && code !== '0x') throw new BadRequestException('The configured multisig signer must be an ordinary MetaMask account.');
+			if (!Number.isSafeInteger(nonce) || nonce < 0) throw new BadRequestException('The signer nonce exceeds this wallet workflow’s supported range.');
+			const gas = (estimate * 120n + 99n) / 100n;
+			if (estimate <= 0n || gas > block.gasLimit || gasPrice <= 0n) throw new ConflictException('A valid activation fee could not be estimated.');
+			if ((await client.getBlock({ blockNumber: block.number })).hash !== block.hash || await client.getChainId() !== 998) throw new ConflictException('The target block changed during activation estimation.');
+			const transaction: BridgeCallTransaction = { from, to: admin, chainId: '0x3e6', data, value: '0x0', gas: `0x${gas.toString(16)}`, gasPrice: `0x${gasPrice.toString(16)}`, nonce: `0x${BigInt(nonce).toString(16)}` };
+			return { escrowId, kind, actionId, gasEstimate: estimate.toString(), gasLimit: gas.toString(), gasPriceWei: gasPrice.toString(), bufferedFeeWei: (gas * gasPrice).toString(), balanceWei: balance.toString(), sufficientBalance: balance >= gas * gasPrice, confirmationsRequired: network.deploymentConfirmations, transaction };
+		});
+	}
+
+	async checkRedemptionActivation(orderId: string, escrowId: string, kind: V15ActivationKind, actionId: Hex, txHash: Hex, principal: Principal, response: Response): Promise<RedemptionEscrowActivationStatus> {
+		const { row, quote, roles } = await this.redemptionActivation(orderId, escrowId, principal);
+		const admin = quote.admin as Address; const escrow = row.contractAddress as Address;
+		const from = (kind === 'propose' ? roles.signer1 : roles.signer2) as Address;
+		const data = kind === 'propose' ? encodeFunctionData({ abi: adminAbi, functionName: 'propose', args: [escrow, unpauseData] }) : encodeFunctionData({ abi: adminAbi, functionName: 'approveAndExecute', args: [actionId] });
+		return withDeploymentRpc(response, async (client) => {
+			const pausedNow = await client.readContract({ address: escrow, abi: wrappedAbi, functionName: 'paused' });
+			const base = { escrowId, kind, actionId, txHash, confirmations: 0, confirmationsRequired: network.deploymentConfirmations, actualFeeWei: null, paused: pausedNow, lastError: null };
+			let tx; try { tx = await client.getTransaction({ hash: txHash }); }
+			catch (cause) { if (cause instanceof TransactionNotFoundError) return { ...base, status: 'pending' as const, lastError: 'Transaction is not visible on HyperEVM Testnet yet.' }; throw cause; }
+			const chain = tx.chainId ?? (tx.v >= 35n ? Number((tx.v - 35n) / 2n) : 0);
+			if (chain !== 998 || tx.from.toLowerCase() !== from.toLowerCase() || tx.to?.toLowerCase() !== admin.toLowerCase() || tx.input.toLowerCase() !== data.toLowerCase() || tx.value !== 0n) return { ...base, status: 'invalid' as const, lastError: 'This transaction differs from the configured signer, multisig, escrow action or network.' };
+			let receipt; try { receipt = await client.getTransactionReceipt({ hash: txHash }); }
+			catch (cause) { if (cause instanceof TransactionReceiptNotFoundError) return { ...base, status: 'pending' as const }; throw cause; }
+			const [receiptBlock, head] = await Promise.all([client.getBlock({ blockNumber: receipt.blockNumber }), client.getBlockNumber({ cacheTime: 0 })]);
+			if (receiptBlock.hash !== receipt.blockHash || tx.blockHash !== receipt.blockHash || tx.blockNumber !== receipt.blockNumber || head < receipt.blockNumber) return { ...base, status: 'confirming' as const, lastError: 'The escrow activation receipt is not canonical yet.' };
+			const confirmations = Number(head - receipt.blockNumber + 1n); const actualFeeWei = (receipt.gasUsed * receipt.effectiveGasPrice).toString();
+			const included = { ...base, confirmations, actualFeeWei };
+			if (receipt.status !== 'success') return { ...included, status: confirmations >= network.deploymentConfirmations ? 'reverted' as const : 'confirming' as const, lastError: 'The multisig escrow activation transaction reverted.' };
+			const expectedEvent = kind === 'propose' ? 'ActionProposed' : 'ActionExecuted';
+			const events = receipt.logs.filter((log) => log.address.toLowerCase() === admin.toLowerCase()).flatMap((log) => { try { const decoded = decodeEventLog({ abi: adminAbi, data: log.data, topics: log.topics, strict: true }); return decoded.eventName === expectedEvent ? [decoded.args] : []; } catch { return []; } });
+			if (events.length !== 1 || !('actionId' in events[0]) || events[0].actionId !== actionId || !('target' in events[0]) || events[0].target.toLowerCase() !== escrow.toLowerCase()) return { ...included, status: 'invalid' as const, lastError: 'The multisig event does not match this return escrow activation.' };
+			if (confirmations < network.deploymentConfirmations) return { ...included, status: 'confirming' as const };
+			const [action, first, second, paused] = await Promise.all([
+				client.readContract({ address: admin, abi: readAbi, functionName: 'action', args: [actionId], blockNumber: receipt.blockNumber }),
+				client.readContract({ address: admin, abi: readAbi, functionName: 'approved', args: [actionId, roles.signer1 as Address], blockNumber: receipt.blockNumber }),
+				client.readContract({ address: admin, abi: readAbi, functionName: 'approved', args: [actionId, roles.signer2 as Address], blockNumber: receipt.blockNumber }),
+				client.readContract({ address: escrow, abi: wrappedAbi, functionName: 'paused', blockNumber: receipt.blockNumber }),
+			]);
+			const commonMatches = action[0].toLowerCase() === escrow.toLowerCase() && action[1].toLowerCase() === unpauseData && first;
+			const valid = kind === 'propose' ? commonMatches && !action[2] && !second && paused : commonMatches && action[2] && second && !paused;
+			if (!valid) return { ...included, paused, status: 'invalid' as const, lastError: 'The confirmed multisig state does not match this escrow activation step.' };
+			if ((await client.getBlock({ blockNumber: receipt.blockNumber })).hash !== receipt.blockHash || await client.getChainId() !== 998) return { ...included, status: 'confirming' as const, lastError: 'The escrow activation block changed during verification.' };
 			return { ...included, paused, status: 'verified' as const };
 		});
 	}

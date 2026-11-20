@@ -27,12 +27,12 @@ export async function withDeploymentRpc<T>(response: Response | undefined, opera
 	} catch (cause) {
 		if (controller.signal.aborted) throw new GatewayTimeoutException('The HyperEVM check timed out or was cancelled. Refresh the saved deployment to retry.');
 		if (cause instanceof HttpException) throw cause;
-		throw new ServiceUnavailableException('The HyperEVM check is unavailable. The saved transaction was retained; refresh its status later.');
+		throw new ServiceUnavailableException('The HyperEVM check is temporarily unavailable. No new transaction was submitted; any previously saved transaction remains unchanged. Retry the check shortly.');
 	} finally {
 		controller.abort(); clearTimeout(timer); response?.removeListener('close', cancel);
 	}
 }
-function deploymentClient(signal: AbortSignal) { return createPublicClient({ transport: http(network.rpcUrl, { retryCount: 0, timeout: 12_000, fetchOptions: { signal } }) }); }
+function deploymentClient(signal: AbortSignal) { return createPublicClient({ transport: http(network.rpcUrl, { retryCount: 2, retryDelay: 500, timeout: 12_000, fetchOptions: { signal } }) }); }
 
 export function normalizedRuntime(code: string, references: unknown): string {
 	if (!/^0x(?:[0-9a-f]{2})+$/i.test(code) || !Array.isArray(references)) throw new BadRequestException('Unsupported deployed bytecode or immutable references.');
