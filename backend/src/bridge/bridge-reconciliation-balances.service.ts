@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { keccak256, parseAbi, type Address } from 'viem';
 import type { ReconciliationBalanceCheck } from '../../../shared/src/types/bridgeReconciliation';
 import { API_URLS, DEVNET_API_BASE } from '../../../shared/src/config/constants';
+import { ApiError } from '../../../shared/src/services/apiClient';
 import { isObject } from '../../../shared/src/services/apiValidation';
 import { AuthService, type Principal } from '../auth/auth.service';
 import { PrismaService } from '../database/prisma.service';
@@ -23,6 +24,7 @@ export class BridgeReconciliationBalancesService {
 		this.auth.requireTbc(principal);
 		const deployment = await this.db.bridgeDeployment.findFirst({ where: { id, identityId: principal.id, status: 'verified' }, select: {
 			contractAddress: true, runtimeCodeHash: true, receiptBlockHash: true, receiptBlockNumber: true, contractId: true, decimals: true,
+			asset: { select: { genesisBlockHeight: true, genesisBlockHash: true } },
 		} });
 		if (!deployment?.contractAddress) throw new NotFoundException('Choose a verified wrapped deployment owned by this TBC wallet.');
 		if (this.running.has(id) || this.running.size >= 2) throw new ConflictException('A balance check is running. Wait for it to finish.');
@@ -73,11 +75,11 @@ export class BridgeReconciliationBalancesService {
 					locked += total;
 				}
 				if (locked > supply) throw new Error('Locked amount exceeds supply.');
-				await this.checkpoint(signal);
+				await this.checkpoint(deployment.asset, signal);
 				let reserve = 0n;
 				const outpoints = new Set<string>();
 				for (const address of addresses) reserve += await this.indexedBalance(address, deployment.contractId, signal, outpoints);
-				await this.checkpoint(signal);
+				await this.checkpoint(deployment.asset, signal);
 				if ((await client.getBlock({ blockNumber })).hash !== block.hash || await client.getChainId() !== 998) throw new Error('Target block changed during reads.');
 				return { reserve, supply, locked, circulating: supply - locked, blockNumber, blockHash: block.hash };
 			});
@@ -86,15 +88,19 @@ export class BridgeReconciliationBalancesService {
 				status: difference === 0n ? 'matching' : 'difference', message: difference === 0n ? 'Indexed source token reserves match totalSupply minus registered permanent locks for this observation.' : 'Observed source token reserves and circulating wrapped token differ. Pending deposits or returns can explain a difference; review the transaction history.',
 				custodyAddressCount, escrowCount, indexedReserveRaw: observed.reserve.toString(), totalSupplyRaw: observed.supply.toString(), permanentlyLockedRaw: observed.locked.toString(),
 				circulatingRaw: observed.circulating.toString(), differenceRaw: difference.toString(), targetBlockNumber: observed.blockNumber.toString(), targetBlockHash: observed.blockHash };
-		} catch {
+		} catch (cause) {
+			const sourceHistoryUnavailable = cause instanceof ApiError && cause.status === 404 && cause.code === 'BLOCK_NOT_FOUND';
 			return { deploymentId: id, wrappedToken: deployment.contractAddress, startedAt, checkedAt: new Date().toISOString(), status: 'unavailable',
-				message: 'A complete balance observation is unavailable. A network read, contract binding, pagination limit or canonical-block check failed. Saved history is unchanged; unavailable balances are not zero.',
+				message: sourceHistoryUnavailable
+					? 'This route belongs to an earlier TBC Devnet history. Its saved genesis block is no longer available after the network reset, so current source reserves cannot be proven against the canonical chain. Saved reconciliation is unchanged.'
+					: 'A complete balance observation is unavailable. A network read, contract binding, pagination limit or canonical-block check failed. Saved history is unchanged; unavailable balances are not zero.',
 				custodyAddressCount, escrowCount, indexedReserveRaw: null, totalSupplyRaw: null, permanentlyLockedRaw: null, circulatingRaw: null, differenceRaw: null, targetBlockNumber: null, targetBlockHash: null };
 		} finally { this.running.delete(id); }
 	}
-	private async checkpoint(signal: AbortSignal) {
-		const block = await readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${policy.genesisBlockHeight}`, signal);
-		if (block.hash !== policy.genesisBlockHash || block.height !== policy.genesisBlockHeight || !Number.isSafeInteger(block.confirmations) || Number(block.confirmations) < policy.minimumConfirmations) throw new ServiceUnavailableException('The fixed source checkpoint did not match.');
+	private async checkpoint(asset: { genesisBlockHeight: number; genesisBlockHash: string }, signal: AbortSignal) {
+		const block = await readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${asset.genesisBlockHeight}`, signal);
+		if (block.hash !== asset.genesisBlockHash || block.height !== asset.genesisBlockHeight || !Number.isSafeInteger(block.confirmations)
+			|| Number(block.confirmations) < policy.minimumConfirmations) throw new ServiceUnavailableException('The route source checkpoint did not match.');
 	}
 	private async indexedBalance(address: string, contractId: string, signal: AbortSignal, seen: Set<string>) {
 		let sum = 0n, cursor = '';

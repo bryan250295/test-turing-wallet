@@ -55,7 +55,7 @@ export class BridgeReconciliationService {
 			const ids = [...new Set(orders.map((order) => order.deploymentId))];
 			const deployments = await tx.bridgeDeployment.findMany({ where: { id: { in: ids }, identityId: principal.id }, select: {
 				id: true, quote: true, contractAddress: true, txHash: true, status: true, confirmations: true, actualFeeWei: true, checkedAt: true, lastError: true,
-			} });
+			}, orderBy: { createdAt: 'desc' } });
 			const escrows = await tx.redemptionEscrowDeployment.findMany({ where: { identityId: principal.id, deploymentId: { in: ids } }, select: {
 				id: true, deploymentId: true, txHash: true, status: true, confirmations: true, actualFeeWei: true, checkedAt: true,
 			}, take: 201 });

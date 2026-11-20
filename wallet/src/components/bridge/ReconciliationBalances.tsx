@@ -6,7 +6,8 @@ import ReconciliationTransactions from './ReconciliationTransactions';
 const date = (value: string | null) => value ? `${formatDateTime(value)} MYT` : 'Not recorded';
 function BalanceCheck({ value, route }: { value: ReconciliationBalanceCheck; route: ReconciliationRoute }) {
 	return <section className="reconciliation-observation" aria-label="Observed contract balances">
-		<p className={`result ${value.status === 'matching' ? 'success' : value.status === 'unavailable' ? 'error' : ''}`} role="status">{value.status === 'matching' ? 'Balances match.' : value.status === 'difference' ? 'Balances differ. Check in-progress requests in Requests.' : 'Balances could not be checked. Try again later.'}</p>
+		<p className={`result ${value.status === 'matching' ? 'success' : value.status === 'unavailable' ? 'error' : ''}`} role="status">{value.status === 'matching' ? 'Balances match.' : value.status === 'difference' ? 'Balances differ. Check in-progress requests in Requests.' : 'Current balances are unavailable.'}</p>
+		<p className="history-note">{value.message}</p>
 		<p className="history-note">Last checked: {date(value.checkedAt)}. Covers registered bridge addresses only.</p>
 		{value.status !== 'unavailable' && <>
 			<dl className="history-detail-grid">
