@@ -1,4 +1,4 @@
-import type { BridgeReconciliation, ReconciliationOrder, ReconciliationRedemption, ReconciliationRoute, ReconciliationTransaction } from '../../../shared/src/types/bridgeReconciliation';
+import type { BridgeReconciliation, ReconciliationOrder, ReconciliationRedemption, ReconciliationRoute, ReconciliationSepoliaReturn, ReconciliationTransaction } from '../../../shared/src/types/bridgeReconciliation';
 import { formatRawAmount } from './tokenAmounts';
 
 export type RequestStatus = 'completed' | 'pending' | 'review' | 'closed';
@@ -15,6 +15,7 @@ export interface ReconciliationRequest {
 	route: ReconciliationRoute;
 	order: ReconciliationOrder;
 	redemption: ReconciliationRedemption | null;
+	sepoliaReturn: ReconciliationSepoliaReturn | null;
 	transactions: ReconciliationTransaction[];
 }
 export const requestStatusLabels: Record<RequestStatus, string> = { completed: 'Completed', pending: 'In progress', review: 'Needs review', closed: 'Closed' };
@@ -24,6 +25,20 @@ export function routeDestinationName(route: ReconciliationRoute) {
 export function routeDirectionLabel(route: ReconciliationRoute, direction: 'forward' | 'return') {
 	const destination = routeDestinationName(route).replace(' Testnet', '');
 	return direction === 'forward' ? `TBC → ${destination}` : `${destination} → TBC`;
+}
+export function requestDirectionLabel(request: ReconciliationRequest) {
+	if (request.sepoliaReturn) return `TBC ↔ ${routeDestinationName(request.route).replace(' Testnet', '')}`;
+	return routeDirectionLabel(request.route, request.direction);
+}
+export function requestFlowLabel(request: ReconciliationRequest) {
+	if (request.sepoliaReturn) return `${request.route.symbol} → ${request.route.wrappedSymbol} → ${request.route.symbol}`;
+	return request.direction === 'forward' ? `${request.route.symbol} → ${request.route.wrappedSymbol}` : `${request.route.wrappedSymbol} → ${request.route.symbol}`;
+}
+export function requestStatusLabel(request: ReconciliationRequest) {
+	return request.sepoliaReturn?.status === 'completed' ? 'Round trip complete' : requestStatusLabels[request.category];
+}
+export function requestStageLabel(request: ReconciliationRequest) {
+	return request.sepoliaReturn?.status === 'completed' ? 'Forward mint, wrapped-token burn and TBC release verified' : requestStage(request.status);
 }
 export function routeFeeSymbol(route: ReconciliationRoute) { return route.destinationChainId === 11_155_111 ? 'ETH' : 'HYPE'; }
 export function requestCategory(status: string): RequestStatus {
@@ -50,17 +65,18 @@ export function reconciliationAmount(raw: string, decimals: number) {
 export function shortReference(value: string) { return value.length > 22 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value; }
 export function reconciliationRequests(report: BridgeReconciliation): ReconciliationRequest[] {
 	return report.routes.flatMap((route) => route.orders.flatMap((order) => [
-		{ key: `forward:${order.id}`, id: order.id, direction: 'forward' as const, createdAt: order.createdAt, checkedAt: order.checkedAt, amountRaw: order.amountRaw,
-			recipient: order.recipient, status: order.status, category: requestCategory(order.status), route, order, redemption: null, transactions: order.transactions },
+		{ key: `forward:${order.id}`, id: order.id, direction: 'forward' as const, createdAt: order.createdAt, checkedAt: order.sepoliaReturn?.checkedAt ?? order.checkedAt, amountRaw: order.amountRaw,
+			recipient: order.recipient, status: order.sepoliaReturn?.status ?? order.status, category: requestCategory(order.sepoliaReturn?.status ?? order.status), route, order,
+			redemption: null, sepoliaReturn: order.sepoliaReturn, transactions: [...order.transactions, ...(order.sepoliaReturn?.transactions ?? [])] },
 		...order.redemptions.map((redemption) => ({ key: `return:${redemption.id}`, id: redemption.id, direction: 'return' as const,
 			createdAt: redemption.createdAt, checkedAt: redemption.checkedAt, amountRaw: redemption.amountRaw, recipient: redemption.recipient,
-			status: redemption.status, category: requestCategory(redemption.status), route, order, redemption, transactions: redemption.transactions })),
+			status: redemption.status, category: requestCategory(redemption.status), route, order, redemption, sepoliaReturn: null, transactions: redemption.transactions })),
 	])).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || a.key.localeCompare(b.key));
 }
 export function matchesReconciliationSearch(row: ReconciliationRequest, query: string) {
 	const term = query.trim().toLowerCase();
 	return !term || [row.id, row.order.id, row.recipient, row.route.wrappedToken, row.route.contractId, row.route.symbol, row.route.wrappedName, row.route.wrappedSymbol,
-		row.redemption?.escrowAddress ?? '', ...row.transactions.map((transaction) => transaction.hash ?? '')].some((value) => value.toLowerCase().includes(term));
+		row.redemption?.escrowAddress ?? '', row.sepoliaReturn?.recipient ?? '', row.sepoliaReturn?.holder ?? '', ...row.transactions.map((transaction) => transaction.hash ?? '')].some((value) => value.toLowerCase().includes(term));
 }
 export function recordedRequestFees(transactions: ReconciliationTransaction[]) {
 	const fees: { tbc: bigint | null; hyperevm: bigint | null } = { tbc: null, hyperevm: null };

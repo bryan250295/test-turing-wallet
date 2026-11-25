@@ -23,6 +23,10 @@ const select = {
 			walletCalls: { select: callSelect, orderBy: { createdAt: 'asc' }, take: 201 },
 		} },
 	}, orderBy: { createdAt: 'asc' }, take: 201 },
+	sepoliaRedemption: { select: { id: true, createdAt: true, checkedAt: true, status: true, lastError: true, amountRaw: true, holder: true, tbcRecipient: true,
+		fundingTxid: true, fundingConfirmations: true, fundingValueRaw: true, feeRaw: true, releaseTxid: true, releaseConfirmations: true, releaseBlockHash: true,
+		calls: { select: { id: true, status: true, txHash: true, confirmations: true, receiptBlockHash: true, actualFeeWei: true, updatedAt: true }, orderBy: { createdAt: 'asc' }, take: 201 },
+	} },
 } satisfies Prisma.BridgeOrderSelect;
 type Order = Prisma.BridgeOrderGetPayload<{ select: typeof select }>;
 type Call = { id: string; kind: string; status: string; txHash: string | null; confirmations: number; actualFeeWei: { toFixed: (digits: number) => string } | null; updatedAt: Date };
@@ -33,6 +37,10 @@ function callTransaction(call: Call, prefix: string, required: number): Transact
 }
 function sourceTransaction(id: string, label: string, hash: string, status: string, confirmations: number | null, required: number, fee: string | null, checkedAt: Date | null): Transaction {
 	return { id, label, network: 'tbc', hash, status, confirmations, required, actualFeeRaw: fee, checkedAt: checkedAt?.toISOString() ?? null };
+}
+function sepoliaBurnTransaction(call: NonNullable<Order['sepoliaRedemption']>['calls'][number], required: number): Transaction {
+	return { id: call.id, label: 'Burn wrapped token', network: 'hyperevm', hash: call.txHash, status: call.status,
+		confirmations: call.confirmations, required, actualFeeRaw: call.txHash ? call.actualFeeWei?.toFixed(0) ?? null : null, checkedAt: call.updatedAt.toISOString() };
 }
 function limited(values: unknown[]) { if (values.length > 200) throw new ConflictException('This reconciliation exceeds the 200-record report limit. No partial totals are displayed.'); }
 
@@ -48,6 +56,7 @@ export class BridgeReconciliationService {
 				tx.bridgeCallAttempt.count({ where: { settlement: { order: { identityId: principal.id } } } }),
 				tx.redemptionOrder.count({ where: { identityId: principal.id } }),
 				tx.redemptionWalletCall.count({ where: { release: { redemption: { identityId: principal.id } } } }),
+				tx.sepoliaBurnCall.count({ where: { redemption: { identityId: principal.id } } }),
 			]);
 			if (counts.some((count) => count > 200)) throw new ConflictException('This reconciliation exceeds the 200-record limit for a record category. No partial totals are displayed.');
 			const orders = await tx.bridgeOrder.findMany({ where: { identityId: principal.id }, select, orderBy: { createdAt: 'desc' }, take: 201 });
@@ -96,6 +105,30 @@ export class BridgeReconciliationService {
 			const transactions = deposit ? [sourceTransaction(`${row.id}:deposit`, 'source token deposit', deposit.txid,
 				depositVerified ? 'verified' : 'confirming', deposit.confirmations, row.sourceConfirmationsRequired, deposit.feeRaw.toFixed(0), deposit.checkedAt)] : [];
 			transactions.push(...(settlement?.attempts ?? []).map((call) => callTransaction(call, 'Token', row.destinationConfirmationsRequired)));
+			const sepolia = row.sepoliaRedemption;
+			let sepoliaReturn = null;
+			if (sepolia) {
+				limited(sepolia.calls);
+				const returnAmount = BigInt(sepolia.amountRaw.toFixed(0));
+				const verifiedBurn = sepolia.calls.find((call) => call.status === 'verified' && !!call.receiptBlockHash && call.confirmations >= row.destinationConfirmationsRequired);
+				const completedReturn = sepolia.status === 'completed' && !!sepolia.releaseTxid && !!sepolia.releaseBlockHash
+					&& sepolia.releaseConfirmations >= row.sourceConfirmationsRequired && !!verifiedBurn && returnAmount === amount;
+				if (verifiedBurn) locked += returnAmount;
+				if (completedReturn) returned += returnAmount;
+				if (sepolia.status === 'completed' && !completedReturn) issues.add('A completed Sepolia burn-return is missing matching burn or release evidence.');
+				if (sepolia.status === 'needs_review' || sepolia.lastError) issues.add('A Sepolia burn-return has a saved verification error.');
+				if (!completedReturn) pending = true;
+				const returnTransactions: Transaction[] = [];
+				if (sepolia.fundingTxid) returnTransactions.push(sourceTransaction(`${sepolia.id}:funding`, 'Fund TBC return fee', sepolia.fundingTxid,
+					sepolia.fundingConfirmations >= row.sourceConfirmationsRequired ? 'verified' : 'confirming', sepolia.fundingConfirmations, row.sourceConfirmationsRequired, null, sepolia.checkedAt));
+				returnTransactions.push(...sepolia.calls.map((call) => sepoliaBurnTransaction(call, row.destinationConfirmationsRequired)));
+				if (sepolia.releaseTxid) returnTransactions.push(sourceTransaction(`${sepolia.id}:release`, 'Release source token', sepolia.releaseTxid,
+					completedReturn ? 'verified' : sepolia.status, sepolia.releaseConfirmations, row.sourceConfirmationsRequired,
+					sepolia.releaseBlockHash && sepolia.releaseConfirmations > 0 ? sepolia.feeRaw?.toString() ?? null : null, sepolia.checkedAt));
+				sepoliaReturn = { id: sepolia.id, createdAt: sepolia.createdAt.toISOString(), checkedAt: sepolia.checkedAt?.toISOString() ?? null,
+					amountRaw: returnAmount.toString(), recipient: sepolia.tbcRecipient, holder: sepolia.holder, status: sepolia.status,
+					fundingRaw: sepolia.fundingValueRaw?.toString() ?? null, transactions: returnTransactions };
+			}
 			const redemptions = row.redemptionOrders.map((redemption) => {
 				const release = redemption.release, plan = release?.plan, savedLock = release?.lock, signed = release?.signed;
 				limited(release?.walletCalls ?? []);
@@ -120,7 +153,7 @@ export class BridgeReconciliationService {
 					plannedReleaseFeeRaw: plan?.feeRaw.toString() ?? null, plannedNativeChangeRaw: plan ? (plan.fundingValueRaw - plan.feeRaw).toString() : null, transactions: calls };
 			});
 			return { id: row.id, amountRaw: amount.toString(), recipient: row.recipient, createdAt: row.createdAt.toISOString(),
-				status: row.status === 'cancelled' ? 'cancelled' : settlement?.status ?? 'prepared', checkedAt: settlement?.checkedAt?.toISOString() ?? null, transactions, redemptions };
+				status: row.status === 'cancelled' ? 'cancelled' : settlement?.status ?? 'prepared', checkedAt: settlement?.checkedAt?.toISOString() ?? null, transactions, redemptions, sepoliaReturn };
 		});
 		const reserve = deposited - returned, circulating = minted - locked, difference = reserve - circulating;
 		if (reserve < 0n || circulating < 0n) issues.add('Recorded returns or locks exceed recorded deposits or mints.');

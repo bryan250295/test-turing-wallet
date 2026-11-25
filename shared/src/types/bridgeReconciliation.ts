@@ -23,6 +23,17 @@ export interface ReconciliationRedemption {
 	plannedNativeChangeRaw: string | null;
 	transactions: ReconciliationTransaction[];
 }
+export interface ReconciliationSepoliaReturn {
+	id: string;
+	createdAt: string;
+	checkedAt: string | null;
+	amountRaw: string;
+	recipient: string;
+	holder: string;
+	status: string;
+	fundingRaw: string | null;
+	transactions: ReconciliationTransaction[];
+}
 export interface ReconciliationOrder {
 	id: string;
 	amountRaw: string;
@@ -32,6 +43,8 @@ export interface ReconciliationOrder {
 	checkedAt: string | null;
 	transactions: ReconciliationTransaction[];
 	redemptions: ReconciliationRedemption[];
+	/** One-to-one, full-amount Ethereum Sepolia burn-return evidence. */
+	sepoliaReturn: ReconciliationSepoliaReturn | null;
 }
 export interface ReconciliationTotals {
 	depositedRaw: string;

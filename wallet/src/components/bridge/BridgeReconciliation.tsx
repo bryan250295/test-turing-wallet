@@ -4,7 +4,7 @@ import type { WalletPageProps } from '../../types/wallet';
 import useBridgeReconciliation from '../../hooks/useBridgeReconciliation';
 import WalletConnection from '../WalletConnection';
 import { formatDateTime } from '../../utils/dateTime';
-import { reconciliationRequests, matchesReconciliationSearch, reconciliationAmount, shortReference, requestStatusLabels, requestStage, routeDirectionLabel } from '../../utils/bridgeReconciliation';
+import { reconciliationRequests, matchesReconciliationSearch, reconciliationAmount, shortReference, requestStatusLabels, requestStageLabel, requestDirectionLabel, requestFlowLabel, requestStatusLabel } from '../../utils/bridgeReconciliation';
 import ReconciliationRequestDetails from './ReconciliationRequestDetails';
 import ReconciliationBalances from './ReconciliationBalances';
 
@@ -53,9 +53,9 @@ function History({ report, state }: { report: Report; state: ReportState }) {
      <tbody>{matches.slice(offset, offset + pageSize).map(row => <tr key={row.key}>
       <td>{formatDateTime(row.createdAt)}</td>
       <td><code title={row.id}>{shortReference(row.id)}</code></td>
-      <td>{routeDirectionLabel(row.route, row.direction)}</td>
-      <td className="recon-amount-cell">{reconciliationAmount(row.amountRaw, row.route.decimals)} <small>{row.direction === 'forward' ? `${row.route.symbol} → ${row.route.wrappedSymbol}` : `${row.route.wrappedSymbol} → ${row.route.symbol}`}</small></td>
-      <td><span className={`recon-status recon-status-${row.category}`}>{requestStatusLabels[row.category]}</span><small>{requestStage(row.status) !== requestStatusLabels[row.category] ? requestStage(row.status) : ''}</small></td>
+      <td>{requestDirectionLabel(row)}</td>
+      <td className="recon-amount-cell">{reconciliationAmount(row.amountRaw, row.route.decimals)} <small>{requestFlowLabel(row)}</small></td>
+      <td><span className={`recon-status recon-status-${row.category}`}>{requestStatusLabel(row)}</span><small>{requestStageLabel(row) !== requestStatusLabel(row) ? requestStageLabel(row) : ''}</small></td>
       <td><button className="history-secondary" type="button" aria-label={`View request ${row.id}`} onClick={() => setSelected(row.key)}>View</button></td>
      </tr>)}</tbody>
     </table>

@@ -22,9 +22,15 @@ function redemption(value: unknown): boolean {
 	return isObject(value) && uuid(value.id) && date(value.createdAt) && optional(date, value.checkedAt) && unsigned(value.amountRaw) && tbcAddress(value.recipient) && address(value.escrowAddress) && text(value.status)
 		&& optional(unsigned, value.fundingRaw) && optional(unsigned, value.plannedReleaseFeeRaw) && optional(unsigned, value.plannedNativeChangeRaw) && list(value.transactions, transaction, 203);
 }
+function sepoliaReturn(value: unknown): boolean {
+	return isObject(value) && uuid(value.id) && date(value.createdAt) && optional(date, value.checkedAt) && unsigned(value.amountRaw)
+		&& tbcAddress(value.recipient) && address(value.holder) && text(value.status) && optional(unsigned, value.fundingRaw)
+		&& list(value.transactions, transaction, 203);
+}
 function order(value: unknown): boolean {
 	return isObject(value) && uuid(value.id) && unsigned(value.amountRaw) && address(value.recipient) && date(value.createdAt) && text(value.status)
-		&& optional(date, value.checkedAt) && list(value.transactions, transaction, 203) && list(value.redemptions, redemption);
+		&& optional(date, value.checkedAt) && list(value.transactions, transaction, 203) && list(value.redemptions, redemption)
+		&& (value.sepoliaReturn === null || sepoliaReturn(value.sepoliaReturn));
 }
 function route(value: unknown): boolean {
 	if (!isObject(value) || !uuid(value.deploymentId) || !address(value.wrappedToken) || typeof value.contractId !== 'string' || !/^[0-9a-f]{64}$/.test(value.contractId) || typeof value.decimals !== 'number' || !Number.isInteger(value.decimals) || value.decimals < 0 || value.decimals > 255
