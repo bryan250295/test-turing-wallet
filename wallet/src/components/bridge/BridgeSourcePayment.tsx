@@ -55,8 +55,10 @@ export default function BridgeSourcePayment({ order, settlement, session, enable
    if (live()) setState({ context, receipt: request, loaded: true, error: '' });
    await verifyWallet();
    // Exactly one explicit wallet request. Never retry a send or time out a pending approval.
-   const result = await session.wallet.sendTransaction([{ flag: 'FT_TRANSFER', ft_contract_address: order.contractId,
-    address: request.custodyAddress, ft_amount: walletTokenAmount(order.amountRaw, order.decimals), broadcastEnabled: true, domain: DEVNET_DOMAIN }]);
+   const result = order.sourceAssetKind === 'native-tbc'
+    ? await session.wallet.sendTransaction([{ flag: 'P2PKH', address: request.custodyAddress, satoshis: order.amountRaw, broadcastEnabled: true, domain: DEVNET_DOMAIN }])
+    : await session.wallet.sendTransaction([{ flag: 'FT_TRANSFER', ft_contract_address: order.contractId, address: request.custodyAddress,
+     ft_amount: walletTokenAmount(order.amountRaw, order.decimals), broadcastEnabled: true, domain: DEVNET_DOMAIN }]);
    const txid = result?.txid?.trim().toLowerCase();
    if (!txid || !/^(?!0{64}$)[0-9a-f]{64}$/.test(txid)) throw new Error('Turing Wallet did not return a single payment TXID. Check its transaction history before retrying; the payment request remains reserved.');
    rememberSourcePayment(order, { attemptId: request.attemptId, txid });
@@ -80,7 +82,7 @@ export default function BridgeSourcePayment({ order, settlement, session, enable
  }
  return <div className="htlc-section" aria-busy={!!action}>
   {(!receipt || receipt.status === 'cancelled') && <>
-   <p>Review the payment in Turing Wallet. The token, amount and address are filled in automatically.</p>
+   <p>Review the payment in Turing Wallet. The {order.sourceAssetKind === 'native-tbc' ? 'native TBC' : 'token'}, amount and address are filled in automatically.</p>
    <button type="button" disabled={!canPay} onClick={() => { void pay(); }}>{action === 'pay' ? 'Confirm in Turing Wallet…' : `Pay ${formatRawAmount(order.amountRaw, order.decimals)} ${order.symbol} with Turing Wallet`}</button>
    <p className="history-note">Already paid this order? Use “Already paid or need recovery?” below. Do not send a second payment.</p>
   </>}

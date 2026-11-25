@@ -2,6 +2,7 @@ import { BRIDGE_ROUTE_CATALOG } from '../../../../shared/src/config/bridgeRoutes
 import useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
 import type { WalletSession } from '../../types/wallet';
 import BridgeWalletConnections from './BridgeWalletConnections';
+import EthereumBurnAdminSetup from './EthereumBurnAdminSetup';
 import { ArchivedBridgeRoute } from './BridgeRouteDetails';
 import V15AdminSetup from './V15AdminSetup';
 
@@ -33,6 +34,7 @@ export default function BridgeAdmin({ session, active }: { session: WalletSessio
 			</select>
 			<p className="history-note">V1.5 is selected above and is the only deployable version. V2/V3 stay visible as disabled, read-only history.</p>
 		</section>
+		<EthereumBurnAdminSetup session={session} active={active} />
 		<section className="htlc-section" aria-labelledby="admin-wallets-title">
 			<h3 id="admin-wallets-title">Operator wallets</h3>
 			<BridgeWalletConnections session={session} evm={evm} />

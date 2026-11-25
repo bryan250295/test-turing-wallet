@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Inject, Injectable, NotFoundExc
 import type { Response } from 'express';
 import { getAddress, isAddress, zeroAddress } from 'viem';
 import { LEARNING_BRIDGE_ORDERS as rules, LEARNING_BRIDGE_EVM } from '../../../shared/src/config/learningBridge';
-import type { BridgeDeploymentPreview, BridgeOrderInput, BridgeOrderSetup } from '../../../shared/src/types/learningBridge';
+import type { BridgeOrderInput, BridgeOrderSetup } from '../../../shared/src/types/learningBridge';
 import { tokenAmountToRaw } from '../../../shared/src/utils/tokenAmounts';
 import { PrismaService } from '../database/prisma.service';
 import { AuthService, type Principal } from '../auth/auth.service';
@@ -11,6 +11,7 @@ import { bridgeRouteId, wrappedMetadata } from '../../../shared/src/config/bridg
 import { BridgeOrdersRepository } from './bridge-orders.repository';
 import { BridgeOrderTargetService } from './bridge-order-target.service';
 import { BridgeCustodyService } from './bridge-custody.service';
+import { ETHEREUM_SEPOLIA_CHAIN_ID } from './ethereum-sepolia-rpc';
 
 @Injectable()
 export class BridgeOrdersService {
@@ -31,7 +32,10 @@ export class BridgeOrdersService {
 		if (deployments.length > 200) throw new ConflictException('Too many registered routes to load. No partial route list was returned.');
 		return { custodyReady, paymentEnabled: custodyReady, maxOpenOrders: rules.maxOpenOrders,
 			message: custodyReady ? 'Prepare an order, then explicitly open payment details. Deposits are verified before wallet-confirmed minting.' : 'Custody setup is unavailable. Run local setup or restore the configured custody encryption key.',
-			deployments: deployments.filter((row) => row.contractAddress && row.verifiedAt).map((row) => ({
+			deployments: deployments.filter((row) => row.contractAddress && row.verifiedAt).map((row) => {
+				const quote = row.quote as unknown as { governanceMode?: string; protocol?: string; sourceAssetKind?: string };
+				const native = row.asset.protocol === 'native-tbc' && row.chainId === ETHEREUM_SEPOLIA_CHAIN_ID;
+				return ({
 				contractId: row.contractId,
 				decimals: row.decimals,
 				sourceSymbol: row.asset.symbol,
@@ -40,8 +44,12 @@ export class BridgeOrdersService {
 				contractAddress: row.contractAddress!,
 				deployer: row.deployer,
 				verifiedAt: row.verifiedAt!.toISOString(),
-				governanceMode: (row.quote as unknown as Partial<BridgeDeploymentPreview>).governanceMode === 'multisig-relayer-v1.5' ? 'multisig-relayer-v1.5' as const : undefined,
-			})),
+				chainId: row.chainId,
+				protocol: native ? 'native-tbc' as const : 'legacy-ft' as const,
+				sourceAssetKind: native ? 'native-tbc' as const : 'fungible-token' as const,
+				governanceMode: quote.governanceMode === 'multisig-relayer-v1.5' ? 'multisig-relayer-v1.5' as const
+					: quote.governanceMode === 'ethereum-burn-multisig-v1' ? 'ethereum-burn-multisig-v1' as const : undefined,
+			}); }),
 		};
 	}
 	async list(principal: Principal) { this.auth.requireTbc(principal); return this.repository.list(principal.id); }
@@ -51,8 +59,8 @@ export class BridgeOrdersService {
 		if (!chosen) throw new NotFoundException('Choose a deployment registered to your TBC wallet.');
 		let amount: bigint;
 		try { amount = tokenAmountToRaw(input.amount, chosen.decimals); } catch { throw new BadRequestException(`Enter a positive amount with at most ${chosen.decimals} decimal places.`); }
-		if (amount > 18446744073709551615n) throw new BadRequestException('This amount exceeds the legacy FT quantity range.');
-		if (!isAddress(input.recipient, { strict: true }) || input.recipient.toLowerCase() === zeroAddress) throw new BadRequestException('Use a valid, nonzero HyperEVM recipient address. Check mixed-case checksums.');
+		if (amount > 18446744073709551615n) throw new BadRequestException('This amount exceeds the supported TBC quantity range.');
+		if (!isAddress(input.recipient, { strict: true }) || input.recipient.toLowerCase() === zeroAddress) throw new BadRequestException('Use a valid, nonzero destination recipient address. Check mixed-case checksums.');
 		const recipient = getAddress(input.recipient).toLowerCase();
 		const retry = await this.repository.existing(principal.id, input.idempotencyKey);
 		if (retry) return this.repository.assertRetry(retry, { deploymentId: input.deploymentId, recipient, amountRaw: amount.toString() });
@@ -65,9 +73,15 @@ export class BridgeOrdersService {
 				this.custody.ready(),
 			]);
 			if (!deployment?.contractAddress) throw new NotFoundException('Choose a verified deployment saved by your current TBC wallet.');
-			if (!asset || asset.contractId !== deployment.contractId || asset.decimals !== deployment.decimals || asset.routeId !== bridgeRouteId(deployment.contractId) || asset.destinationChainId !== 998
-				|| asset.confirmations < policy.minimumConfirmations || Date.now() - asset.verifiedAt.getTime() > LEARNING_BRIDGE_EVM.assetVerificationLifetimeMs || asset.verifiedAt.getTime() > Date.now() + 30_000)
-				throw new ConflictException('Verify this token again before preparing the transfer. Verification must be less than 10 minutes old.');
+			const sepolia = deployment.chainId === ETHEREUM_SEPOLIA_CHAIN_ID;
+			const native = asset?.protocol === 'native-tbc' && sepolia;
+			if (!asset || asset.contractId !== deployment.contractId || asset.decimals !== deployment.decimals
+				|| native && (asset.routeId !== deployment.routeId || asset.destinationChainId !== ETHEREUM_SEPOLIA_CHAIN_ID)
+				|| sepolia && !native && (asset.routeId !== deployment.routeId || asset.destinationChainId !== ETHEREUM_SEPOLIA_CHAIN_ID || asset.protocol !== 'legacy-ft'
+					|| asset.confirmations < policy.minimumConfirmations || asset.verifiedAt.getTime() > Date.now() + 30_000)
+				|| !sepolia && (asset.routeId !== bridgeRouteId(deployment.contractId) || asset.destinationChainId !== 998
+					|| asset.confirmations < policy.minimumConfirmations || Date.now() - asset.verifiedAt.getTime() > LEARNING_BRIDGE_EVM.assetVerificationLifetimeMs || asset.verifiedAt.getTime() > Date.now() + 30_000))
+				throw new ConflictException(native ? 'The native TBC Sepolia route is no longer verified.' : 'Verify this token again before preparing the transfer. Verification must be less than 10 minutes old.');
 			if (amount > BigInt(asset.totalSupplyRaw.toFixed(0))) throw new BadRequestException('The order amount exceeds the verified token total supply.');
 			if (!custodyReady) throw new ServiceUnavailableException('Custody setup is unavailable. Restore the configured custody encryption key before preparing orders.');
 			if (recipient === deployment.contractAddress.toLowerCase()) throw new BadRequestException('The wrapped token contract cannot be the recipient. Choose a receiving wallet address.');

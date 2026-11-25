@@ -3,6 +3,14 @@ import { LEARNING_BRIDGE_SOURCE_FT } from './learningBridge';
 /** Explicitly enabled destinations; RPCs and chain IDs never come from form input. */
 export const BRIDGE_DESTINATIONS = [{ id: 'hyperevm-testnet', chainId: 998, name: 'HyperEVM Testnet', nativeSymbol: 'HYPE' }] as const;
 
+/** Canonical TT test token used by the TBC -> Sepolia burn/mint exercise. */
+export const TURING_TOKEN_TESTNET = {
+	contractId: '52b6a3d05583042d0aff73aed30c7630a11eda291f90e1aff52a9a4173c26ebb',
+	name: 'Turing Token',
+	symbol: 'TT',
+	decimals: 2,
+} as const;
+
 /** Operator-reviewed routes shown by the wallet. Disabled routes remain here
  * for historical receipts, but cannot be selected for a new transfer. */
 export const BRIDGE_ROUTE_CATALOG = [{
@@ -71,6 +79,18 @@ export const BRIDGE_ROUTE_CATALOG = [{
 	contracts: { relay: null, gateway: null, wrappedToken: null },
 }] as const;
 export const ORIGINAL_BRIDGE_ROUTE = 'tbc-testnet-legacy-ft-to-hyperevm-testnet-v1';
+export function sepoliaFtRouteId(contractId: string): string {
+ if (!/^(?!0{64}$)[0-9a-f]{64}$/.test(contractId)) throw new Error('Invalid source token contract ID.');
+ return `tbc-ft-sepolia-${contractId}`;
+}
+export function sepoliaWrappedMetadata(name: string, symbol: string): { wrappedName: string; wrappedSymbol: string } {
+ const cleanName = name.replace(/[^\x20-\x7e]/g, '').trim();
+ const cleanSymbol = symbol.replace(/[^A-Za-z0-9]/g, '').slice(0, 10);
+ const wrappedName = `Wrapped ${cleanName}`.slice(0, 64).trim();
+ const wrappedSymbol = `w${cleanSymbol || 'FT'}`;
+ if (!validWrappedName(wrappedName) || !validWrappedSymbol(wrappedSymbol)) throw new Error('The source token cannot produce valid wrapped-token metadata.');
+ return { wrappedName, wrappedSymbol };
+}
 export function bridgeRouteId(contractId: string, chainId = 998): string {
  if (!/^(?!0{64}$)[0-9a-f]{64}$/.test(contractId)) throw new Error('Invalid source token contract ID.');
  if (!BRIDGE_DESTINATIONS.some(destination => destination.chainId === chainId)) throw new Error('This destination is not enabled.');

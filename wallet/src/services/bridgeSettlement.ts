@@ -1,6 +1,7 @@
 import type { BridgeCallAttempt, BridgeCallKind, BridgeOrder, BridgeSettlement } from '../types/learningBridge';
 import { isObject } from './apiValidation';
 import { backendData, getBackendSession } from './backendClient';
+import { encodeFunctionData, parseAbi } from 'viem';
 
 const uuid = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const hash = (value: unknown) => typeof value === 'string' && /^0x(?!0{64}$)[0-9a-f]{64}$/.test(value);
@@ -17,12 +18,13 @@ async function expectedData(order: BridgeOrder, kind: BridgeCallKind, settlement
 	const key = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`learning-bridge/order/v1:${order.id}`));
 	const orderKey = Array.from(new Uint8Array(key), (byte) => byte.toString(16).padStart(2, '0')).join('');
 	const word = (value: bigint) => value.toString(16).padStart(64, '0');
+	if (order.destinationChainId === 11_155_111) return encodeFunctionData({ abi: parseAbi(['function mintFromDeposit(bytes32 orderId,bytes32 sourceAssetId,uint8 sourceAssetKind,bytes32 sourceTxid,uint32 sourceVout,address recipient,uint256 amountRaw)']), functionName: 'mintFromDeposit', args: [`0x${orderKey}`, `0x${order.contractId}`, order.sourceAssetKind === 'fungible-token' ? 1 : 0, `0x${settlement.deposit.txid}`, settlement.deposit.vout, order.recipient as `0x${string}`, BigInt(order.amountRaw)] });
 	return `0xbf31ca75${orderKey}${order.contractId}${settlement.deposit.txid}${word(BigInt(settlement.deposit.vout))}${order.recipient.slice(2).toLowerCase().padStart(64, '0')}${word(BigInt(order.amountRaw))}`;
 }
 export async function validateBridgeCall(value: unknown, order: BridgeOrder, settlement: BridgeSettlement | null): Promise<BridgeCallAttempt> {
 	if (!isObject(value) || !uuid(value.id) || !['unpause', 'mint'].includes(String(value.kind))
 		|| !['quoted', 'awaiting_wallet', 'submitted', 'confirming', 'verified', 'reverted', 'invalid', 'cancelled'].includes(String(value.status))
-		|| !isObject(value.transaction) || !address(value.transaction.from) || value.transaction.to !== order.destinationContract || value.transaction.chainId !== '0x3e6' || value.transaction.value !== '0x0'
+		|| !isObject(value.transaction) || !address(value.transaction.from) || value.transaction.to !== order.destinationContract || value.transaction.chainId !== (order.destinationChainId === 11_155_111 ? '0xaa36a7' : '0x3e6') || value.transaction.value !== '0x0'
 		|| !quantity(value.transaction.gas) || !quantity(value.transaction.gasPrice) || !quantity(value.transaction.nonce)
 		|| !unsigned(value.estimatedFeeWei) || !unsigned(value.budgetWei) || BigInt(value.estimatedFeeWei) <= 0n || BigInt(value.budgetWei) <= 0n
 		|| BigInt(value.transaction.gas) > 50_000_000n || BigInt(value.transaction.nonce) > BigInt(Number.MAX_SAFE_INTEGER)

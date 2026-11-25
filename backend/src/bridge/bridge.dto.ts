@@ -8,6 +8,16 @@ export class VerifyBridgeAssetDto {
 	contractId!: string;
 }
 
+export class RegisterEthereumSepoliaFtRouteDto extends VerifyBridgeAssetDto {
+	@ApiProperty({ type: String, description: 'Verified wrapped-token contract deployed on Ethereum Sepolia.' })
+	@IsEthereumAddress()
+	wrappedToken!: string;
+	@ApiProperty({ type: String, description: 'Sepolia contract-creation transaction hash returned by MetaMask.' })
+	@IsString()
+	@Matches(/^0x(?!0{64}$)[0-9a-f]{64}$/i)
+	txHash!: string;
+}
+
 export class PreviewBridgeDeploymentDto extends VerifyBridgeAssetDto {
 	@ApiProperty({ type: Number, required: false, enum: [998], default: 998 })
 	@IsOptional() @Equals(998)

@@ -11,18 +11,18 @@ export function CopyReference({ value, label, compact = false }: { value: string
 		void navigator.clipboard.writeText(value).then(() => setFeedback('Copied')).catch(() => setFeedback('Select the text to copy'));
 	}}>{feedback || 'Copy'}</button></span>;
 }
-export default function ReconciliationTransactions({ rows, title }: { rows: ReconciliationTransaction[]; title: string }) {
+export default function ReconciliationTransactions({ rows, title, destinationName = 'HyperEVM Testnet', destinationFeeSymbol = 'HYPE' }: { rows: ReconciliationTransaction[]; title: string; destinationName?: string; destinationFeeSymbol?: string }) {
 	const sent = rows.filter((row) => row.hash);
 	const unsent = rows.filter((row) => !row.hash);
 	function table(transactions: ReconciliationTransaction[], caption: string) {
 		return <div className="history-scroll recon-transaction-list" role="region" aria-label={caption} tabIndex={0}>
 			<table className="history-table"><caption>{caption}</caption><thead><tr><th scope="col">Action</th><th scope="col">Status</th><th scope="col">Transaction</th><th scope="col">Confirmations</th><th scope="col">Recorded fee</th></tr></thead>
 				<tbody>{transactions.map((row) => <tr key={row.id}>
-					<td>{row.label}<small>{row.network === 'tbc' ? 'TBC Testnet' : 'HyperEVM Testnet'}</small></td>
+					<td>{row.label}<small>{row.network === 'tbc' ? 'TBC Testnet' : destinationName}</small></td>
 					<td>{requestStage(row.status)}{row.checkedAt && <small>{formatDateTime(row.checkedAt)} MYT</small>}</td>
 					<td>{row.hash ? <CopyReference value={row.hash} label="transaction hash" compact /> : 'Not sent'}</td>
 					<td>{row.confirmations === null ? 'Not recorded' : `${row.confirmations} / ${row.required}`}</td>
-					<td>{row.actualFeeRaw === null ? 'Not recorded' : `${amount(row.actualFeeRaw, row.network === 'tbc' ? 6 : 18)} ${row.network === 'tbc' ? 'TBC' : 'HYPE'}`}</td>
+					<td>{row.actualFeeRaw === null ? 'Not recorded' : `${amount(row.actualFeeRaw, row.network === 'tbc' ? 6 : 18)} ${row.network === 'tbc' ? 'TBC' : destinationFeeSymbol}`}</td>
 				</tr>)}</tbody></table>
 		</div>;
 	}

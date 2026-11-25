@@ -51,6 +51,12 @@ async function main() {
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "proof_bridge_routes", "proof_bridge_transfers" TO "${user}"`);
 			await tx.$executeRawUnsafe(`REVOKE UPDATE, DELETE ON "proof_bridge_routes", "proof_bridge_transfers" FROM "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "blockHash", "blockHeight", "transactionIndex", "transactionCount", "merkleSiblings", "sourceConfirmations", "relayHeight", "relayPendingHeight", "relayPendingTxHash", "relayPendingRaw", "relayPendingNonce", "mintTxHash", "mintRawTransaction", "mintNonce", "mintBlockNumber", "mintConfirmations", "mintGasUsed", "mintFeeWei", "checkedAt", "completedAt", "lastError", "failureCount", "updatedAt") ON "proof_bridge_transfers" TO "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "sepolia_burn_redemptions", "sepolia_burn_calls" TO "${user}"`);
+			await tx.$executeRawUnsafe(`REVOKE UPDATE, DELETE ON "sepolia_burn_redemptions", "sepolia_burn_calls" FROM "${user}"`);
+			// Return terms, burn calldata and fee budgets are frozen at insert time.
+			// Runtime may only advance the saved state and attach verified chain data.
+			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "payoutRaw", "feeRaw", "releaseUnsignedRaw", "releasePlanHash", "fundingTxid", "fundingConfirmations", "fundingVout", "fundingValueRaw", "fundingRaw", "reserveRaw", "releaseInputs", "proof", "releaseRaw", "releaseTxid", "releaseConfirmations", "releaseBlockHash", "releaseBlockHeight", "checkedAt", "lastError", "updatedAt") ON "sepolia_burn_redemptions" TO "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "txHash", "logIndex", "confirmations", "receiptBlockHash", "receiptBlockNumber", "actualFeeWei", "lastError", "updatedAt") ON "sepolia_burn_calls" TO "${user}"`);
 		});
 		console.log('Application database privileges applied. Schema migrations and import ledgers remain restricted.');
 	} finally { await db.$disconnect(); }

@@ -5,6 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"contracts:compile": "node scripts/compileBridgeContract.mjs",
+		"ethereum-burn:compile": "node scripts/compileBridgeContract.mjs --ethereum-burn",
+		"ethereum-admin:compile": "node scripts/compileBridgeContract.mjs --ethereum-admin",
 		"multisig:compile": "node scripts/compileBridgeContract.mjs --multisig",
 		"phase3:compile": "node scripts/compilePhase3Contracts.mjs",
 		"phase3:testnet-v2-compile": "node scripts/compilePhase3TestnetV2Contracts.mjs",

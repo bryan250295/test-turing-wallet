@@ -46,7 +46,7 @@ function accountOf(value: unknown): string {
 	return value[0] ?? '';
 }
 
-export async function readEvmWallet(provider: EvmProvider): Promise<EvmWalletSnapshot> {
+export async function readEvmWalletIdentity(provider: EvmProvider): Promise<EvmWalletSnapshot> {
 	const [accounts, chain] = await Promise.all([
 		provider.request({ method: 'eth_accounts' }),
 		provider.request({ method: 'eth_chainId' }),
@@ -55,15 +55,18 @@ export async function readEvmWallet(provider: EvmProvider): Promise<EvmWalletSna
 	const chainValue = hexQuantity(chain);
 	if (chainValue > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Unsupported wallet chain ID.');
 	const chainId = Number(chainValue);
+	return { address, chainId, balanceWei: null, checkedAt: Date.now() };
+}
+
+export async function readEvmWallet(provider: EvmProvider, balanceChainId: number = HYPEREVM_TESTNET.chainId): Promise<EvmWalletSnapshot> {
+	const identity = await readEvmWalletIdentity(provider);
+	const { address, chainId } = identity;
 	let balanceWei: string | null = null;
-	if (address && chainId === HYPEREVM_TESTNET.chainId) {
+	if (address && chainId === balanceChainId) {
 		balanceWei = hexQuantity(await provider.request({ method: 'eth_getBalance', params: [address, 'latest'] })).toString();
 		// A network/account switch during the request must not label another balance as test HYPE.
-		const [latestAccounts, latestChain] = await Promise.all([
-			provider.request({ method: 'eth_accounts' }),
-			provider.request({ method: 'eth_chainId' }),
-		]);
-		if (accountOf(latestAccounts).toLowerCase() !== address.toLowerCase() || hexQuantity(latestChain) !== chainValue) {
+		const latest = await readEvmWalletIdentity(provider);
+		if (latest.address.toLowerCase() !== address.toLowerCase() || latest.chainId !== chainId) {
 			throw new Error('The wallet changed while loading. Refresh the wallet details.');
 		}
 	}
@@ -87,8 +90,12 @@ export function evmWalletError(error: unknown): string {
 }
 
 export async function switchToHyperEvmTestnet(provider: EvmProvider): Promise<void> {
+	return switchEvmNetwork(provider, HYPEREVM_TESTNET);
+}
+
+export async function switchEvmNetwork(provider: EvmProvider, network: { chainIdHex: string; chainName: string; nativeCurrency: { name: string; symbol: string; decimals: number }; rpcUrl: string }): Promise<void> {
 	const switchNetwork = () => provider.request({
-		method: 'wallet_switchEthereumChain', params: [{ chainId: HYPEREVM_TESTNET.chainIdHex }],
+		method: 'wallet_switchEthereumChain', params: [{ chainId: network.chainIdHex }],
 	});
 	try {
 		await switchNetwork();
@@ -97,10 +104,10 @@ export async function switchToHyperEvmTestnet(provider: EvmProvider): Promise<vo
 		await provider.request({
 			method: 'wallet_addEthereumChain',
 			params: [{
-				chainId: HYPEREVM_TESTNET.chainIdHex,
-				chainName: HYPEREVM_TESTNET.chainName,
-				nativeCurrency: HYPEREVM_TESTNET.nativeCurrency,
-				rpcUrls: [HYPEREVM_TESTNET.rpcUrl],
+				chainId: network.chainIdHex,
+				chainName: network.chainName,
+				nativeCurrency: network.nativeCurrency,
+				rpcUrls: [network.rpcUrl],
 			}],
 		});
 		// Adding a network does not guarantee the wallet selected it.

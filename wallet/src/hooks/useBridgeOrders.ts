@@ -6,9 +6,9 @@ import { cancelBridgeOrder, listBridgeOrders, loadBridgeOrderSetup, prepareBridg
 import { getErrorMessage } from '../utils/errors';
 
 interface OrdersState { context: string; rows: BridgeOrder[]; setup: BridgeOrderSetup | null; loading: boolean; error: string }
-export default function useBridgeOrders(session: WalletSession, evm: ReturnType<typeof useHyperEvmWallet>, active: boolean, assetRevision?: string) {
+export default function useBridgeOrders(session: WalletSession, evm: ReturnType<typeof useHyperEvmWallet>, active: boolean, assetRevision?: string, destinationChainId = 998) {
 	const enabled = active && !!session.address && session.networkIsDevnet && session.backendAuth.ready;
-	const context = JSON.stringify([enabled, session.address, evm.address, evm.chainId]);
+	const context = JSON.stringify([enabled, session.address, evm.address, evm.chainId, destinationChainId]);
 	const current = useRef({ context, epoch: 0 });
 	if (current.current.context !== context) current.current = { context, epoch: current.current.epoch + 1 };
 	const epoch = current.current.epoch;
@@ -55,7 +55,7 @@ export default function useBridgeOrders(session: WalletSession, evm: ReturnType<
 		const account = addresses as WalletAddresses | undefined;
 		if (!live() || network?.network !== 'tbc' || network.type !== 'testnet'
 			|| (account?.tbcAddress ?? account?.addresses?.tbcAddress) !== session.address
-			|| destination.chainId !== 998 || destination.address.toLowerCase() !== evm.address?.toLowerCase()) {
+			|| destination.chainId !== destinationChainId || destination.address.toLowerCase() !== evm.address?.toLowerCase()) {
 			throw new Error('The wallet account, network or page changed. Reconnect and review the order again.');
 		}
 	}

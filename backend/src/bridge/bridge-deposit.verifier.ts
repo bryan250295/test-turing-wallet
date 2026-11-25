@@ -9,6 +9,8 @@ import { isObject } from '../../../shared/src/services/apiValidation';
 import { BridgeAssetVerifier } from './bridge-asset.verifier';
 import { isLegacyFtTape } from './legacy-ft-code';
 import { BRIDGE_ASSET_POLICY as policy } from './bridge.config';
+import { ETHEREUM_SEPOLIA_CHAIN_ID } from './ethereum-sepolia-rpc';
+import { NATIVE_TBC_SOURCE_ID } from './ethereum-sepolia-route.service';
 
 function match(value: unknown, message: string): asserts value { if (!value) throw new UnprocessableEntityException(message); }
 export interface DepositObservation { txid: string; vout: number; amountRaw: string; feeRaw: string; confirmations: number; blockHash: string | null; blockHeight: number | null; checkedAt: Date }
@@ -27,6 +29,7 @@ export class BridgeDepositVerifier {
 		'The selected token genesis is not in a confirmed canonical block. Payment details remain closed.');
 	}
 	async verify(order: BridgeOrder, address: string, txid: string, signal: AbortSignal): Promise<DepositObservation> {
+		if (order.destinationChainId === ETHEREUM_SEPOLIA_CHAIN_ID && order.contractId === NATIVE_TBC_SOURCE_ID.slice(2)) return this.verifyNative(order, address, txid, signal);
 		// Trust the fixed testnet node/indexer for chain inclusion and FT ancestry.
 		// Independently check raw bytes, full published FT binding, exact amounts,
 		// conservation, all unlocking scripts and continued custody of the output.
@@ -134,5 +137,62 @@ export class BridgeDepositVerifier {
 		}
 		signal.throwIfAborted();
 		return { txid, vout: 0, amountRaw: paid.toString(), feeRaw: fee.toString(), confirmations, blockHash, blockHeight, checkedAt: new Date() };
+	}
+	private async verifyNative(order: BridgeOrder, address: string, txid: string, signal: AbortSignal): Promise<DepositObservation> {
+		match(/^[0-9a-f]{64}$/.test(txid), 'Invalid native TBC payment TXID.');
+		const rawData = await readBridgeSource(API_URLS.rawTransaction(txid), signal);
+		match(typeof rawData.txraw === 'string' && /^(?:[0-9a-f]{2})+$/i.test(rawData.txraw) && rawData.txraw.length <= 2_000_000, 'Native TBC payment bytes are unavailable or too large.');
+		const tx = new tbc.Transaction(rawData.txraw);
+		match(tx.hash === txid && tx.toBuffer().toString('hex') === rawData.txraw.toLowerCase(), 'Native TBC payment TXID or encoding mismatch.');
+		match(tx.inputs.length >= 1 && tx.inputs.length <= 50 && tx.outputs.length >= 1 && tx.outputs.length <= 50, 'Unsupported native TBC payment structure.');
+		const paid = BigInt(order.amountRaw.toFixed(0));
+		match(paid > 0n && paid <= BigInt(Number.MAX_SAFE_INTEGER), 'Native TBC payment amount exceeds the supported range.');
+		const custodyScript = tbc.Script.buildPublicKeyHashOut(address).toHex();
+		const senderScript = tbc.Script.buildPublicKeyHashOut(order.sender).toHex();
+		const matches = tx.outputs.map((output, index) => ({ output, index })).filter(({ output }) => output.script.toHex() === custodyScript);
+		match(matches.length === 1 && BigInt(matches[0].output.satoshis) === paid, 'Send exactly the reviewed native TBC amount in one output to this order custody address.');
+		match(tx.outputs.every((output, index) => Number.isSafeInteger(output.satoshis) && output.satoshis >= 0
+			&& (index === matches[0].index || output.script.toHex() === senderScript)), 'Native TBC change must return only to the frozen source wallet.');
+		let inputTotal = 0n;
+		const spent = new Set<string>();
+		for (let index = 0; index < tx.inputs.length; index++) {
+			const input = tx.inputs[index];
+			const parentId = input.prevTxId.toString('hex');
+			const key = `${parentId}:${input.outputIndex}`;
+			match(!spent.has(key), 'Duplicate native TBC payment input.'); spent.add(key);
+			const parentData = await readBridgeSource(API_URLS.rawTransaction(parentId), signal);
+			match(typeof parentData.txraw === 'string' && /^(?:[0-9a-f]{2})+$/i.test(parentData.txraw) && parentData.txraw.length <= 2_000_000, 'A native TBC payment input is unavailable.');
+			const parent = new tbc.Transaction(parentData.txraw);
+			match(parent.hash === parentId, 'A native TBC payment input TXID is invalid.');
+			const output = parent.outputs[input.outputIndex];
+			match(output && Number.isSafeInteger(output.satoshis) && output.satoshis > 0 && output.script.toHex() === senderScript, 'Every native TBC payment input must belong to the frozen source wallet.');
+			input.output = output; inputTotal += BigInt(output.satoshis);
+		}
+		const outputTotal = tx.outputs.reduce((sum, output) => sum + BigInt(output.satoshis), 0n);
+		const fee = inputTotal - outputTotal;
+		match(fee > 0n, 'The native TBC payment network fee is invalid.');
+		for (let index = 0; index < tx.inputs.length; index++) { signal.throwIfAborted(); match(tx.verifyScript(index).success, `Native TBC unlocking-script validation failed at input ${index}.`); }
+		let cursor = ''; const cursors = new Set<string>(); let unspent = false;
+		for (let page = 0; page < 10; page++) {
+			const url = new URL(API_URLS.nativeUtxos(address)); url.searchParams.set('limit', '1000'); if (cursor) url.searchParams.set('after', cursor);
+			const data = await readBridgeSource(url, signal);
+			match(Array.isArray(data.utxos), 'The native TBC custody index is unavailable.');
+			unspent ||= data.utxos.some((row: unknown) => isObject(row) && row.txid === txid && row.index === matches[0].index && String(row.value ?? row.satoshis) === paid.toString());
+			if (unspent || !data.next_cursor) break;
+			match(typeof data.next_cursor === 'string' && !cursors.has(data.next_cursor), 'Invalid native TBC pagination cursor.'); cursor = data.next_cursor; cursors.add(cursor);
+		}
+		match(unspent, 'The native TBC payment output is not unspent at this order custody address. Do not pay again; refresh or request review.');
+		const decoded = await readBridgeSource(API_URLS.transaction(txid), signal);
+		match(decoded.txid === txid && Number.isSafeInteger(decoded.confirmations) && Number(decoded.confirmations) >= 0, 'Native TBC confirmation data is invalid.');
+		let blockHash: string | null = null; let blockHeight: number | null = null; let confirmations = 0;
+		if (Number(decoded.confirmations) > 0) {
+			match(typeof decoded.blockhash === 'string' && /^[0-9a-f]{64}$/.test(decoded.blockhash) && Number.isSafeInteger(decoded.blockheight) && Number(decoded.blockheight) >= 0, 'Native TBC block metadata is missing.');
+			const [block, latest] = await Promise.all([readBridgeSource(`${DEVNET_API_BASE}/blockByHeight/height/${decoded.blockheight}`, signal), readBridgeSource(API_URLS.transaction(txid), signal)]);
+			match(block.hash === decoded.blockhash && block.height === decoded.blockheight && latest.blockhash === block.hash && latest.blockheight === block.height
+				&& Number.isSafeInteger(block.confirmations) && Number.isSafeInteger(latest.confirmations), 'Native TBC payment block changed while validating.');
+			blockHash = decoded.blockhash; blockHeight = Number(decoded.blockheight);
+			confirmations = Math.max(0, Math.min(Number(decoded.confirmations), Number(block.confirmations), Number(latest.confirmations)));
+		}
+		return { txid, vout: matches[0].index, amountRaw: paid.toString(), feeRaw: fee.toString(), confirmations, blockHash, blockHeight, checkedAt: new Date() };
 	}
 }

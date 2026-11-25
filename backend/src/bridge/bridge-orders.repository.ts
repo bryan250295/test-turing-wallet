@@ -8,10 +8,12 @@ import { wrappedMetadata } from '../../../shared/src/config/bridgeRoutes';
 import { BridgeCustodyService } from './bridge-custody.service';
 
 export function publicOrder(row: OrderRow & { settlement?: { orderId: string; status: string } | null; deployment?: { quote: unknown } }): BridgeOrder {
+	const sourceAssetKind = row.deployment?.quote && typeof row.deployment.quote === 'object' && 'sourceAssetKind' in row.deployment.quote
+		&& row.deployment.quote.sourceAssetKind === 'native-tbc' ? 'native-tbc' as const : 'fungible-token' as const;
 	return {
 		id: row.id, deploymentId: row.deploymentId, status: row.status as BridgeOrder['status'], sourceNetwork: 'testnet', contractId: row.contractId,
-		decimals: row.decimals, symbol: row.symbol, ...wrappedMetadata(row.deployment?.quote), amountRaw: row.amountRaw.toFixed(0), sender: row.sender, recipient: row.recipient,
-		destinationChainId: 998, destinationContract: row.destinationContract, sourceConfirmationsRequired: row.sourceConfirmationsRequired,
+		sourceAssetKind, decimals: row.decimals, symbol: row.symbol, ...wrappedMetadata(row.deployment?.quote), amountRaw: row.amountRaw.toFixed(0), sender: row.sender, recipient: row.recipient,
+		destinationChainId: row.destinationChainId, destinationContract: row.destinationContract, sourceConfirmationsRequired: row.sourceConfirmationsRequired,
 		destinationConfirmationsRequired: row.destinationConfirmationsRequired, termsHash: row.termsHash, policyVersion: row.policyVersion,
 		custody: { allocated: true, encrypted: true, address: null, paymentEnabled: row.settlement?.status === 'awaiting_payment' },
 		depositTxHash: null, mintTxHash: null, paymentDeadline: null,
@@ -54,7 +56,7 @@ export class BridgeOrdersRepository {
 			const destinationContract = deployment.contractAddress!;
 			const termsHash = createHash('sha256').update(JSON.stringify([
 				'learning-bridge-order-v1', id, terms.identityId, terms.idempotencyKey, 'testnet', deployment.contractId,
-				deployment.decimals, terms.amountRaw, terms.sender, terms.recipient, 998, deployment.id, destinationContract,
+				deployment.decimals, terms.amountRaw, terms.sender, terms.recipient, deployment.chainId, deployment.id, destinationContract,
 				limits.sourceConfirmations, limits.destinationConfirmations, limits.policyVersion,
 			])).digest('hex');
 			const custody = await this.custody.allocate(terms.identityId, id, termsHash);
@@ -62,7 +64,7 @@ export class BridgeOrdersRepository {
 				id, identityId: terms.identityId, idempotencyKey: terms.idempotencyKey, deploymentId: deployment.id,
 				sourceNetwork: 'testnet', contractId: deployment.contractId, decimals: deployment.decimals, symbol: terms.sourceSymbol,
 				amountRaw: terms.amountRaw, sender: terms.sender, recipient: terms.recipient,
-				destinationChainId: 998, destinationContract,
+				destinationChainId: deployment.chainId, destinationContract,
 				sourceConfirmationsRequired: limits.sourceConfirmations, destinationConfirmationsRequired: limits.destinationConfirmations,
 				termsHash, policyVersion: limits.policyVersion,
 				targetCheckedBlockNumber: terms.targetBlockNumber, targetCheckedBlockHash: terms.targetBlockHash,

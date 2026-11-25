@@ -10,6 +10,7 @@ import { sizingPublicKey, sizingSignatures } from '../htlc/engine/recoveryFee';
 function requireValue(ok: unknown, message: string): asserts ok { if (!ok) throw new UnprocessableEntityException(message); }
 export type ReleaseInput = { txId: string; outputIndex: number; script: string; satoshis: number };
 export interface ReleaseMaterial { reserve: tbc.Transaction; proof: string; token: ReleaseInput; amountRaw: string; custodyAddress: string; recipient: string; publicKey: string }
+export interface FundingObservation { txid: string; outputIndex: number; satoshis: number; raw: string; confirmations: number }
 export function buildRelease(material: ReleaseMaterial, funding: ReleaseInput) {
 	const { reserve, token, amountRaw, custodyAddress, recipient, publicKey, proof } = material;
 	const balance = sdk.getFtBalanceFromTape(reserve.outputs[token.outputIndex + 1].script.toHex());
@@ -94,20 +95,43 @@ export class RedemptionReleaseEngine {
 			&& Number.isSafeInteger(first.confirmations) && Number.isSafeInteger(latest.confirmations) && Number.isSafeInteger(block.confirmations), 'The source transaction block changed.');
 		return { blockHash: first.blockhash, blockHeight: Number(first.blockheight), confirmations: Math.max(0, Math.min(Number(first.confirmations), Number(latest.confirmations), Number(block.confirmations))) };
 	}
-	async funding(material: ReleaseMaterial, txid: string, signal: AbortSignal) {
+	async observeFunding(address: string, txid: string, signal: AbortSignal): Promise<FundingObservation> {
 		const tx = await this.raw(txid, signal);
-		const script = tbc.Script.buildPublicKeyHashOut(material.custodyAddress).toHex();
+		const script = tbc.Script.buildPublicKeyHashOut(address).toHex();
 		const matches = tx.outputs.map((output, index) => ({ output, index })).filter(({ output }) => output.script.toHex() === script);
 		requireValue(matches.length === 1, 'Use a funding transaction with one native TBC output to this custody address.');
 		const { output, index } = matches[0];
 		requireValue(Number.isSafeInteger(output.satoshis) && output.satoshis > 0 && output.satoshis <= 1_000_000, 'Fee funding must be at most 1 native test TBC; excess funds are not automatically refunded.');
+		const confirmation = await this.confirmed(txid, signal, true);
+		return { txid, outputIndex: index, satoshis: output.satoshis, raw: tx.uncheckedSerialize(), confirmations: confirmation.confirmations };
+	}
+	async discoverFunding(address: string, requiredRaw: string, signal: AbortSignal): Promise<FundingObservation | null> {
+		requireValue(/^\d{1,16}$/.test(requiredRaw) && BigInt(requiredRaw) > 0n, 'Invalid native fee funding amount.');
+		const data = await readBridgeSource(API_URLS.nativeHistory(address, 0, 100), signal);
+		requireValue(Array.isArray(data.history_list) && data.history_list.length <= 100, 'The native fee history index is unavailable.');
+		const candidates = new Set<string>();
+		for (const item of data.history_list as unknown[]) {
+			if (!isObject(item) || typeof item.txid !== 'string' || !/^(?!0{64}$)[0-9a-f]{64}$/.test(item.txid)) continue;
+			const outputs = Array.isArray(item.vout) ? item.vout : Array.isArray(item.output) ? item.output : [];
+			const matches = outputs.filter((output: unknown) => isObject(output) && output.address === address && String(output.value ?? output.satoshis) === requiredRaw);
+			if (matches.length === 1) candidates.add(item.txid);
+		}
+		requireValue(candidates.size <= 1, 'More than one exact fee payment reached this unique address. Manual review is required; do not pay again.');
+		const txid = [...candidates][0];
+		if (!txid) return null;
+		const observed = await this.observeFunding(address, txid, signal);
+		requireValue(String(observed.satoshis) === requiredRaw, 'The discovered fee transaction differs from the frozen funding amount.');
+		return observed;
+	}
+	async funding(material: ReleaseMaterial, txid: string, signal: AbortSignal) {
+		const observed = await this.observeFunding(material.custodyAddress, txid, signal);
 		const confirmation = await this.confirmed(txid, signal);
 		requireValue(confirmation.confirmations >= 6, 'Wait for 6 confirmations of the native TBC fee funding, then recheck the same TXID.');
-		await this.nativeUnspent(material.custodyAddress, txid, index, output.satoshis, signal);
-		const funding: ReleaseInput = { txId: txid, outputIndex: index, script, satoshis: output.satoshis };
+		await this.nativeUnspent(material.custodyAddress, txid, observed.outputIndex, observed.satoshis, signal);
+		const funding: ReleaseInput = { txId: txid, outputIndex: observed.outputIndex, script: tbc.Script.buildPublicKeyHashOut(material.custodyAddress).toHex(), satoshis: observed.satoshis };
 		const plan = buildRelease(material, funding);
-		requireValue(output.satoshis >= plan.fundingRequiredRaw, 'This funding output is insufficient for the release proof and native change budget. Retain its TXID for review.');
-		return { ...plan, funding, fundingRaw: tx.uncheckedSerialize() };
+		requireValue(observed.satoshis >= plan.fundingRequiredRaw, 'This funding output is insufficient for the release proof and native change budget. Retain its TXID for review.');
+		return { ...plan, funding, fundingRaw: observed.raw, confirmations: confirmation.confirmations };
 	}
 	assertPlan(unsignedRaw: string, expected: { inputs: ReleaseInput[]; recipient: string; amountRaw: string; custodyAddress: string; feeRaw: bigint; reserveRaw: string }) {
 		const tx = new tbc.Transaction(unsignedRaw); const reserve = new tbc.Transaction(expected.reserveRaw);

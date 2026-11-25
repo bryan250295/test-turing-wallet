@@ -11,10 +11,11 @@ const date = (value: unknown) => typeof value === 'string' && Number.isFinite(Da
 function order(value: unknown): BridgeOrder {
 	if (!isObject(value) || !uuid(value.id) || !uuid(value.deploymentId)
 		|| !['prepared', 'cancelled'].includes(String(value.status)) || value.sourceNetwork !== 'testnet'
+		|| !['fungible-token', 'native-tbc'].includes(String(value.sourceAssetKind))
 		|| typeof value.contractId !== 'string' || !/^(?!0{64}$)[0-9a-f]{64}$/.test(value.contractId) || typeof value.decimals !== 'number' || !Number.isInteger(value.decimals) || value.decimals < 0 || value.decimals > 255 || typeof value.symbol !== 'string' || !value.symbol || value.symbol.length > 100 || !validWrappedName(value.wrappedName) || !validWrappedSymbol(value.wrappedSymbol)
 		|| typeof value.amountRaw !== 'string' || !/^[1-9]\d{0,19}$/.test(value.amountRaw) || BigInt(value.amountRaw) > 18446744073709551615n
 		|| typeof value.sender !== 'string' || !/^1[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(value.sender)
-		|| !address(value.recipient) || !address(value.destinationContract) || value.destinationChainId !== 998
+		|| !address(value.recipient) || !address(value.destinationContract) || ![998, 11_155_111].includes(Number(value.destinationChainId))
 		|| value.sourceConfirmationsRequired !== rules.sourceConfirmations || value.destinationConfirmationsRequired !== rules.destinationConfirmations
 		|| typeof value.termsHash !== 'string' || !/^[0-9a-f]{64}$/.test(value.termsHash) || value.policyVersion !== rules.policyVersion
 		|| !isObject(value.custody) || value.custody.allocated !== true || value.custody.encrypted !== true || value.custody.address !== null || typeof value.custody.paymentEnabled !== 'boolean'
@@ -31,7 +32,7 @@ export async function loadBridgeOrderSetup(signal: AbortSignal): Promise<BridgeO
 	if (!isObject(value) || typeof value.custodyReady !== 'boolean' || value.paymentEnabled !== value.custodyReady
 		|| value.maxOpenOrders !== rules.maxOpenOrders || typeof value.message !== 'string'
 		|| !Array.isArray(value.deployments) || value.deployments.length > 200
-		|| value.deployments.some((row: unknown) => !isObject(row) || !uuid(row.id) || !address(row.contractAddress) || !address(row.deployer) || !date(row.verifiedAt) || typeof row.contractId !== 'string' || !/^[0-9a-f]{64}$/.test(row.contractId) || typeof row.decimals !== 'number' || !Number.isInteger(row.decimals) || row.decimals < 0 || row.decimals > 255 || typeof row.sourceSymbol !== 'string' || !row.sourceSymbol || !validWrappedName(row.wrappedName) || !validWrappedSymbol(row.wrappedSymbol))) {
+		|| value.deployments.some((row: unknown) => !isObject(row) || !uuid(row.id) || !address(row.contractAddress) || !address(row.deployer) || !date(row.verifiedAt) || typeof row.contractId !== 'string' || !/^[0-9a-f]{64}$/.test(row.contractId) || typeof row.decimals !== 'number' || !Number.isInteger(row.decimals) || row.decimals < 0 || row.decimals > 255 || typeof row.sourceSymbol !== 'string' || !row.sourceSymbol || !validWrappedName(row.wrappedName) || !validWrappedSymbol(row.wrappedSymbol) || ![998, 11_155_111].includes(Number(row.chainId)) || !['legacy-ft', 'native-tbc'].includes(String(row.protocol)) || !['fungible-token', 'native-tbc'].includes(String(row.sourceAssetKind)))) {
 		throw new Error('The bridge order setup is unavailable. Refresh saved orders.');
 	}
 	return value as unknown as BridgeOrderSetup;

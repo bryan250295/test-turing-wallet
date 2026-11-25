@@ -9,7 +9,7 @@ import { wrappedMetadata } from '../../../shared/src/config/bridgeRoutes';
 const callSelect = { id: true, kind: true, status: true, txHash: true, confirmations: true, actualFeeWei: true, updatedAt: true } as const;
 const select = {
 	id: true, deploymentId: true, status: true, amountRaw: true, recipient: true, createdAt: true,
-	destinationContract: true, contractId: true, decimals: true, symbol: true,
+	destinationChainId: true, destinationContract: true, contractId: true, decimals: true, symbol: true,
 	sourceConfirmationsRequired: true, destinationConfirmationsRequired: true,
 	settlement: { select: { status: true, checkedAt: true, lastError: true,
 		deposit: { select: { txid: true, vout: true, amountRaw: true, feeRaw: true, confirmations: true, blockHash: true, checkedAt: true } },
@@ -134,7 +134,7 @@ export class BridgeReconciliationService {
 			fees.set(key, item.actualFeeRaw);
 			if (item.network === 'tbc') tbc += BigInt(item.actualFeeRaw); else hype += BigInt(item.actualFeeRaw);
 		}
-		return { deploymentId: first.deploymentId, wrappedToken: first.destinationContract, contractId: first.contractId, decimals: first.decimals, symbol: first.symbol,
+		return { deploymentId: first.deploymentId, destinationChainId: first.destinationChainId, wrappedToken: first.destinationContract, contractId: first.contractId, decimals: first.decimals, symbol: first.symbol,
 			status: issues.size ? 'needs_review' : pending ? 'pending' : deposited === 0n && minted === 0n ? 'empty' : 'balanced', issues: [...issues],
 			totals: { depositedRaw: deposited.toString(), mintedRaw: minted.toString(), lockedRaw: locked.toString(), returnedRaw: returned.toString(),
 				reserveRaw: reserve.toString(), circulatingRaw: circulating.toString(), differenceRaw: difference.toString(), tbcFeesRaw: tbc.toString(), hypeFeesWei: hype.toString() }, setupTransactions, orders };

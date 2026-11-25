@@ -9,11 +9,15 @@ import { formatDateTime } from '../../utils/dateTime';
 import BridgeSourcePayment from './BridgeSourcePayment';
 import RedemptionEscrowPreview from './RedemptionEscrowPreview';
 import { BridgeSteps, AttemptHistory, bridgeStatus } from './BridgeFlow';
+import SepoliaBurnReturn from './SepoliaBurnReturn';
 
-interface Props { order: BridgeOrder; session: WalletSession; evm: ReturnType<typeof useHyperEvmWallet>; active: boolean; onChanged: () => void; returnOnly: boolean; onReturn: () => void }
+interface Props { order: BridgeOrder; session: WalletSession; evm: ReturnType<typeof useHyperEvmWallet>; active: boolean; onChanged: () => void; returnOnly: boolean; onReturn: () => void; allowReturn?: boolean }
 const labels = { awaiting_payment: 'Awaiting token payment', confirming: 'Confirming source deposit', ready_to_mint: 'Deposit verified · ready for wallet settlement', mint_pending: 'Mint wallet transaction pending', completed: 'Completed · wrapped tokens received', needs_review: 'Reconciliation required' };
-export default function BridgeSettlement({ order, session, evm, active, onChanged, returnOnly, onReturn }: Props) {
-	const flow = useBridgeSettlement(order, session, evm, active, onChanged);
+export default function BridgeSettlement({ order, session, evm, active, onChanged, returnOnly, onReturn, allowReturn = true }: Props) {
+	const sepolia = order.destinationChainId === 11_155_111;
+	const flow = useBridgeSettlement(order, session, evm, active && !(returnOnly && sepolia), onChanged);
+	const destinationName = sepolia ? 'Ethereum Sepolia' : 'HyperEVM Testnet';
+	const destinationFeeSymbol = sepolia ? 'ETH' : 'HYPE';
 	const [acknowledged, setAcknowledged] = useState(false);
 	const [txid, setTxid] = useState(''); const [hashes, setHashes] = useState<Record<string, string>>({});
 	const [reviewed, setReviewed] = useState<Record<string, boolean>>({}); const [now, setNow] = useState(Date.now());
@@ -35,13 +39,14 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
         : !evm.detected ? 'MetaMask was not detected. Enable the extension and reload this page.'
         : evm.error ? `MetaMask could not be read: ${evm.error}`
         : !evm.address ? 'Connect or unlock MetaMask, then refresh its connection.'
-        : !evm.networkIsTestnet ? 'Switch MetaMask to HyperEVM Testnet (998).'
+        : !evm.networkIsTestnet ? `Switch MetaMask to ${destinationName} (${order.destinationChainId}).`
         : '';
     const canWallet = !walletBlockReason;
     const walletReadBusy = evm.loading || !!evm.pending;
     const showWalletRecovery = !flow.loading && !flow.action && !session.busy && !evm.pending && !evm.loading && (!evm.address || !evm.networkIsTestnet || !!evm.error);
 	const activeCall = value?.attempts.some((row) => ['quoted', 'awaiting_wallet', 'submitted', 'confirming'].includes(row.status));
 	function callTitle(row: BridgeCallAttempt) { return row.kind === 'unpause' ? 'Activate token' : `Receive ${order.wrappedSymbol}`; }
+	if (returnOnly && sepolia) return <SepoliaBurnReturn order={order} session={session} evm={evm} active={active} />;
 	if (returnOnly) return <section aria-label="Return wrapped tokens">
 		{flow.loading && <p role="status">Loading your return…</p>}
 		{flow.error && <p className="result error" role="alert">{flow.error}</p>}
@@ -50,7 +55,7 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 	return <section className="htlc-section" aria-label="Order payment and mint" aria-busy={busy}>
 		<header className="history-titlebar"><div><h4>{value ? labels[value.status] : 'Payment and mint'}</h4><p className="history-note">Background progress · {flow.realtime === 'connected' ? 'live' : flow.realtime === 'off' ? 'offline' : 'reconnecting…'}</p></div><button type="button" className="history-secondary" disabled={!flow.enabled || busy} onClick={flow.refresh}>Refresh saved progress</button></header>
 		<BridgeSteps steps={[`Pay ${order.symbol}`, 'Wait for deposit', 'Confirm mint', `Receive ${order.wrappedSymbol}`]} current={!value?.deposit ? 0 : value.status === 'confirming' ? 1 : value.status === 'completed' ? 3 : 2} complete={value?.status === 'completed'} />
-		{value && value.status !== 'completed' && <p className="history-note">The backend checks TBC about once per minute and submitted HyperEVM transactions about every 12 seconds. You may close this page; saved progress resumes after restart.</p>}
+		{value && value.status !== 'completed' && <p className="history-note">The backend checks TBC about once per minute and submitted {destinationName} transactions about every 12 seconds. You may close this page; saved progress resumes after restart.</p>}
 		{flow.loading && <p role="status">Loading saved progress…</p>}
 		{!value && !flow.loading && !flow.error && <>
 			<p>Open payment details, then send the exact source token amount to the address shown. Funds are held by the bridge until settlement; there is no automatic refund.</p>
@@ -64,14 +69,14 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 				<div><dt>Exact payment · TBC Testnet</dt><dd>{amount} {order.symbol}</dd></div>
 				<div><dt>Send from this TBC wallet</dt><dd><code>{order.sender}</code></dd></div>
 				<div><dt>Send {order.symbol} to this address</dt><dd><code>{value.custodyAddress}</code></dd></div>
-				<div><dt>{order.symbol} token contract</dt><dd><code>{order.contractId}</code></dd></div>
-				<div><dt>{order.wrappedSymbol} receiving wallet · HyperEVM Testnet (998)</dt><dd><code>{order.recipient}</code></dd></div>
+				<div><dt>{sepolia ? 'Source asset binding' : `${order.symbol} token contract`}</dt><dd>{sepolia && order.sourceAssetKind === 'native-tbc' ? 'Native TBC' : <code>{order.contractId}</code>}</dd></div>
+				<div><dt>{order.wrappedSymbol} receiving wallet · {destinationName} ({order.destinationChainId})</dt><dd><code>{order.recipient}</code></dd></div>
 			</dl></details>
 			{!value.deposit && <>
 				<BridgeSourcePayment key={flow.context} order={order} settlement={value} session={session} enabled={active && flow.enabled} busy={busy} error={flow.error} verify={txid => flow.deposit(txid)} />
 				<details className="bridge-flow-history"><summary>Already paid or need recovery?</summary>
 				<p>If you already sent this payment, paste its original TXID below. Do not send another payment. If the wallet button is unavailable and you have not paid, use the exact token, amount and address in Payment amount and addresses, then attach the TXID here.</p>
-				<p className="history-note">Do not send native TBC as the token payment. Underpayments, overpayments, a different FT, or multiple payment groups require review. Once payment details are opened, this order cannot be closed as an unused preparation.</p>
+				<p className="history-note">{sepolia && order.sourceAssetKind === 'native-tbc' ? 'Send native TBC only. The backend requires the exact reviewed output and change back to the same source wallet.' : 'Send the selected TBC token, not native TBC. Underpayments, overpayments, a different FT, or multiple payment groups require review.'} Once payment details are opened, this order cannot be closed as an unused preparation.</p>
 				<label htmlFor={`deposit-${order.id}`}>TBC transfer TXID</label><input id={`deposit-${order.id}`} type="text" spellCheck={false} autoComplete="off" placeholder="64-character transaction ID from Turing Wallet" value={txid} disabled={busy} onChange={(event) => setTxid(event.target.value)} />
 				<button type="button" disabled={busy || !/^[0-9a-f]{64}$/i.test(txid.trim())} onClick={() => { void flow.deposit(txid); }}>Verify source deposit</button>
 				</details>
@@ -89,27 +94,27 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
                 {showWalletRecovery && <div className="htlc-actions">
                     <button type="button" className="history-secondary" disabled={walletReadBusy} onClick={evm.refresh}>Refresh MetaMask connection</button>
                     {(!evm.address || !!evm.error) && <button type="button" className="history-secondary" disabled={walletReadBusy} onClick={() => { void evm.connect(); }}>Reconnect MetaMask</button>}
-                    {evm.address && !evm.networkIsTestnet && <button type="button" className="history-secondary" disabled={walletReadBusy} onClick={() => { void evm.switchNetwork(); }}>Switch to HyperEVM Testnet</button>}
+					{evm.address && !evm.networkIsTestnet && <button type="button" className="history-secondary" disabled={walletReadBusy} onClick={() => { void evm.switchNetwork(); }}>Switch to {destinationName}</button>}
                 </div>}
 			</div>}
 			{<AttemptHistory rows={value.attempts} render={(row) => <article className="bridge-deployment-record" key={row.id}>
 				<h4>{callTitle(row)} · {bridgeStatus(row.status)}</h4>
 				<p>From <code>{row.transaction.from}</code> → Contract <code>{row.transaction.to}</code></p>
-				<p>Estimated fee {formatHypeBalance(row.estimatedFeeWei)} HYPE · Budget with gas margin {formatHypeBalance(row.budgetWei)} HYPE</p>
+				<p>Estimated fee {formatHypeBalance(row.estimatedFeeWei)} {destinationFeeSymbol} · Budget with gas margin {formatHypeBalance(row.budgetWei)} {destinationFeeSymbol}</p>
 				{row.status === 'quoted' && <>
 					<p>Confirm before {formatDateTime(row.expiresAt)} MYT.</p>
 					{row.kind === 'mint' && <p>Mint {amount} {order.wrappedSymbol} to <code>{order.recipient}</code> for this order.</p>}
-					<label className="bridge-role-choice"><input type="checkbox" checked={!!reviewed[row.id]} disabled={busy} onChange={(event) => setReviewed((old) => ({ ...old, [row.id]: event.target.checked }))} /> I reviewed this action, address, token amount and HYPE budget.</label>
+					<label className="bridge-role-choice"><input type="checkbox" checked={!!reviewed[row.id]} disabled={busy} onChange={(event) => setReviewed((old) => ({ ...old, [row.id]: event.target.checked }))} /> I reviewed this action, address, token amount and {destinationFeeSymbol} budget.</label>
 					<div className="htlc-actions"><button type="button" disabled={!canWallet || !reviewed[row.id] || now >= Date.parse(row.expiresAt) || evm.address?.toLowerCase() !== row.transaction.from} onClick={() => { void flow.send(row); }}>Confirm {row.kind} in MetaMask</button><button type="button" className="history-secondary" disabled={busy} onClick={() => { void flow.cancel(row); }}>Discard unused quote</button></div>
 				</>}
 				{row.status === 'awaiting_wallet' && !row.txHash && <>
 					<p>Open MetaMask and finish the pending request. If it was already sent, paste its transaction hash below. Do not send again.</p>
-					<label htmlFor={`call-hash-${row.id}`}>Recover HyperEVM transaction hash</label><input id={`call-hash-${row.id}`} type="text" autoComplete="off" spellCheck={false} value={hashes[row.id] ?? ''} disabled={busy} onChange={(event) => setHashes((old) => ({ ...old, [row.id]: event.target.value }))} />
+					<label htmlFor={`call-hash-${row.id}`}>Recover {destinationName} transaction hash</label><input id={`call-hash-${row.id}`} type="text" autoComplete="off" spellCheck={false} value={hashes[row.id] ?? ''} disabled={busy} onChange={(event) => setHashes((old) => ({ ...old, [row.id]: event.target.value }))} />
 					<button type="button" disabled={busy || !/^0x[0-9a-f]{64}$/i.test(hashes[row.id]?.trim() ?? '')} onClick={() => { void flow.attach(row, hashes[row.id]); }}>Save Activity hash</button>
 					<details><summary>No transaction was sent?</summary><p>Check MetaMask Activity first. Discarding this local request cannot cancel a pending wallet or chain transaction. If a transaction exists, recover its hash above.</p><label className="bridge-role-choice"><input type="checkbox" checked={!!notSent[row.id]} disabled={busy} onChange={(event) => setNotSent((old) => ({ ...old, [row.id]: event.target.checked }))} /> I checked Activity and confirmed this request was rejected or never sent.</label><button type="button" className="history-secondary" disabled={busy || !notSent[row.id]} onClick={() => { void flow.discardUnsent(row); }}>Discard unsent wallet request</button></details>
 				</>}
 				{row.txHash && <>
-					<p>HyperEVM transaction: <code>{row.txHash}</code></p><p>Confirmations: {row.confirmations} / {order.destinationConfirmationsRequired} required{row.actualFeeWei !== null ? ` · Actual fee ${formatHypeBalance(row.actualFeeWei)} HYPE` : ''}</p>
+					<p>{destinationName} transaction: <code>{row.txHash}</code></p><p>Confirmations: {row.confirmations} / {order.destinationConfirmationsRequired} required{row.actualFeeWei !== null ? ` · Actual fee ${formatHypeBalance(row.actualFeeWei)} ${destinationFeeSymbol}` : ''}</p>
 					{value.status !== 'completed' && <p role="status">Receipt and destination confirmations are checked automatically.</p>}
 				</>}
 				{row.lastError && <p className="result error" role="alert">{row.lastError}</p>}
@@ -118,11 +123,11 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 				<p>{amount} {order.wrappedSymbol} was minted to <code>{order.recipient}</code>. Both chain confirmation thresholds were verified.</p>
 				<button type="button" disabled={!canWallet || flow.tokenImport.status === 'added' || evm.address?.toLowerCase() !== order.recipient.toLowerCase()} onClick={() => { void flow.importToken(); }}>{flow.action === 'import' ? 'Confirm import in MetaMask…' : flow.tokenImport.status === 'added' ? `${order.wrappedSymbol} added to MetaMask` : `Add ${order.wrappedSymbol} to MetaMask`}</button>
 				<p>Add {order.wrappedSymbol} to view your balance in MetaMask. No fee is charged.</p>
-				{evm.address?.toLowerCase() !== order.recipient.toLowerCase() && <p>Select the receiving account on HyperEVM Testnet to add {order.wrappedSymbol}.</p>}
+				{evm.address?.toLowerCase() !== order.recipient.toLowerCase() && <p>Select the receiving account on {destinationName} to add {order.wrappedSymbol}.</p>}
 				{flow.tokenImport.message && <p role={flow.tokenImport.status === 'error' ? 'alert' : 'status'}>{flow.tokenImport.message}</p>}
-				<p>Select the receiving account on HyperEVM Testnet to view {order.wrappedSymbol}.</p>
+				<p>Select the receiving account on {destinationName} to view {order.wrappedSymbol}.</p>
 			</div>}
-			{value.status === 'completed' && <button type="button" className="history-secondary" onClick={onReturn}>Return {order.wrappedSymbol} → Receive {order.symbol}</button>}
+			{value.status === 'completed' && allowReturn && <button type="button" className="history-secondary" onClick={onReturn}>Return {order.wrappedSymbol} → Receive {order.symbol}</button>}
 			{value.lastError && <p className="result error" role="alert">{value.lastError}</p>}
 		</>}
 		{flow.action && <p role="status">{flow.action === 'import' ? 'Open MetaMask to approve or cancel token import.' : flow.action.startsWith('send:') ? 'Checking the order / waiting for MetaMask. Finish the current prompt; do not send again.' : 'Updating saved progress…'}</p>}

@@ -9,8 +9,9 @@ const include = { custody: true, deployment: true, settlement: { include: { depo
 export type SettlementOrder = Prisma.BridgeOrderGetPayload<{ include: typeof include }>;
 export const activeCallStates = ['quoted', 'awaiting_wallet', 'submitted', 'confirming'];
 export function publicAttempt(row: BridgeCallAttempt): PublicAttempt {
+	const chainId = row.chainId === 11_155_111 ? '0xaa36a7' : '0x3e6';
 	return { id: row.id, kind: row.kind as PublicAttempt['kind'], status: row.status as PublicAttempt['status'],
-		transaction: { from: row.fromAddress, to: row.toAddress, chainId: '0x3e6', value: '0x0', data: row.data, nonce: `0x${row.nonce.toString(16)}`, gas: `0x${row.gasLimit.toString(16)}`, gasPrice: `0x${BigInt(row.gasPriceWei.toFixed(0)).toString(16)}` },
+		transaction: { from: row.fromAddress, to: row.toAddress, chainId, value: '0x0', data: row.data, nonce: `0x${row.nonce.toString(16)}`, gas: `0x${row.gasLimit.toString(16)}`, gasPrice: `0x${BigInt(row.gasPriceWei.toFixed(0)).toString(16)}` },
 		estimatedFeeWei: row.estimatedFeeWei.toFixed(0), budgetWei: row.budgetWei.toFixed(0), expiresAt: row.expiresAt.toISOString(), createdAt: row.createdAt.toISOString(),
 		txHash: row.txHash, confirmations: row.confirmations, actualFeeWei: row.actualFeeWei?.toFixed(0) ?? null, lastError: row.lastError };
 }

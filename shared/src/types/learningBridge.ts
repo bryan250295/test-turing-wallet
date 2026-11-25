@@ -178,6 +178,7 @@ export interface BridgeOrder {
 	status: 'prepared' | 'cancelled';
 	sourceNetwork: 'testnet';
 	contractId: string;
+	sourceAssetKind: 'fungible-token' | 'native-tbc';
 	decimals: number;
 	symbol: string;
 	wrappedName: string;
@@ -185,7 +186,7 @@ export interface BridgeOrder {
 	amountRaw: string;
 	sender: string;
 	recipient: string;
-	destinationChainId: 998;
+	destinationChainId: number;
 	destinationContract: string;
 	sourceConfirmationsRequired: number;
 	destinationConfirmationsRequired: number;
@@ -203,7 +204,7 @@ export interface BridgeOrder {
 
 export type BridgeSettlementStatus = 'awaiting_payment' | 'confirming' | 'ready_to_mint' | 'mint_pending' | 'completed' | 'needs_review';
 export type BridgeCallKind = 'unpause' | 'mint';
-export interface BridgeCallTransaction extends BridgeDeploymentTransaction { to: string }
+export interface BridgeCallTransaction extends Omit<BridgeDeploymentTransaction, 'chainId'> { to: string; chainId: '0x3e6' | '0xaa36a7' }
 export interface Phase3TestnetRelayPlan {
 	schema: 'learningmaterials/phase3-testnet-relay-plan/v1';
 	createdAt: string;
@@ -239,7 +240,7 @@ export interface BridgeOrderSetup {
 	paymentEnabled: boolean;
 	message: string;
 	maxOpenOrders: number;
-	deployments: { contractId: string; decimals: number; sourceSymbol: string; wrappedName: string; wrappedSymbol: string; id: string; contractAddress: string; deployer: string; verifiedAt: string; governanceMode?: 'multisig-relayer-v1.5' }[];
+	deployments: { contractId: string; decimals: number; sourceSymbol: string; wrappedName: string; wrappedSymbol: string; id: string; contractAddress: string; deployer: string; verifiedAt: string; chainId: number; protocol: 'legacy-ft' | 'native-tbc'; sourceAssetKind: 'fungible-token' | 'native-tbc'; governanceMode?: 'multisig-relayer-v1.5' | 'ethereum-burn-multisig-v1' }[];
 }
 
 export interface RedemptionEscrowPreview {
@@ -346,4 +347,20 @@ export interface RedemptionWalletState { redemptionId: string; paused: boolean; 
 export interface BridgeSourcePayment {
  orderId: string; attemptId: string; status: 'awaiting_wallet' | 'submitted' | 'cancelled'; txid: string | null;
  sender: string; contractId: string; amountRaw: string; decimals: number; custodyAddress: string;
+}
+
+export type SepoliaBurnStatus = 'awaiting_fee' | 'prepared' | 'burn_pending' | 'burn_confirming' | 'burn_verified' | 'release_signed' | 'release_broadcasting' | 'release_submitted' | 'release_confirming' | 'completed' | 'needs_review';
+export interface SepoliaBurnCall {
+	id: string; status: 'quoted' | 'awaiting_wallet' | 'submitted' | 'confirming' | 'verified' | 'reverted' | 'invalid' | 'cancelled';
+	transaction: BridgeCallTransaction; estimatedFeeWei: string; budgetWei: string; expiresAt: string; createdAt: string;
+	txHash: string | null; logIndex: number | null; confirmations: number; actualFeeWei: string | null; lastError: string | null;
+}
+export interface SepoliaBurnRedemption {
+	id: string; orderId: string; status: SepoliaBurnStatus; redemptionKey: string; holder: string; tbcRecipient: string;
+	sourceAssetKind: 'native-tbc' | 'fungible-token'; amountRaw: string; payoutRaw: string | null; feeRaw: string | null;
+	releasePlanHash: string | null; fundingAddress: string | null; fundingRequiredRaw: string | null;
+	feeQuote: { feeRaw: string; fundingRequiredRaw: string; estimatedBytes: number; feeRateSatPerKb: 80; marginPercent: 20; nativeDecimals: 6 } | null;
+	fundingTxid: string | null; fundingConfirmations: number; releaseTxid: string | null;
+	releaseConfirmations: number; releaseBlockHash: string | null; checkedAt: string | null; lastError: string | null; createdAt: string;
+	calls: SepoliaBurnCall[];
 }

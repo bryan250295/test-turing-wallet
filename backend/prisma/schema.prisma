@@ -20,6 +20,7 @@ model WalletIdentity {
 	bridgeOrders BridgeOrder[]
 	escrowDeployments RedemptionEscrowDeployment[]
 	redemptionOrders RedemptionOrder[]
+	sepoliaRedemptions SepoliaBurnRedemption[]
 	proofBridgeRoutes ProofBridgeRoute[]
 	proofBridgeTransfers ProofBridgeTransfer[]
 	@@unique([chain, network, address])
@@ -308,9 +309,82 @@ model BridgeOrder {
 	settlement                      BridgeSettlement?
 	escrowDeployments               RedemptionEscrowDeployment[]
 	redemptionOrders                RedemptionOrder[]
+	sepoliaRedemption               SepoliaBurnRedemption?
 	@@unique([identityId, idempotencyKey])
 	@@index([identityId, createdAt])
 	@@map("bridge_orders")
+}
+
+// Full-amount return for Ethereum Sepolia burn routes. Native TBC can pay its
+// fee from the reserved output. FT reserves require a separate confirmed
+// native-TBC fee input before the irreversible Sepolia burn is enabled.
+model SepoliaBurnRedemption {
+	id                  String @id @default(uuid()) @db.Uuid
+	orderId             String @unique @db.Uuid
+	order               BridgeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+	identityId          String @db.Uuid
+	identity            WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+	status              String @default("prepared") @db.VarChar(32)
+	redemptionKey       String @unique @db.VarChar(66)
+	holder              String @db.VarChar(42)
+	tbcRecipient        String @db.VarChar(35)
+	amountRaw           Decimal @db.Decimal(78, 0)
+	sourceAssetKind     String @default("native-tbc") @db.VarChar(24)
+	payoutRaw           BigInt?
+	feeRaw              BigInt?
+	releaseUnsignedRaw  String?
+	releasePlanHash     String? @db.Char(64)
+	fundingAddress      String? @db.VarChar(100)
+	fundingRequiredRaw  BigInt?
+	feeQuote            Json?
+	fundingTxid         String? @db.Char(64)
+	fundingConfirmations Int @default(0)
+	fundingVout         Int?
+	fundingValueRaw     BigInt?
+	fundingRaw          String?
+	reserveRaw          String?
+	releaseInputs       Json?
+	proof               String?
+	releaseRaw          String?
+	releaseTxid         String? @unique @db.Char(64)
+	releaseConfirmations Int @default(0)
+	releaseBlockHash    String? @db.Char(64)
+	releaseBlockHeight  Int?
+	checkedAt           DateTime? @db.Timestamptz(3)
+	lastError           String?
+	createdAt           DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+	calls               SepoliaBurnCall[]
+	@@index([identityId, createdAt])
+	@@map("sepolia_burn_redemptions")
+}
+
+model SepoliaBurnCall {
+	id                 String @id @default(uuid()) @db.Uuid
+	redemptionId       String @db.Uuid
+	redemption         SepoliaBurnRedemption @relation(fields: [redemptionId], references: [id], onDelete: Restrict)
+	status             String @default("quoted") @db.VarChar(24)
+	chainId            Int @default(11155111)
+	fromAddress        String @db.VarChar(42)
+	toAddress          String @db.VarChar(42)
+	data               String
+	nonce              BigInt
+	gasLimit           BigInt
+	gasPriceWei        Decimal @db.Decimal(78, 0)
+	estimatedFeeWei    Decimal @db.Decimal(78, 0)
+	budgetWei          Decimal @db.Decimal(78, 0)
+	txHash             String? @unique @db.VarChar(66)
+	logIndex           Int?
+	confirmations      Int @default(0)
+	receiptBlockHash   String? @db.VarChar(66)
+	receiptBlockNumber BigInt?
+	actualFeeWei       Decimal? @db.Decimal(78, 0)
+	lastError          String?
+	expiresAt          DateTime @db.Timestamptz(3)
+	createdAt          DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+	@@index([redemptionId, createdAt])
+	@@map("sepolia_burn_calls")
 }
 
 model BridgeCustody {

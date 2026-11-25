@@ -95,7 +95,7 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 	async function importToken() {
 		if (!live() || working.current || value?.status !== 'completed' || visibleImport.status === 'added') return;
 		if (!evm.networkIsTestnet || evm.address?.toLowerCase() !== order.recipient.toLowerCase()) {
-			setTokenImport({ context, status: 'error', message: 'Select the receiving MetaMask account on HyperEVM Testnet to add wrapped token.' });
+			setTokenImport({ context, status: 'error', message: `Select the receiving MetaMask account on ${evm.targetNetwork.chainName} to add wrapped token.` });
 			return;
 		}
 		working.current = true; setAction('import');
@@ -124,7 +124,7 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 		quote: (kind: BridgeCallKind | 'next') => run(`quote:${kind}`, async (signal) => {
 			if (!value) return;
 			const currentWallet = await evm.readCurrent();
-			if (!live() || currentWallet.chainId !== 998 || !currentWallet.address || currentWallet.address.toLowerCase() !== evm.address?.toLowerCase()) throw new Error('Reconnect the expected MetaMask role account on Testnet.');
+			if (!live() || currentWallet.chainId !== order.destinationChainId || !currentWallet.address || currentWallet.address.toLowerCase() !== evm.address?.toLowerCase()) throw new Error(`Reconnect the expected MetaMask role account on chain ${order.destinationChainId}.`);
 			return quoteCall(order, value, kind, currentWallet.address, signal);
 		}),
 		cancel: (row: BridgeCallAttempt) => run(`cancel:${row.id}`, async () => { if (value) await cancelCall(order, value, row); }),

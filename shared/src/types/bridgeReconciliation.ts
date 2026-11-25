@@ -46,6 +46,7 @@ export interface ReconciliationTotals {
 }
 export interface ReconciliationRoute {
 	deploymentId: string;
+	destinationChainId: number;
 	wrappedToken: string;
 	contractId: string;
 	decimals: number;

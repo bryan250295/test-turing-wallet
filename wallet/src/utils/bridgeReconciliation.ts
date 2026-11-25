@@ -18,6 +18,14 @@ export interface ReconciliationRequest {
 	transactions: ReconciliationTransaction[];
 }
 export const requestStatusLabels: Record<RequestStatus, string> = { completed: 'Completed', pending: 'In progress', review: 'Needs review', closed: 'Closed' };
+export function routeDestinationName(route: ReconciliationRoute) {
+	return route.destinationChainId === 11_155_111 ? 'Ethereum Sepolia' : 'HyperEVM Testnet';
+}
+export function routeDirectionLabel(route: ReconciliationRoute, direction: 'forward' | 'return') {
+	const destination = routeDestinationName(route).replace(' Testnet', '');
+	return direction === 'forward' ? `TBC → ${destination}` : `${destination} → TBC`;
+}
+export function routeFeeSymbol(route: ReconciliationRoute) { return route.destinationChainId === 11_155_111 ? 'ETH' : 'HYPE'; }
 export function requestCategory(status: string): RequestStatus {
 	if (['completed', 'verified'].includes(status)) return 'completed';
 	if (['cancelled', 'closed'].includes(status)) return 'closed';

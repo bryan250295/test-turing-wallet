@@ -11,6 +11,7 @@ import { PrismaService } from '../database/prisma.service';
 import { BridgeCallVerifier } from './bridge-call.verifier';
 import type { BridgeCallKind } from '../../../shared/src/types/learningBridge';
 import { BridgeProgressService } from './bridge-progress.service';
+import { ETHEREUM_SEPOLIA_CHAIN_ID } from './ethereum-sepolia-rpc';
 
 @Injectable()
 export class BridgeSettlementService {
@@ -50,8 +51,12 @@ export class BridgeSettlementService {
 			if (order.settlement) return publicSettlement(order);
 			if (order.status !== 'prepared' || !order.custody) throw new ConflictException('This order is closed or its custody record is missing.');
 			await this.custody.assertRecoverable(order, order.custody);
-			const asset = await this.asset.verify(signal, order.contractId);
-			await this.deposits.assertAvailable(asset, signal);
+			const nativeSepolia = order.destinationChainId === ETHEREUM_SEPOLIA_CHAIN_ID && order.deployment.quote
+				&& typeof order.deployment.quote === 'object' && 'sourceAssetKind' in order.deployment.quote && order.deployment.quote.sourceAssetKind === 'native-tbc';
+			if (!nativeSepolia) {
+				const asset = await this.asset.verify(signal, order.contractId);
+				await this.deposits.assertAvailable(asset, signal);
+			}
 			await this.target.check(order.deployment, response); signal.throwIfAborted();
 			await this.repository.open(order);
 			return publicSettlement(await this.repository.owned(id, principal.id));
