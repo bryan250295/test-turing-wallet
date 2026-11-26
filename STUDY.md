@@ -413,7 +413,7 @@ https://faucet.zalalena.com/hyperliquid
 
 **当前安排（2026-10-30，自选源代币与包装元数据）：选择并验证 TBC Testnet token → 选择 HyperEVM Testnet → 复用当前 TBC 身份的包装合约或设置新 name／symbol → 明确钱包确认并继续付款／mint。新增独立 BridgeWrappedFT artifact，旧 MT／lwFT 部署兼容保留；精度、源合约、订单、入金／返回和对账按各记录绑定，MetaMask 导入采用实际 symbol／decimals。仅支持通过原始 genesis 和 SDK 普通 legacy FT v1–v4 布局验证的代币；不代表所有 FT 变种或 Sepolia 已接通。包装部署复用按当前 TBC 身份，跨身份共享和共享 escrow／重复返回仍未实现。Solidity 和前后端构建通过，Docker backend ready 且 API schema 已加载新字段；未运行自动化测试、migration 或真实链上交易。新 token 浏览器及完整往返验收待用户操作。详见 wallet/docs/learning-bridge.md 第 21 TelegramSharing.md 只读。**
 
-**当前安排（2026-10-30，钱包付款自动填入）：正向付款改为 Pay [amount] [symbol] with Turing Wallet，自动使用冻结的 token／数量字符串／保管地址，捕获 SDK 返回 TXID 后自动进入原入金与确认检查。服务端现有 append-only audit journal 保留付款请求，订单锁阻止重复 begin；未知钱包结果保留恢复状态，不自动重复付款。旧手动付款／无 TXID 等情况折叠到 Already paid or need recovery。六确认和钱包逐笔批准保留。前后端构建通过，backend ready 且新 payment routes 已加载；未运行自动化测试、migration 或真实签名／付款，钱包实际验收待用户操作。详见 wallet/docs/learning-bridge.md 第 22 TelegramSharing.md 只读。**
+**当前安排（2026-10-30，钱包付款自动填入）：正向付款改为 `Pay [amount] [symbol] with Turing Wallet`，自动使用冻结的 token／数量字符串／保管地址，捕获 SDK 返回 TXID 后自动进入原入金与确认检查。服务端现有 append-only audit journal 保留付款请求，订单锁阻止重复 begin；未知钱包结果保留恢复状态，不自动重复付款。旧手动付款／无 TXID 等情况折叠到 Already paid or need recovery。六确认和钱包逐笔批准保留。前后端构建通过，backend ready 且新 payment routes 已加载；未运行自动化测试、migration 或真实签名／付款，钱包实际验收待用户操作。详见 wallet/docs/learning-bridge.md 第 22 TelegramSharing.md 只读。**
 
 **当前安排（2026-10-30，完成记录折叠）：正向 Transfer 的 completed／cancelled 订单默认放入 Completed and closed transfers，不再整页展开旧收据及 Add token。展开仍可查看详情和导入，折叠不挂载历史结算组件；Reconciliation 搜索与返回方向保留。前端构建通过，未运行自动化测试或真实交易，无数据删除／状态变更。详见 wallet/docs/learning-bridge.md 第 23 节；新显示待浏览器验收。**
 
