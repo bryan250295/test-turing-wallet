@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weekly Project Progress Report — 27 Nov 2026</title>
+  <style>
+    :root {
+      --ink: #132238;
+      --muted: #53657d;
+      --line: #d7e2ee;
+      --panel: #f4f8fc;
+      --navy: #0b1e36;
+      --blue: #1769aa;
+      --cyan: #42b8db;
+      --green: #11865b;
+      --amber: #a86508;
+      --red: #b34343;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      color: var(--ink);
+      background: #dfe8f1;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.48;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      position: relative;
+      width: 210mm;
+      min-height: 297mm;
+      margin: 10mm auto;
+      padding: 16mm 17mm 15mm;
+      background: white;
+      box-shadow: 0 12px 40px rgba(22, 49, 80, 0.14);
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    .page:last-child { page-break-after: auto; }
+
+    .page-number {
+      position: absolute;
+      right: 17mm;
+      bottom: 8mm;
+      color: #8190a2;
+      font-size: 8.5pt;
+    }
+
+    .page-footer {
+      position: absolute;
+      left: 17mm;
+      bottom: 8mm;
+      color: #8190a2;
+      font-size: 8.5pt;
+    }
+
+    .eyebrow {
+      margin: 0 0 4mm;
+      color: var(--blue);
+      font-size: 9pt;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 6mm;
+      font-size: 31pt;
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    h2 {
+      margin: 0 0 5mm;
+      font-size: 20pt;
+      line-height: 1.18;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      margin: 0 0 2mm;
+      font-size: 12.5pt;
+      line-height: 1.3;
+    }
+
+    p { margin-bottom: 3mm; }
+
+    ul {
+      margin: 2mm 0 0;
+      padding-left: 5mm;
+    }
+
+    li { margin: 0 0 1.5mm; }
+
+    .cover {
+      color: white;
+      background:
+        radial-gradient(circle at 82% 18%, rgba(66, 184, 219, 0.38), transparent 31%),
+        radial-gradient(circle at 10% 85%, rgba(25, 119, 180, 0.36), transparent 35%),
+        linear-gradient(145deg, #07172b 0%, #0d2846 55%, #0a4264 100%);
+    }
+
+    .cover::after {
+      content: "";
+      position: absolute;
+      width: 150mm;
+      height: 150mm;
+      right: -58mm;
+      bottom: -50mm;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 50%;
+      box-shadow: 0 0 0 20mm rgba(255,255,255,.025), 0 0 0 42mm rgba(255,255,255,.018);
+    }
+
+    .brand-line {
+      display: flex;
+      align-items: center;
+      gap: 3mm;
+      margin-bottom: 41mm;
+      font-size: 11pt;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 9mm;
+      height: 9mm;
+      border-radius: 2.5mm;
+      color: var(--navy);
+      background: #66d4f1;
+      font-weight: 900;
+    }
+
+    .cover h1 { max-width: 155mm; }
+
+    .cover-subtitle {
+      max-width: 148mm;
+      margin-bottom: 15mm;
+      color: #cae3f2;
+      font-size: 14pt;
+      line-height: 1.5;
+    }
+
+    .cover-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6mm;
+      max-width: 145mm;
+      padding-top: 7mm;
+      border-top: 1px solid rgba(255,255,255,.24);
+    }
+
+    .cover-meta small {
+      display: block;
+      margin-bottom: 1mm;
+      color: #85cce3;
+      font-size: 8pt;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .cover-meta strong { font-size: 11pt; }
+
+    .summary-callout {
+      margin: 0 0 6mm;
+      padding: 5mm 6mm;
+      color: #10304c;
+      background: linear-gradient(90deg, #e7f7fc, #f3f9fd);
+      border-left: 1.5mm solid var(--cyan);
+      border-radius: 1.5mm;
+      font-size: 11.5pt;
+      line-height: 1.55;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3mm;
+      margin-bottom: 7mm;
+    }
+
+    .metric {
+      padding: 4mm;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 3mm;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 1mm;
+      color: var(--blue);
+      font-size: 20pt;
+      line-height: 1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 8.5pt;
+    }
+
+    .section-label {
+      margin: 0 0 3mm;
+      color: var(--blue);
+      font-size: 8.5pt;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .outcomes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4mm;
+    }
+
+    .outcome {
+      padding: 4.5mm;
+      border: 1px solid var(--line);
+      border-radius: 3mm;
+      break-inside: avoid;
+    }
+
+    .outcome .num {
+      display: inline-grid;
+      place-items: center;
+      width: 7mm;
+      height: 7mm;
+      margin-bottom: 3mm;
+      color: white;
+      background: var(--blue);
+      border-radius: 50%;
+      font-size: 8.5pt;
+      font-weight: 800;
+    }
+
+    .outcome p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 9.2pt;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr 11mm 1fr 11mm 1fr;
+      align-items: stretch;
+      margin: 4mm 0 7mm;
+    }
+
+    .flow-step {
+      padding: 4mm 3mm;
+      text-align: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 3mm;
+    }
+
+    .flow-step strong { display: block; margin-bottom: 1mm; }
+    .flow-step span { color: var(--muted); font-size: 8.5pt; }
+    .arrow { display: grid; place-items: center; color: var(--cyan); font-size: 19pt; }
+
+    .work-list {
+      display: grid;
+      grid-template-columns: 37mm 1fr;
+      margin-bottom: 3mm;
+      border: 1px solid var(--line);
+      border-radius: 3mm;
+      overflow: hidden;
+      break-inside: avoid;
+    }
+
+    .work-list .label {
+      padding: 4mm;
+      color: #fff;
+      background: var(--navy);
+      font-weight: 800;
+    }
+
+    .work-list .content {
+      padding: 4mm 5mm;
+      background: white;
+    }
+
+    .work-list .content p:last-child,
+    .work-list .content ul:last-child { margin-bottom: 0; }
+
+    .badge {
+      display: inline-block;
+      margin: 0 1mm 1mm 0;
+      padding: 1mm 2.2mm;
+      color: #1b506e;
+      background: #e3f4fa;
+      border: 1px solid #b9ddea;
+      border-radius: 999px;
+      font-size: 8pt;
+      font-weight: 700;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 6mm;
+      font-size: 9.2pt;
+    }
+
+    th, td {
+      padding: 3.2mm 3mm;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      color: #fff;
+      background: var(--navy);
+      font-size: 8.2pt;
+      letter-spacing: .04em;
+    }
+
+    tbody tr:nth-child(even) td { background: #f7fafc; }
+
+    .status-pass { color: var(--green); font-weight: 800; }
+    .status-watch { color: var(--amber); font-weight: 800; }
+
+    .risk-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4mm;
+      margin-bottom: 7mm;
+    }
+
+    .risk {
+      padding: 4mm;
+      background: #fffaf2;
+      border: 1px solid #ead4ae;
+      border-radius: 3mm;
+      break-inside: avoid;
+    }
+
+    .risk.high { background: #fff5f5; border-color: #e9bcbc; }
+
+    .risk small {
+      display: block;
+      margin-bottom: 1.5mm;
+      color: var(--amber);
+      font-size: 8pt;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .risk.high small { color: var(--red); }
+    .risk p { margin: 0; color: var(--muted); font-size: 9pt; }
+
+    .next-list {
+      counter-reset: next;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .next-list li {
+      counter-increment: next;
+      display: grid;
+      grid-template-columns: 9mm 1fr;
+      gap: 3mm;
+      margin: 0 0 3mm;
+      padding: 3.5mm 4mm;
+      background: var(--panel);
+      border-radius: 2.5mm;
+    }
+
+    .next-list li::before {
+      content: counter(next);
+      display: grid;
+      place-items: center;
+      width: 7mm;
+      height: 7mm;
+      color: white;
+      background: var(--blue);
+      border-radius: 50%;
+      font-size: 8pt;
+      font-weight: 800;
+    }
+
+    .decision-box {
+      margin-top: 7mm;
+      padding: 5mm 6mm;
+      color: white;
+      background: linear-gradient(110deg, var(--navy), #124f77);
+      border-radius: 3mm;
+    }
+
+    .decision-box h3 { color: #7ed9ef; }
+    .decision-box ul { margin-bottom: 0; }
+
+    .note {
+      color: var(--muted);
+      font-size: 8pt;
+    }
+
+    #page-3 {
+      padding-top: 12mm;
+      font-size: 9.6pt;
+      line-height: 1.38;
+    }
+
+    #page-3 h2 { margin-bottom: 3mm; }
+    #page-3 .section-label { margin-bottom: 2mm; }
+    #page-3 .flow { margin: 2mm 0 4mm; }
+    #page-3 .flow-step { padding: 3mm 2mm; }
+    #page-3 .work-list { margin-bottom: 2mm; }
+    #page-3 .work-list .label,
+    #page-3 .work-list .content { padding: 3mm 4mm; }
+    #page-3 li { margin-bottom: .8mm; }
+
+    @page {
+      size: A4;
+      margin: 0;
+    }
+
+    @media print {
+      html, body { background: white; }
+      .page {
+        width: 210mm;
+        height: 297mm;
+        min-height: 297mm;
+        max-height: 297mm;
+        margin: 0;
+        box-shadow: none;
+        overflow: hidden;
+        break-after: page;
+        page-break-after: always;
+      }
+      .page:last-child { break-after: auto; page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+  <section class="page cover" id="page-1">
+    <div class="brand-line">
+      <span class="brand-mark">T</span>
+      <span>TBC DEVNET · ENGINEERING</span>
+    </div>
+    <p class="eyebrow" style="color:#70d3ec">Weekly Project Progress Report</p>
+    <h1>本周项目进度与成果报告</h1>
+    <p class="cover-subtitle">
+      TBC ↔ Ethereum Sepolia Bridge、后台自动化与实时状态，以及 Oracle / TuringUSD 技术调研
+    </p>
+    <div class="cover-meta">
+      <div>
+        <small>Reporting period</small>
+        <strong>21–27 November 2026</strong>
+      </div>
+      <div>
+        <small>Document purpose</small>
+        <strong>Management Progress Review</strong>
+      </div>
+      <div>
+        <small>Environment</small>
+        <strong>Testnet / Devnet</strong>
+      </div>
+      <div>
+        <small>Status</small>
+        <strong>Core flows implemented and validated</strong>
+      </div>
+    </div>
+    <div class="page-footer" style="color:#8db9cd">Internal project report</div>
+    <div class="page-number" style="color:#8db9cd">01</div>
+  </section>
+
+  <section class="page" id="page-2">
+    <p class="eyebrow">Executive Summary</p>
+    <h2>本周完成的核心成果</h2>
+    <div class="summary-callout">
+      本周已把 Bridge 从单向转账扩展为可追踪的完整往返流程，并加入后台自动 mint、burn-return、TBC payout、实时状态更新与有限重试机制；同时完成 Oracle / TuringUSD live 产品及新版钱包插件的技术审查，为下一阶段开发建立清晰的接口、安全与验收基线。
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><strong>6</strong><span>主要 Git commits</span></div>
+      <div class="metric"><strong>135</strong><span>本周涉及文件</span></div>
+      <div class="metric"><strong>7/7</strong><span>重点后端测试通过</span></div>
+      <div class="metric"><strong>561</strong><span>调研与问题清单行数</span></div>
+    </div>
+
+    <p class="section-label">Outcome overview</p>
+    <div class="outcomes">
+      <article class="outcome">
+        <span class="num">1</span>
+        <h3>Bridge 往返流程完成</h3>
+        <p>实现 TBC Testnet → Ethereum Sepolia 的 wrapped-token mint，以及 Sepolia burn → TBC 原生资产释放；详情页可显示金额、钱包、交易、确认数、费用与 burn-return 证据。</p>
+      </article>
+      <article class="outcome">
+        <span class="num">2</span>
+        <h3>后台自动化落地</h3>
+        <p>确认数达到门槛后可由 backend relayer 自动执行 mint；Admin signer 及 return payout 采用独立 key-file 配置、固定交易身份与受限重试，降低重复操作风险。</p>
+      </article>
+      <article class="outcome">
+        <span class="num">3</span>
+        <h3>实时状态与连接恢复</h3>
+        <p>加入身份隔离的 Bridge WebSocket、bounded WebSocket/EventSource 与 network recovery；页面可自动恢复一次并在失败后停止，避免无限重连或重复弹窗。</p>
+      </article>
+      <article class="outcome">
+        <span class="num">4</span>
+        <h3>Oracle / TuringUSD 调研完成</h3>
+        <p>审查 live 产品、Oracle/TuringUSD 指南及钱包 3.2.2 插件，整理产品规则、签名接口、P0/P1 待确认问题、安全清单、测试方案与 Go/No-Go 条件。</p>
+      </article>
+    </div>
+
+    <div class="decision-box">
+      <h3>业务价值</h3>
+      <ul>
+        <li>用户不再需要持续停留在详情页或手动检查确认数；后台与实时状态可推进流程。</li>
+        <li>每笔 transfer 的 forward 与 return 数据保持在同一个 request 上，便于审计、对账和问题追踪。</li>
+        <li>在正式投入 Oracle/TuringUSD 开发前，已提前识别接口、流动性、精度和 signer 信任模型的关键风险。</li>
+      </ul>
+    </div>
+    <div class="page-footer">Weekly Project Progress Report · 27 Nov 2026</div>
+    <div class="page-number">02</div>
+  </section>
+
+  <section class="page" id="page-3">
+    <p class="eyebrow">Delivery Detail</p>
+    <h2>主要交付内容</h2>
+
+    <p class="section-label">End-to-end bridge lifecycle</p>
+    <div class="flow">
+      <div class="flow-step"><strong>Bridge out</strong><span>TT deposited on TBC</span></div>
+      <div class="arrow">→</div>
+      <div class="flow-step"><strong>Mint</strong><span>wTT issued on Sepolia</span></div>
+      <div class="arrow">→</div>
+      <div class="flow-step"><strong>Burn-return</strong><span>wTT burned, TT released</span></div>
+    </div>
+
+    <div class="work-list">
+      <div class="label">Bridge<br/>流程与安全</div>
+      <div class="content">
+        <ul>
+          <li>新增 Ethereum Sepolia route、wrapped-token 合约、burn redemption API、交易验证器及 TBC native release engine。</li>
+          <li>校验 frozen sender、contract、nonce、recipient 与 amount；拒绝错误 signer、额外 delegated execution 或已改变的 payout 条件。</li>
+          <li>保存 source deposit、mint、burn、release 的 TXID、确认数与实际费用，支持 reconciliation 与 round-trip 证据。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="work-list">
+      <div class="label">自动化<br/>与密钥边界</div>
+      <div class="content">
+        <ul>
+          <li>加入可选 minter backend relayer；source deposit 达 6 confirmations 后自动 mint，并只追踪固定 nonce/hash。</li>
+          <li>加入两组独立 Admin signer key-file 配置，保留链上 2-of-2 顺序；burn-return 达 6 confirmations 后自动广播及 reconcile TBC payout。</li>
+          <li>secret file 以 read-only mount 与 mode 600 方式接入；private key 不进入公开 DTO、Git 或前端 bundle。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="work-list">
+      <div class="label">前端 UX<br/>与韧性</div>
+      <div class="content">
+        <ul>
+          <li>重构为可点击的 Route / Wallets / Order / Transfer 步骤视图，减少长页面滚动；状态标签显示具体进行中的步骤。</li>
+          <li>完善 transfer details 与 reconciliation UI：区分 Completed、Round trip complete，并显示 bridge-out 与 return 的独立数据。</li>
+          <li>加入自动 session reconnect、可点击状态提示、稳定网络检测、有限次数 retry 及可手动恢复入口。</li>
+          <li>WebSocket/EventSource 连接采用 bounded retry；断线不会无限重试，身份订阅只接收所属 request 的更新。</li>
+        </ul>
+        <div style="margin-top:2mm">
+          <span class="badge">WebSocket</span><span class="badge">Network recovery</span><span class="badge">Session reconnect</span><span class="badge">Responsive workflow</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="work-list">
+      <div class="label">Oracle /<br/>TuringUSD</div>
+      <div class="content">
+        <ul>
+          <li>确认 Oracle 多来源定价、median/weighted price、签名报告与 stale/recovery 规则；整理建议 API/event schema。</li>
+          <li>确认 TuringUSD 的 200% opening ratio、120% liquidation ratio、5% APY、最低 1 TUSD debt，以及 borrow/repay/withdraw/close 行为。</li>
+          <li>审查钱包 3.2.2 的 DApp provider、domain-message signing、EVM provider 与权限边界；保留原始插件包作版本基准。</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="note">注：本周代码统计包含编译后的钱包插件资产，因此行数仅作为工作范围参考，不作为生产力评价指标。</p>
+    <div class="page-footer">Weekly Project Progress Report · 27 Nov 2026</div>
+    <div class="page-number">03</div>
+  </section>
+
+  <section class="page" id="page-4">
+    <p class="eyebrow">Validation &amp; Risk</p>
+    <h2>验证结果、发现与后续重点</h2>
+
+    <p class="section-label">Quality evidence — executed on 27 Nov 2026</p>
+    <table>
+      <thead>
+        <tr><th style="width:30%">检查项目</th><th style="width:18%">结果</th><th>证据 / 说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Backend TypeScript typecheck</td><td class="status-pass">通过</td><td><code>tsc --noEmit</code>，无 type error。</td></tr>
+        <tr><td>Wallet production build</td><td class="status-pass">通过</td><td>Vite 成功转换 547 modules 并生成 production bundle。</td></tr>
+        <tr><td>Bridge focused backend tests</td><td class="status-pass">7 / 7 通过</td><td>覆盖身份隔离进度、direct burn、EIP-7702 delegated burn、错误授权拒绝、额外 execution 拒绝、精确 TBC payout 与变更 payout 拒绝。</td></tr>
+        <tr><td>Live flow validation</td><td class="status-pass">已验证核心路径</td><td>已完成 bridge-out、自动 mint、burn fee funding、burn confirmation 与 TBC release 状态追踪；历史记录能够显示具体 return step。</td></tr>
+        <tr><td>Frontend bundle size</td><td class="status-watch">需优化</td><td>主 JS bundle 约 819.5 KB（gzip 223.5 KB），构建成功但出现 chunk-size warning。</td></tr>
+      </tbody>
+    </table>
+
+    <p class="section-label">Important findings</p>
+    <div class="risk-grid">
+      <article class="risk high">
+        <small>Product / Liquidity</small>
+        <h3>TUSD 利息偿还来源不足</h3>
+        <p>Live 测试发现 debt 会产生利息，但当前产品没有公开 TUSD faucet、market 或 top-up 流程。用户余额与实际 debt 仅差极小数额时，仍无法 Close；UI 又把两者四舍五入成相同数值。需要补充外部 TUSD 来源与高精度差额提示。</p>
+      </article>
+      <article class="risk high">
+        <small>Security / Trust</small>
+        <h3>Backend signer 仍属集中式信任</h3>
+        <p>现有 key-file relayer 适合 testnet 自动化；正式环境应使用 HSM/KMS、独立 operator 或真正分离的多签执行域，并建立 rotation、审计和 incident response 流程。</p>
+      </article>
+      <article class="risk">
+        <small>Specification</small>
+        <h3>Oracle 正式契约尚待确认</h3>
+        <p>仍需项目方提供正式 OpenAPI/JSON schema、source-health 状态机、signer trust root、round/deployment 绑定规则，以及 TBC/USDT 到 USD 的最终转换依据。</p>
+      </article>
+      <article class="risk">
+        <small>Engineering</small>
+        <h3>完整 E2E 与 bundle 优化</h3>
+        <p>重点单元测试与 build 已通过；下一阶段仍需加入断网/reorg/重复事件/多账户切换的自动 E2E，并使用 code splitting 降低主 bundle 体积。</p>
+      </article>
+    </div>
+
+    <div class="decision-box" style="margin-top:4mm">
+      <h3>本周质量结论</h3>
+      <p style="margin:0">核心路径已具备可演示、可追踪及可恢复能力；现阶段适合继续进行 testnet 验证。正式环境上线前仍需完成 Oracle 契约确认、TUSD 流动性设计、signer 托管强化与完整 E2E。</p>
+    </div>
+
+    <div class="page-footer">Weekly Project Progress Report · 27 Nov 2026</div>
+    <div class="page-number">04</div>
+  </section>
+
+  <section class="page" id="page-5">
+    <p class="eyebrow">Next Steps</p>
+    <h2>下一阶段建议与待确认事项</h2>
+
+    <p class="section-label">Recommended next actions</p>
+    <ol class="next-list">
+      <li><div><strong>确认 Oracle/TuringUSD P0 规格</strong><br/>锁定 API、签名格式、网络、合约地址、精度、liquidation 与 event schema。</div></li>
+      <li><div><strong>解决 TUSD repayment liquidity</strong><br/>决定采用 faucet、testnet operator distribution、secondary market 或 protocol-level close tolerance，并显示精确缺口。</div></li>
+      <li><div><strong>完成全流程自动 E2E 与监控</strong><br/>覆盖 bridge out、mint、burn-return、TBC release、断线恢复、WebSocket fallback 与 reconciliation。</div></li>
+      <li><div><strong>强化 signer 与部署规范</strong><br/>把 testnet key-file 方案升级为可审计的 secret management、独立 signer 与告警机制。</div></li>
+    </ol>
+
+    <div class="decision-box" style="margin-top:5mm">
+      <h3>需要管理层 / 项目方确认</h3>
+      <ul>
+        <li>下一阶段优先级：先完成 Oracle 只读集成，还是直接进入 TuringUSD testnet 写操作。</li>
+        <li>TUSD 额外流动性的正式来源，以及利息导致余额不足时的产品处理方式。</li>
+        <li>Backend minter/Admin signer 在正式环境的托管与职责分离标准。</li>
+      </ul>
+    </div>
+
+    <div class="page-footer">Weekly Project Progress Report · 27 Nov 2026</div>
+    <div class="page-number">05</div>
+  </section>
+  <script>
+    const reportParams = new URLSearchParams(window.location.search);
+    const previewPage = reportParams.get("preview");
+    if (previewPage) {
+      document.querySelectorAll(".page").forEach((page, index) => {
+        page.style.display = String(index + 1) === previewPage ? "block" : "none";
+      });
+    }
+    if (reportParams.has("measure")) {
+      const dimensions = [...document.querySelectorAll(".page")].map((page) => ({
+        id: page.id,
+        height: page.getBoundingClientRect().height,
+        scrollHeight: page.scrollHeight
+      }));
+      document.body.textContent = JSON.stringify(dimensions);
+    }
+  </script>
+</body>
+</html>
