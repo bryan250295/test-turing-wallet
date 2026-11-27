@@ -6,9 +6,10 @@ import { formatRawAmount } from '../../utils/tokenAmounts';
 import { formatHypeBalance } from '../../services/evmWallet';
 import { formatDateTime } from '../../utils/dateTime';
 import { getErrorMessage } from '../../utils/errors';
-import { beginSepoliaBurn, broadcastNativeRelease, cancelSepoliaBurn, checkNativeRelease, checkSepoliaBurn, fundSepoliaFtRelease, getSepoliaRedemption, prepareSepoliaRedemption, quoteSepoliaBurn, submitSepoliaBurn } from '../../services/sepoliaBurnRedemption';
+import { beginSepoliaBurn, cancelSepoliaBurn, checkNativeRelease, checkSepoliaBurn, fundSepoliaFtRelease, getSepoliaRedemption, prepareSepoliaRedemption, quoteSepoliaBurn, submitSepoliaBurn } from '../../services/sepoliaBurnRedemption';
 import { BridgeSteps, AttemptHistory, bridgeStatus } from './BridgeFlow';
 import { DEVNET_DOMAIN } from '../../config/constants';
+import { openBoundedEventSource, type LiveConnectionState } from '../../utils/boundedEventSource';
 
 interface Props { order: BridgeOrder; session: WalletSession; evm: ReturnType<typeof useHyperEvmWallet>; active: boolean }
 export default function SepoliaBurnReturn({ order, session, evm, active }: Props) {
@@ -17,10 +18,10 @@ export default function SepoliaBurnReturn({ order, session, evm, active }: Props
 	const busyRef = useRef(false);
 	const [value, setValue] = useState<SepoliaBurnRedemption | null>(null);
 	const [loading, setLoading] = useState(false); const [action, setAction] = useState(''); const [error, setError] = useState('');
-	const [reviewed, setReviewed] = useState<Record<string, boolean>>({}); const [releaseReviewed, setReleaseReviewed] = useState(false);
+	const [reviewed, setReviewed] = useState<Record<string, boolean>>({});
 	const [hashes, setHashes] = useState<Record<string, string>>({}); const [notSent, setNotSent] = useState<Record<string, boolean>>({});
 	const [funding, setFunding] = useState('');
-	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'connected' | 'reconnecting'>('off');
+	const [realtime, setRealtime] = useState<LiveConnectionState>('off');
 	const eventRefresh = useRef(false);
 	const ft = order.sourceAssetKind === 'fungible-token';
 	const fundingStorageKey = `sepolia-ft-return-fee:${order.sender}:${order.id}`;
@@ -39,7 +40,7 @@ export default function SepoliaBurnReturn({ order, session, evm, active }: Props
 	useEffect(() => {
 		const controller = new AbortController(); let saved = '';
 		try { saved = localStorage.getItem(fundingStorageKey) ?? ''; } catch { /* Manual recovery stays available. */ }
-		setFunding(/^[0-9a-f]{64}$/i.test(saved) ? saved.toLowerCase() : ''); setValue(null); setLoading(enabled); setError(''); setReviewed({}); setReleaseReviewed(false); setHashes({}); setNotSent({});
+		setFunding(/^[0-9a-f]{64}$/i.test(saved) ? saved.toLowerCase() : ''); setValue(null); setLoading(enabled); setError(''); setReviewed({}); setHashes({}); setNotSent({});
 		if (enabled) void load(controller.signal).catch((cause) => { if (!controller.signal.aborted) setError(getErrorMessage(cause)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
 		return () => controller.abort();
 	}, [context, enabled]);
@@ -47,21 +48,18 @@ export default function SepoliaBurnReturn({ order, session, evm, active }: Props
 	const fundingTxid = value?.fundingTxid ?? funding;
 	useEffect(() => {
 		if (!enabled || value?.status === 'completed') { setRealtime('off'); return; }
-		setRealtime('connecting');
-		const source = new EventSource(`/api/bridge/orders/${order.id}/settlement/events`, { withCredentials: true });
-		const connected = () => { if (current.current === context) setRealtime('connected'); };
+		const controller = new AbortController();
 		const refresh = () => {
 			if (current.current !== context || busyRef.current || eventRefresh.current) return;
 			eventRefresh.current = true;
 			void load(AbortSignal.timeout(25_000)).catch((cause) => { if (current.current === context) setError(getErrorMessage(cause)); })
 				.finally(() => { eventRefresh.current = false; });
 		};
-		source.onopen = connected;
-		source.onerror = () => { if (current.current === context) setRealtime('reconnecting'); };
-		source.addEventListener('ready', connected);
-		source.addEventListener('heartbeat', connected);
-		source.addEventListener('progress', refresh);
-		return () => { source.close(); eventRefresh.current = false; setRealtime('off'); };
+		const close = openBoundedEventSource({
+			url: `/api/bridge/orders/${order.id}/settlement/events`, signal: controller.signal,
+			onState: (next) => { if (current.current === context) setRealtime(next); }, onProgress: refresh,
+		});
+		return () => { controller.abort(); close(); eventRefresh.current = false; setRealtime('off'); };
 	}, [context, enabled, order.id, value?.status === 'completed']);
 	async function run(label: string, work: (signal: AbortSignal) => Promise<unknown>) {
 		if (!enabled || busyRef.current) return;
@@ -99,7 +97,7 @@ export default function SepoliaBurnReturn({ order, session, evm, active }: Props
 	useEffect(() => { if (value?.status === 'awaiting_fee') return; try { localStorage.removeItem(fundingStorageKey); } catch { /* It can expire naturally. */ } }, [value?.status, fundingStorageKey]);
 	if (!enabled) return <p>Reconnect the original TBC wallet to continue this saved Sepolia return.</p>;
 	return <section className="htlc-section" aria-label={`Burn ${order.wrappedSymbol} and return ${order.symbol}`} aria-busy={busy}>
-		<header className="history-titlebar"><div><h4>Burn-return · Ethereum Sepolia → TBC Testnet</h4><p className="history-note">Full original amount only · burn proof required · {realtime === 'connected' ? 'live updates connected' : realtime === 'off' ? 'live updates off' : 'live updates reconnecting…'}</p></div><button type="button" className="history-secondary" disabled={busy} onClick={() => { void run('refresh', async () => undefined); }}>Refresh saved return</button></header>
+		<header className="history-titlebar"><div><h4>Burn-return · Ethereum Sepolia → TBC Testnet</h4><p className="history-note">Full original amount only · burn proof required · {realtime === 'connected' ? 'live updates connected' : realtime === 'off' ? 'live updates off' : realtime === 'stopped' ? 'live connection stopped · refresh manually' : 'live updates reconnecting once…'}</p></div><button type="button" className="history-secondary" disabled={busy} onClick={() => { void run('refresh', async () => undefined); }}>Refresh saved return</button></header>
 		<BridgeSteps steps={ft ? ['Fund TBC fee', `Review ${order.wrappedSymbol} burn`, `Burn ${order.wrappedSymbol}`, 'Verify burn', `Receive ${order.symbol}`] : [`Review ${order.wrappedSymbol} burn`, `Burn ${order.wrappedSymbol}`, 'Verify 6 confirmations', `Receive ${order.symbol}`]} current={!value ? 0 : ft ? value.status === 'awaiting_fee' ? 0 : value.status === 'prepared' ? 1 : value.status === 'burn_pending' ? 2 : ['burn_confirming', 'burn_verified'].includes(value.status) ? 3 : 4 : ['prepared', 'burn_pending'].includes(value.status) ? 1 : ['burn_confirming', 'burn_verified'].includes(value.status) ? 2 : 3} complete={value?.status === 'completed'} />
 		{loading && <p role="status">Loading saved burn-return progress…</p>}
 		{!value && !loading && <>
@@ -139,12 +137,12 @@ export default function SepoliaBurnReturn({ order, session, evm, active }: Props
 				}); }}>Confirm irreversible burn in MetaMask</button><button type="button" className="history-secondary" disabled={busy} onClick={() => { void run(`cancel:${row.id}`, () => cancelSepoliaBurn(order, value, row)); }}>Discard unused quote</button></div></>}
 				{row.status === 'awaiting_wallet' && !row.txHash && <><p>Check MetaMask Activity. If the burn was sent, save its existing hash; do not send another burn.</p><label htmlFor={`sepolia-burn-hash-${row.id}`}>Sepolia burn transaction hash</label><input id={`sepolia-burn-hash-${row.id}`} value={hashes[row.id] ?? ''} disabled={busy} onChange={(event) => setHashes((old) => ({ ...old, [row.id]: event.target.value }))} /><button type="button" disabled={busy || !/^0x[0-9a-f]{64}$/i.test(hashes[row.id] ?? '')} onClick={() => { void run(`recover:${row.id}`, () => submitSepoliaBurn(order, value, row, hashes[row.id])); }}>Save existing burn hash</button><details><summary>No burn transaction was sent?</summary><label className="bridge-role-choice"><input type="checkbox" checked={!!notSent[row.id]} onChange={(event) => setNotSent((old) => ({ ...old, [row.id]: event.target.checked }))} /> I checked MetaMask Activity and confirmed it was rejected or never sent.</label><button type="button" className="history-secondary" disabled={busy || !notSent[row.id]} onClick={() => { void run(`cancel:${row.id}`, () => cancelSepoliaBurn(order, value, row)); }}>Discard unsent request</button></details></>}
 				{row.txHash && <><p>Burn transaction: <code>{row.txHash}</code></p><p>Confirmations: {row.confirmations} / 6{row.actualFeeWei ? ` · Actual fee ${formatHypeBalance(row.actualFeeWei)} ETH` : ''}</p>{['submitted', 'confirming'].includes(row.status) && <button type="button" className="history-secondary" disabled={busy} onClick={() => { void run(`check:${row.id}`, (signal) => checkSepoliaBurn(order, row, signal)); }}>Check burn confirmations</button>}</>}
-				{row.lastError && <p className="result error" role="alert">{row.lastError}</p>}
+				{row.lastError && row.lastError !== value.lastError && row.lastError !== error && <p className="result error" role="alert">{row.lastError}</p>}
 			</article>} />
-			{value.status === 'release_signed' && <div className="htlc-section"><h4>Burn verified · {order.symbol} release ready</h4><p>The backend saved and signed exactly one payout transaction: <code>{value.releaseTxid}</code>.</p><label className="bridge-role-choice"><input type="checkbox" checked={releaseReviewed} disabled={busy} onChange={(event) => setReleaseReviewed(event.target.checked)} /> I reviewed the {order.symbol} recipient, amount, TBC fee and saved release TXID.</label><button type="button" disabled={busy || !releaseReviewed} onClick={() => { void run('broadcast', (signal) => broadcastNativeRelease(order, value, signal)); }}>Broadcast saved {order.symbol} release</button></div>}
+			{value.status === 'release_signed' && <div className="htlc-section" role="status"><h4>Burn verified · automatic {order.symbol} release</h4><p>The backend saved and signed exactly one payout transaction: <code>{value.releaseTxid}</code>.</p><p>It is now broadcasting that exact saved transaction automatically. No wallet action is required and no replacement payout will be created.</p></div>}
 			{value.releaseTxid && ['release_broadcasting', 'release_submitted', 'release_confirming'].includes(value.status) && <div className="htlc-section"><h4>{order.symbol} release submitted</h4><p>Release TXID: <code>{value.releaseTxid}</code></p><p>Confirmations: {value.releaseConfirmations} / 6. Never broadcast a second payout.</p><button type="button" className="history-secondary" disabled={busy} onClick={() => { void run('check-release', (signal) => checkNativeRelease(order, signal)); }}>Check TBC confirmations</button></div>}
 			{value.status === 'completed' && <div className="result success"><p>Return complete. {formatRawAmount(value.amountRaw, order.decimals)} {order.wrappedSymbol} was burned and {formatRawAmount(value.payoutRaw ?? value.amountRaw, order.decimals)} {order.symbol} was released to <code>{value.tbcRecipient}</code>.</p><p>TBC release TXID: <code>{value.releaseTxid}</code> · {value.releaseConfirmations} confirmations.</p></div>}
-			{value.lastError && <p className="result error" role="alert">{value.lastError}</p>}
+			{value.lastError && value.lastError !== error && <p className="result error" role="alert">{value.lastError}</p>}
 		</>}
 		{action && <p role="status">Updating saved burn-return progress…</p>}
 		{error && <p className="result error" role="alert">{error}</p>}

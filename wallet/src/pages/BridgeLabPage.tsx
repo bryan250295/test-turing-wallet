@@ -92,7 +92,7 @@ export default function BridgeLabPage({ session }: WalletPageProps) {
 				{activeTab === 'htlc' && <HtlcTestnet active session={session} recoveryTarget={recoveryTarget} onClearRecoveryTarget={() => setRecoveryTarget(undefined)} onViewRequests={() => selectTab('requests')} />}
 			</div>
 			<div id="bridge-testnet-bridge-panel" role="tabpanel" aria-labelledby="bridge-testnet-bridge-tab" hidden={activeTab !== 'testnet-bridge'} tabIndex={0}>
-				<TestnetBridge session={session} active={activeTab === 'testnet-bridge'} />
+				<TestnetBridge session={session} active={activeTab === 'testnet-bridge'} mode="selection" />
 			</div>
 			<div id="bridge-reconciliation-panel" role="tabpanel" aria-labelledby="bridge-reconciliation-tab" hidden={activeTab !== 'reconciliation'} tabIndex={0}>
 				{activeTab === 'reconciliation' && <BridgeReconciliation session={session} active />}

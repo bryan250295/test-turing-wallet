@@ -10,7 +10,7 @@ import {
 	buildPhase3TestnetDeposit, broadcastPhase3TestnetDeposit, finalizePhase3TestnetDeposit,
 	phase3TestnetDepositSigningRequest,
 } from '../../services/phase3TestnetDeposit';
-import { connectProofBridgeV3Progress, getProofBridgeV3GasPreflight, getProofBridgeV3Progress } from '../../services/proofBridgeV3';
+import { connectProofBridgeV3Progress, getProofBridgeV3GasPreflight, getProofBridgeV3Progress, type ProofBridgeRealtimeState } from '../../services/proofBridgeV3';
 
 type EvmWallet = ReturnType<typeof useHyperEvmWallet>;
 const routeDefinition = BRIDGE_ROUTE_CATALOG.find((route) => route.id === 'mt-v3-hyperevm-testnet')!;
@@ -23,7 +23,7 @@ function normalizedPublicKey(value: string) {
 
 export default function ProofBridgeTestnetV3Transfer({ session, evm, active }: { session: WalletSession; evm: EvmWallet; active: boolean }) {
 	const [snapshot, setSnapshot] = useState<ProofBridgeV3Snapshot | null>(null);
-	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'live' | 'reconnecting'>('off');
+	const [realtime, setRealtime] = useState<ProofBridgeRealtimeState>('off');
 	const [amount, setAmount] = useState('');
 	const [sourceTxid, setSourceTxid] = useState('');
 	const [working, setWorking] = useState('');
@@ -97,7 +97,7 @@ export default function ProofBridgeTestnetV3Transfer({ session, evm, active }: {
 						: latest?.status === 'signed' ? 'Signed locally' : 'Ready';
 
 	return <section className="htlc-section proof-transfer" aria-labelledby="proof-transfer-title" aria-busy={Boolean(working)}>
-		<header className="history-titlebar"><div><h3 id="proof-transfer-title">2. Send MT and receive wMT</h3><p>One Turing Wallet signature starts the complete proof-backed flow. No contract deployment or MetaMask transaction is required from the user.</p></div><span className={`network-pill ${realtime === 'live' ? 'route-live' : ''}`}>{realtime === 'live' ? 'Live progress' : realtime}</span></header>
+		<header className="history-titlebar"><div><h3 id="proof-transfer-title">2. Send MT and receive wMT</h3><p>One Turing Wallet signature starts the complete proof-backed flow. No contract deployment or MetaMask transaction is required from the user.</p></div><span className={`network-pill ${realtime === 'live' ? 'route-live' : ''}`}>{realtime === 'live' ? 'Live progress' : realtime === 'stopped' ? 'Stopped · refresh page' : realtime === 'reconnecting' ? 'Reconnecting once…' : realtime}</span></header>
 		{snapshot?.route ? <dl className="history-detail-grid">
 			<div><dt>Source token</dt><dd>{routeDefinition.sourceName} ({routeDefinition.sourceSymbol}) · <code>{routeDefinition.sourceContractId}</code></dd></div>
 			<div><dt>Receive token</dt><dd>{routeDefinition.wrappedName} ({routeDefinition.wrappedSymbol}) · <code>{snapshot.route.wrappedToken}</code></dd></div>

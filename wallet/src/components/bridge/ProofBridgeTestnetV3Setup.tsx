@@ -9,7 +9,7 @@ import type useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
 import type { WalletAddresses, WalletSession } from '../../types/wallet';
 import type { BridgeDeploymentTransaction } from '../../types/learningBridge';
 import { getErrorMessage } from '../../utils/errors';
-import { connectProofBridgeV3Progress, getProofBridgeV3GasPreflight, getProofBridgeV3Progress, registerProofBridgeV3Route } from '../../services/proofBridgeV3';
+import { connectProofBridgeV3Progress, getProofBridgeV3GasPreflight, getProofBridgeV3Progress, registerProofBridgeV3Route, type ProofBridgeRealtimeState } from '../../services/proofBridgeV3';
 import type { ProofBridgeV3GasPreflight, ProofBridgeV3Snapshot } from '../../../../shared/src/types/proofBridgeV3';
 
 type EvmWallet = ReturnType<typeof useHyperEvmWallet>;
@@ -77,7 +77,7 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 	const [snapshot, setSnapshot] = useState<ProofBridgeV3Snapshot | null>(null);
 	const [gasPreflight, setGasPreflight] = useState<ProofBridgeV3GasPreflight | null>(null);
 	const [setupBudget, setSetupBudget] = useState<SetupBudget | null>(null);
-	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'live' | 'reconnecting'>('off');
+	const [realtime, setRealtime] = useState<ProofBridgeRealtimeState>('off');
 	const running = useRef(false);
 	const registrationAttempted = useRef('');
 	const client = useMemo(() => createPublicClient({ transport: http(HYPEREVM_TESTNET.rpcUrl) }), []);
@@ -281,7 +281,7 @@ export default function ProofBridgeTestnetV3Setup({ session, evm, active }: { se
 				<div><dt>V3 Gateway</dt><dd><code>{snapshot?.route?.gateway ?? state?.gateway ?? 'Not deployed'}</code></dd></div>
 				<div><dt>Wrapped token (wMT)</dt><dd><code>{snapshot?.route?.wrappedToken ?? state?.wrappedToken ?? 'Created by Gateway'}</code></dd></div>
 				<div><dt>Backend automation</dt><dd>{snapshot?.relayer.mode === 'automatic' ? <>Automatic · <code>{snapshot.relayer.address}</code>{snapshot.relayer.balanceWei !== null ? <> · {formatEther(BigInt(snapshot.relayer.balanceWei))} HYPE</> : null}</> : 'Observe-only until relayer key is configured'}</dd></div>
-				<div><dt>Live progress</dt><dd>{realtime === 'live' ? 'WebSocket connected' : realtime}</dd></div>
+				<div><dt>Live progress</dt><dd>{realtime === 'live' ? 'WebSocket connected' : realtime === 'stopped' ? 'Stopped · refresh page' : realtime === 'reconnecting' ? 'Reconnecting once…' : realtime}</dd></div>
 			</dl>
 			{!snapshot?.route && !state?.relay && <p className={candidateFresh ? 'result success' : 'result error'}>
 				<strong>Checkpoint freshness: {candidateFresh ? 'ready' : 'blocked'}</strong><br />

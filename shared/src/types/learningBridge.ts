@@ -172,6 +172,38 @@ export interface BridgeOrderInput {
 	recipient: string;
 }
 
+export interface BridgeOrderDraftInput {
+	idempotencyKey: string;
+	contractId: string;
+	destinationChainId: 998 | 11_155_111;
+}
+
+export interface BridgeOrderDraftFinalizeInput {
+	amount: string;
+	recipient: string;
+}
+
+export interface BridgeOrderDraft {
+	id: string;
+	deploymentId: string;
+	status: 'draft' | 'finalized' | 'cancelled';
+	contractId: string;
+	name: string;
+	sourceAssetKind: 'fungible-token' | 'native-tbc';
+	destinationChainId: 998 | 11_155_111;
+	destinationContract: string;
+	decimals: number;
+	symbol: string;
+	totalSupplyRaw: string;
+	verifiedAt: string;
+	wrappedName: string;
+	wrappedSymbol: string;
+	createdAt: string;
+	updatedAt: string;
+	finalizedAt: string | null;
+	cancelledAt: string | null;
+}
+
 export interface BridgeOrder {
 	id: string;
 	deploymentId: string;
@@ -225,11 +257,13 @@ export interface Phase3TestnetRelayPlan {
 }
 export interface BridgeCallAttempt {
 	id: string; kind: BridgeCallKind; status: 'quoted' | 'awaiting_wallet' | 'submitted' | 'confirming' | 'verified' | 'reverted' | 'invalid' | 'cancelled';
+	submissionMode: 'wallet' | 'relayer';
 	transaction: BridgeCallTransaction; estimatedFeeWei: string; budgetWei: string; expiresAt: string; createdAt: string;
 	txHash: string | null; confirmations: number; actualFeeWei: string | null; lastError: string | null;
 }
 export interface BridgeSettlement {
 	orderId: string; status: BridgeSettlementStatus; custodyAddress: string; paymentOpenedAt: string;
+	mintMode: 'automatic' | 'manual';
 	checkedAt: string | null; lastError: string | null;
 	deposit: { txid: string; vout: number; amountRaw: string; feeRaw: string; confirmations: number; blockHash: string | null; blockHeight: number | null; checkedAt: string } | null;
 	attempts: BridgeCallAttempt[];
@@ -340,7 +374,7 @@ export interface RedemptionReleaseView {
 }
 
 export type RedemptionWalletKind = 'unpause' | 'reset' | 'approve' | 'lock';
-export interface RedemptionWalletCall extends Omit<BridgeCallAttempt, 'kind'> { kind: RedemptionWalletKind; redemptionId: string }
+export interface RedemptionWalletCall extends Omit<BridgeCallAttempt, 'kind' | 'submissionMode'> { kind: RedemptionWalletKind; redemptionId: string }
 export interface RedemptionWalletState { redemptionId: string; paused: boolean; allowanceRaw: string; balanceRaw: string; nextKind: RedemptionWalletKind; from: string; blockNumber: string; blockHash: string }
 
 /** Wallet-returned transaction receipt; never a verified deposit proof. */

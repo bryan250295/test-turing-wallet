@@ -12,6 +12,7 @@ import { BridgeCallVerifier } from './bridge-call.verifier';
 import type { BridgeCallKind } from '../../../shared/src/types/learningBridge';
 import { BridgeProgressService } from './bridge-progress.service';
 import { ETHEREUM_SEPOLIA_CHAIN_ID } from './ethereum-sepolia-rpc';
+import { BridgeMintRelayerService } from './bridge-mint-relayer.service';
 
 @Injectable()
 export class BridgeSettlementService {
@@ -26,7 +27,9 @@ export class BridgeSettlementService {
 		@Inject(BridgeDepositVerifier) private readonly deposits: BridgeDepositVerifier,
 		@Inject(BridgeCallVerifier) private readonly calls: BridgeCallVerifier,
 		@Inject(BridgeProgressService) private readonly progress: BridgeProgressService,
+		@Inject(BridgeMintRelayerService) private readonly mintRelayer: BridgeMintRelayerService,
 	) {}
+	private view(order: SettlementOrder) { return publicSettlement(order, this.mintRelayer.mintMode(order)); }
 	private async job<T>(id: string, principal: Principal, response: Response, operation: (order: SettlementOrder, signal: AbortSignal) => Promise<T>): Promise<T> {
 		this.auth.requireTbc(principal);
 		if (this.running.has(id) || this.running.size >= 4) throw new ConflictException('An order operation is running. Wait, then refresh saved progress.');
@@ -45,10 +48,10 @@ export class BridgeSettlementService {
 			throw cause;
 		} finally { clearTimeout(timer); response.removeListener('close', close); this.running.delete(id); }
 	}
-	async get(id: string, principal: Principal) { this.auth.requireTbc(principal); return publicSettlement(await this.repository.owned(id, principal.id)); }
+	async get(id: string, principal: Principal) { this.auth.requireTbc(principal); return this.view(await this.repository.owned(id, principal.id)); }
 	open(id: string, principal: Principal, response: Response) {
 		return this.job(id, principal, response, async (order, signal) => {
-			if (order.settlement) return publicSettlement(order);
+			if (order.settlement) return this.view(order);
 			if (order.status !== 'prepared' || !order.custody) throw new ConflictException('This order is closed or its custody record is missing.');
 			await this.custody.assertRecoverable(order, order.custody);
 			const nativeSepolia = order.destinationChainId === ETHEREUM_SEPOLIA_CHAIN_ID && order.deployment.quote
@@ -59,7 +62,7 @@ export class BridgeSettlementService {
 			}
 			await this.target.check(order.deployment, response); signal.throwIfAborted();
 			await this.repository.open(order);
-			return publicSettlement(await this.repository.owned(id, principal.id));
+			return this.view(await this.repository.owned(id, principal.id));
 		});
 	}
 	private async recheck(order: SettlementOrder, txid: string, signal: AbortSignal) {
@@ -81,7 +84,7 @@ export class BridgeSettlementService {
 		return this.job(id, principal, response, async (order, signal) => {
 			const source = txid ?? order.settlement?.deposit?.txid;
 			if (!source || !/^(?!0{64}$)[0-9a-f]{64}$/.test(source)) throw new BadRequestException('Paste the TBC transfer TXID from Turing Wallet.');
-			return publicSettlement(await this.recheck(order, source, signal));
+			return this.view(await this.recheck(order, source, signal));
 		});
 	}
 	private attempt(order: SettlementOrder, id: string) {
@@ -143,7 +146,7 @@ export class BridgeSettlementService {
 			await this.target.check(order.deployment, response);
 			const observation = await this.calls.receipt(order, row, response); signal.throwIfAborted();
 			await this.repository.observeCall(order, row, observation);
-			return publicSettlement(await this.repository.owned(id, principal.id));
+			return this.view(await this.repository.owned(id, principal.id));
 		});
 	}
 }

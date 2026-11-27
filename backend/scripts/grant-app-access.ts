@@ -23,6 +23,9 @@ async function main() {
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT, UPDATE ON "bridge_assets" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT, UPDATE ON "bridge_deployments" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_orders" TO "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_order_drafts" TO "${user}"`);
+			await tx.$executeRawUnsafe(`REVOKE UPDATE, DELETE ON "bridge_order_drafts" FROM "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "finalizedAt", "cancelledAt", "updatedAt") ON "bridge_order_drafts" TO "${user}"`);
 			// Frozen terms cannot be edited by the application role, even through a
 			// later accidental repository update. Only unused preparations can close.
 			await tx.$executeRawUnsafe(`REVOKE UPDATE ON "bridge_orders" FROM "${user}"`);
@@ -31,7 +34,10 @@ async function main() {
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_settlements", "bridge_call_attempts" TO "${user}"`);
 			await tx.$executeRawUnsafe(`REVOKE UPDATE ON "bridge_settlements", "bridge_call_attempts" FROM "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT UPDATE ("sourceTxid", "status", "checkedAt", "lastError", "updatedAt") ON "bridge_settlements" TO "${user}"`);
-			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "txHash", "confirmations", "receiptBlockHash", "receiptBlockNumber", "actualFeeWei", "lastError", "updatedAt") ON "bridge_call_attempts" TO "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "rawTransaction", "txHash", "confirmations", "receiptBlockHash", "receiptBlockNumber", "actualFeeWei", "lastError", "updatedAt") ON "bridge_call_attempts" TO "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_admin_activations" TO "${user}"`);
+			await tx.$executeRawUnsafe(`REVOKE UPDATE, DELETE ON "bridge_admin_activations" FROM "${user}"`);
+			await tx.$executeRawUnsafe(`GRANT UPDATE ("status", "proposalConfirmations", "proposalReceiptBlockHash", "proposalReceiptBlockNumber", "proposalActualFeeWei", "approvalNonce", "approvalData", "approvalGasLimit", "approvalGasPriceWei", "approvalRawTransaction", "approvalTxHash", "approvalConfirmations", "approvalReceiptBlockHash", "approvalReceiptBlockNumber", "approvalActualFeeWei", "checkedAt", "lastError", "updatedAt") ON "bridge_admin_activations" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "bridge_deposits" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT UPDATE ("confirmations", "blockHash", "blockHeight", "checkedAt") ON "bridge_deposits" TO "${user}"`);
 			await tx.$executeRawUnsafe(`GRANT SELECT, INSERT ON "redemption_wallet_calls" TO "${user}"`);

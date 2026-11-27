@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { WalletAddresses, WalletSession } from '../types/wallet';
 import type { BridgeOrder, BridgeOrderInput, BridgeOrderSetup } from '../types/learningBridge';
 import type useHyperEvmWallet from './useHyperEvmWallet';
-import { cancelBridgeOrder, listBridgeOrders, loadBridgeOrderSetup, prepareBridgeOrder } from '../services/bridgeOrders';
+import { cancelBridgeOrder, finalizeBridgeOrderDraft, listBridgeOrders, loadBridgeOrderSetup, prepareBridgeOrder } from '../services/bridgeOrders';
 import { getErrorMessage } from '../utils/errors';
 
 interface OrdersState { context: string; rows: BridgeOrder[]; setup: BridgeOrderSetup | null; loading: boolean; error: string }
@@ -62,9 +62,9 @@ export default function useBridgeOrders(session: WalletSession, evm: ReturnType<
 	const visible = state.context === context ? state : { rows: [], setup: null, loading: enabled, error: '' };
 	return { ...visible, context, enabled, action,
 		refresh: () => { if (!working.current) setRevision((value) => value + 1); },
-		prepare: (input: BridgeOrderInput) => run('prepare', async (signal) => {
+		prepare: (input: BridgeOrderInput, draftId?: string) => run('prepare', async (signal) => {
 			await verifyWallets(signal);
-			const row = await prepareBridgeOrder(input, signal);
+			const row = draftId ? await finalizeBridgeOrderDraft(draftId, { amount: input.amount, recipient: input.recipient }, signal) : await prepareBridgeOrder(input, signal);
 			// The database write may finish even if the user switches accounts or tabs.
 			// Never repeat it automatically; saved history is the recovery path.
 			return row;

@@ -160,7 +160,7 @@ export default function TransactionPage({ session, hidden }: WalletPageProps) {
 		<section className="card history-card" hidden={hidden}>
 		<div className="history-titlebar">
 			<div><p className="eyebrow">ACTIVITY / TBC DEVNET</p><h1>Transaction history</h1><p className="intro">Your on-chain activity, in one place.</p></div>
-			{address && networkIsDevnet && <span className={`history-live history-live-${realtime}`} role="status"><span aria-hidden="true">●</span>{realtime === 'connected' ? 'Live' : realtime === 'off' ? 'Offline' : realtime === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</span>}
+			{address && networkIsDevnet && <span className={`history-live history-live-${realtime}`} role="status"><span aria-hidden="true">●</span>{realtime === 'connected' ? 'Live' : realtime === 'off' ? 'Offline' : realtime === 'connecting' ? 'Connecting…' : realtime === 'reconnecting' ? 'Reconnecting once…' : 'Connection stopped · refresh page'}</span>}
 		</div>
 		<WalletConnection session={session} />
 		{requestedTxid && !targetTxid && <p className="result error" role="alert">Invalid transaction ID in this link.</p>}

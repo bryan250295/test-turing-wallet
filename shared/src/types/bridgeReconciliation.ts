@@ -46,6 +46,19 @@ export interface ReconciliationOrder {
 	/** One-to-one, full-amount Ethereum Sepolia burn-return evidence. */
 	sepoliaReturn: ReconciliationSepoliaReturn | null;
 }
+export interface ReconciliationDraft {
+	id: string;
+	deploymentId: string;
+	contractId: string;
+	destinationChainId: number;
+	wrappedToken: string;
+	decimals: number;
+	symbol: string;
+	wrappedName: string;
+	wrappedSymbol: string;
+	createdAt: string;
+	status: 'draft';
+}
 export interface ReconciliationTotals {
 	depositedRaw: string;
 	mintedRaw: string;
@@ -76,6 +89,7 @@ export interface BridgeReconciliation {
 	identityAddress: string;
 	generatedAt: string;
 	basis: 'saved_verification';
+	drafts: ReconciliationDraft[];
 	routes: ReconciliationRoute[];
 }
 export interface ReconciliationBalanceCheck {

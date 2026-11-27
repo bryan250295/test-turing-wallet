@@ -32,6 +32,11 @@ function order(value: unknown): boolean {
 		&& optional(date, value.checkedAt) && list(value.transactions, transaction, 203) && list(value.redemptions, redemption)
 		&& (value.sepoliaReturn === null || sepoliaReturn(value.sepoliaReturn));
 }
+function draft(value: unknown): boolean {
+	return isObject(value) && uuid(value.id) && uuid(value.deploymentId) && typeof value.contractId === 'string' && /^[0-9a-f]{64}$/.test(value.contractId)
+		&& [998, 11_155_111].includes(Number(value.destinationChainId)) && address(value.wrappedToken) && typeof value.decimals === 'number' && Number.isInteger(value.decimals) && value.decimals >= 0 && value.decimals <= 255
+		&& text(value.symbol) && validWrappedName(value.wrappedName) && validWrappedSymbol(value.wrappedSymbol) && date(value.createdAt) && value.status === 'draft';
+}
 function route(value: unknown): boolean {
 	if (!isObject(value) || !uuid(value.deploymentId) || !address(value.wrappedToken) || typeof value.contractId !== 'string' || !/^[0-9a-f]{64}$/.test(value.contractId) || typeof value.decimals !== 'number' || !Number.isInteger(value.decimals) || value.decimals < 0 || value.decimals > 255
 		||  !text(value.symbol) || !validWrappedName(value.wrappedName) || !validWrappedSymbol(value.wrappedSymbol) || !['empty', 'balanced', 'pending', 'needs_review'].includes(String(value.status)) || !list(value.issues, text)
@@ -45,7 +50,7 @@ function route(value: unknown): boolean {
 }
 export async function loadBridgeReconciliation(expectedAddress: string, signal: AbortSignal): Promise<BridgeReconciliation> {
 	const value: unknown = await backendData('/api/bridge/reconciliation', undefined, true, signal);
-	if (!isObject(value) || value.identityAddress !== expectedAddress || !date(value.generatedAt) || value.basis !== 'saved_verification' || !list(value.routes, route)) {
+	if (!isObject(value) || value.identityAddress !== expectedAddress || !date(value.generatedAt) || value.basis !== 'saved_verification' || !list(value.drafts, draft) || !list(value.routes, route)) {
 		throw new Error('The reconciliation response is invalid or belongs to a different wallet. Reconnect and refresh.');
 	}
 	return value as unknown as BridgeReconciliation;

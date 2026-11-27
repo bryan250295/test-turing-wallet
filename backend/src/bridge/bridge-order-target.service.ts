@@ -18,7 +18,7 @@ const sepoliaAbi = parseAbi([
 
 @Injectable()
 export class BridgeOrderTargetService {
-	async check(deployment: BridgeDeployment, response: Response) {
+	async check(deployment: BridgeDeployment, response?: Response) {
 		if (deployment.chainId === ETHEREUM_SEPOLIA_CHAIN_ID) return this.checkSepolia(deployment, response);
 		if (!deployment.contractAddress || !deployment.runtimeCodeHash || !deployment.receiptBlockHash || deployment.receiptBlockNumber === null) throw new ConflictException('The deployment verification record is incomplete. Refresh deployment status.');
 		const address = deployment.contractAddress as Address;
@@ -35,7 +35,7 @@ export class BridgeOrderTargetService {
 			return { blockNumber: head.number, blockHash: head.hash, paused, supply };
 		});
 	}
-	private async checkSepolia(deployment: BridgeDeployment, response: Response) {
+	private async checkSepolia(deployment: BridgeDeployment, response?: Response) {
 		if (!deployment.contractAddress || !deployment.runtimeCodeHash) throw new ConflictException('The Sepolia route verification record is incomplete. Refresh route status.');
 		const address = deployment.contractAddress as Address;
 		const expectedSourceKind = deployment.quote && typeof deployment.quote === 'object' && 'sourceAssetKind' in deployment.quote && deployment.quote.sourceAssetKind === 'fungible-token' ? 1 : 0;

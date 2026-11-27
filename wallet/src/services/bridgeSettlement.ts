@@ -24,6 +24,7 @@ async function expectedData(order: BridgeOrder, kind: BridgeCallKind, settlement
 export async function validateBridgeCall(value: unknown, order: BridgeOrder, settlement: BridgeSettlement | null): Promise<BridgeCallAttempt> {
 	if (!isObject(value) || !uuid(value.id) || !['unpause', 'mint'].includes(String(value.kind))
 		|| !['quoted', 'awaiting_wallet', 'submitted', 'confirming', 'verified', 'reverted', 'invalid', 'cancelled'].includes(String(value.status))
+		|| !['wallet', 'relayer'].includes(String(value.submissionMode))
 		|| !isObject(value.transaction) || !address(value.transaction.from) || value.transaction.to !== order.destinationContract || value.transaction.chainId !== (order.destinationChainId === 11_155_111 ? '0xaa36a7' : '0x3e6') || value.transaction.value !== '0x0'
 		|| !quantity(value.transaction.gas) || !quantity(value.transaction.gasPrice) || !quantity(value.transaction.nonce)
 		|| !unsigned(value.estimatedFeeWei) || !unsigned(value.budgetWei) || BigInt(value.estimatedFeeWei) <= 0n || BigInt(value.budgetWei) <= 0n
@@ -37,7 +38,7 @@ export async function validateBridgeCall(value: unknown, order: BridgeOrder, set
 }
 async function validateSettlement(value: unknown, order: BridgeOrder): Promise<BridgeSettlement | null> {
 	if (value === null) return null;
-	if (!isObject(value) || value.orderId !== order.id || !states.includes(String(value.status))
+	if (!isObject(value) || value.orderId !== order.id || !states.includes(String(value.status)) || !['automatic', 'manual'].includes(String(value.mintMode))
 		|| typeof value.custodyAddress !== 'string' || !/^1[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(value.custodyAddress)
 		|| !date(value.paymentOpenedAt) || value.checkedAt !== null && !date(value.checkedAt) || value.lastError !== null && typeof value.lastError !== 'string'
 		|| !Array.isArray(value.attempts) || value.attempts.length > 20) throw new Error('Invalid bridge settlement response. Refresh saved progress.');

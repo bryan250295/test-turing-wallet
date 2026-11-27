@@ -76,8 +76,27 @@ Health endpoints: `/api/health/live`, `/api/health/ready`.
   dashboard or privilege-elevation API is supplied.
 - Bridge orders retain frozen terms and owner-scoped history. Each has unique
   encrypted custody; payment details require explicit acknowledgement. The backend
-  verifies ordinary MT transfers and prepares unpause/mint calls for MetaMask.
-  No backend EVM private key, automatic mint worker or reverse redemption exists.
+  verifies source transfers and can automatically mint after the confirmation
+  threshold when `V15_MINTER_KEY_FILE` points to an owner-only (`chmod 600`) key
+  matching `V15_MINTER_ADDRESS`. Without that file, the MetaMask mint flow remains
+  available. Automatic attempts persist the signed raw transaction before broadcast
+  and only retry that exact nonce/hash.
+- With Compose, set the host path in the root `.env`, for example
+  `V15_MINTER_KEY_FILE=./.secrets/v15-minter.key`. Compose mounts it read-only at
+  `/run/secrets/v15_minter_key`; the host file must be mode `600`. Leave the
+  variable unset to keep automatic minting disabled.
+- Optional testnet Admin automation uses two separate owner-only files:
+  `V15_ADMIN_SIGNER_1_KEY_FILE=./.secrets/v15-admin-signer-1.key` and
+  `V15_ADMIN_SIGNER_2_KEY_FILE=./.secrets/v15-admin-signer-2.key`. Both must be
+  set, mode `600`, and match the configured signer addresses. The backend saves
+  each exact signed proposal/approval before broadcasting and waits for six
+  canonical confirmations between them. Leave both unset to retain the manual
+  MetaMask activation flow. Keeping both keys in one backend preserves the
+  on-chain 2-of-2 sequence but intentionally places both signers in one trust
+  boundary; use this only for the configured test networks.
+- Sepolia burn-return payouts do not use those Admin signers. After the user's
+  irreversible burn reaches six confirmations, the custody signer freezes one
+  exact TBC payout and the backend now broadcasts and reconciles it automatically.
 - Authentication and funded flows need user wallet acceptance after the migration.
 
 ## Reverse bridge preparation

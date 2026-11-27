@@ -27,6 +27,7 @@ export interface PrepareOrderTerms {
 	identityId: string; idempotencyKey: string; deployment: BridgeDeployment;
 	sender: string; recipient: string; amountRaw: string; sourceSymbol: string;
 	targetBlockNumber: bigint; targetBlockHash: string;
+	draftId?: string;
 }
 
 @Injectable()
@@ -52,7 +53,11 @@ export class BridgeOrdersRepository {
 			if (await tx.bridgeOrder.count({ where: { identityId: terms.identityId, status: 'prepared', OR: [{ settlement: null }, { settlement: { status: { not: 'completed' } } }] } }) >= limits.maxOpenOrders) throw new ConflictException(`You already have ${limits.maxOpenOrders} unfinished orders. Complete one or close an unused preparation before creating another.`);
 			const deployment = await tx.bridgeDeployment.findFirst({ where: { id: terms.deployment.id, identityId: terms.identityId, status: 'verified', lastError: null } });
 			if (!deployment || deployment.contractAddress !== terms.deployment.contractAddress || deployment.runtimeCodeHash !== terms.deployment.runtimeCodeHash) throw new ConflictException('Deployment verification changed. Refresh its saved status before preparing an order.');
-			const id = randomUUID();
+			if (terms.draftId) {
+				const draft = await tx.bridgeOrderDraft.findFirst({ where: { id: terms.draftId, identityId: terms.identityId } });
+				if (!draft || draft.deploymentId !== terms.deployment.id || draft.status !== 'draft') throw new ConflictException('This transfer draft is no longer available to finalize. Refresh Reconciliation before retrying.');
+			}
+			const id = terms.draftId ?? randomUUID();
 			const destinationContract = deployment.contractAddress!;
 			const termsHash = createHash('sha256').update(JSON.stringify([
 				'learning-bridge-order-v1', id, terms.identityId, terms.idempotencyKey, 'testnet', deployment.contractId,
@@ -70,6 +75,7 @@ export class BridgeOrdersRepository {
 				targetCheckedBlockNumber: terms.targetBlockNumber, targetCheckedBlockHash: terms.targetBlockHash,
 				custody: { create: custody },
 			} });
+			if (terms.draftId) await tx.bridgeOrderDraft.update({ where: { id: terms.draftId }, data: { status: 'finalized', finalizedAt: new Date() } });
 			await tx.auditEvent.create({ data: { identityId: terms.identityId, action: 'bridge.order.prepared', data: { id, deploymentId: deployment.id, termsHash, paymentEnabled: false } } });
 			return publicOrder({ ...row, deployment });
 		}, { timeout: 10_000 });

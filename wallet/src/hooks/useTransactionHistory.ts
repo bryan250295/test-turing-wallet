@@ -4,8 +4,9 @@ import { detectConfirmations, statusOf } from '../utils/transactions';
 import { getErrorMessage } from '../utils/errors';
 import type { TransactionData } from '../types/api';
 import type { TransactionRow, TransactionDetails, ConfirmationTracking } from '../types/transaction';
+import { openBoundedWebSocket, type BoundedSocketState } from '../utils/boundedWebSocket';
 
-type RealtimeState = 'off' | 'connecting' | 'connected' | 'reconnecting';
+type RealtimeState = BoundedSocketState;
 const detailVersion = (row: TransactionRow) => `${statusOf(row)}:${row.records.find(({ source }) => source === 'FT tokens')?.data.contract_id ?? ''}`;
 interface HistorySnapshot {
 	type: 'history';
@@ -61,23 +62,17 @@ export default function useTransactionHistory(address: string, networkIsDevnet: 
 			? { ...previous, loading: true, errors: [] }
 			: { address, loading: true, rows: [], errors: [] });
 
-		let disposed = false;
-		let socket: WebSocket | null = null;
-		let retryTimer: ReturnType<typeof setTimeout> | null = null;
-		let attempts = 0;
-		const connect = () => {
-			if (disposed) return;
-			setRealtime(attempts ? 'reconnecting' : 'connecting');
-			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-			socket = new WebSocket(`${protocol}//${window.location.host}/api/transaction-history/ws`);
-			socket.onopen = () => {
-				attempts = 0;
-				setRealtime('connected');
-			};
-			socket.onmessage = (event) => {
-				if (disposed || typeof event.data !== 'string') return;
+		const controller = new AbortController();
+		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+		const disconnect = openBoundedWebSocket({
+			url: `${protocol}//${window.location.host}/api/transaction-history/ws`, signal: controller.signal,
+			onState: (next) => {
+				setRealtime(next);
+				if (next === 'reconnecting' || next === 'stopped') setState((previous) => ({ ...previous, loading: false }));
+			},
+			onMessage: (data) => {
 				try {
-					const snapshot = parseSnapshot(JSON.parse(event.data));
+					const snapshot = parseSnapshot(JSON.parse(data));
 					if (snapshot.address !== address) throw new Error('Live history identity mismatch.');
 					const stale = snapshot.rows.filter((row) => detailVersions.current.has(row.txid) && detailVersions.current.get(row.txid) !== detailVersion(row)).map((row) => row.txid);
 					for (const txid of stale) {
@@ -92,22 +87,13 @@ export default function useTransactionHistory(address: string, networkIsDevnet: 
 					setCheckedAt(snapshot.checkedAt);
 				} catch (error) {
 					setState((previous) => ({ ...previous, loading: false, errors: [getErrorMessage(error)] }));
-					socket?.close(1008, 'Invalid history message');
+					throw error;
 				}
-			};
-			socket.onclose = () => {
-				if (disposed) return;
-				attempts++;
-				setRealtime('reconnecting');
-				setState((previous) => ({ ...previous, loading: false }));
-				retryTimer = setTimeout(connect, Math.min(30_000, 1000 * 2 ** Math.min(attempts - 1, 5)));
-			};
-		};
-		connect();
+			},
+		});
 		return () => {
-			disposed = true;
-			if (retryTimer) clearTimeout(retryTimer);
-			socket?.close(1000, 'Transaction page closed');
+			controller.abort();
+			disconnect();
 			for (const controller of detailRequests.current.values()) controller.abort();
 			detailRequests.current.clear();
 		};

@@ -14,6 +14,8 @@ import { TransactionHistoryService } from './transaction-history/transaction-his
 import { attachTransactionHistoryWebSocket } from './transaction-history/transaction-history.websocket';
 import { ProofBridgeV3ProgressService } from './bridge/proof-bridge-v3-progress.service';
 import { attachProofBridgeV3WebSocket } from './bridge/proof-bridge-v3.websocket';
+import { BridgeProgressService } from './bridge/bridge-progress.service';
+import { attachBridgeReconciliationWebSocket } from './bridge/bridge-reconciliation.websocket';
 
 async function bootstrap() {
 	const config = environment();
@@ -43,6 +45,7 @@ async function bootstrap() {
 	}
 	attachTransactionHistoryWebSocket(app.getHttpServer(), app.get(AuthService), app.get(TransactionHistoryService), config.origin);
 	attachProofBridgeV3WebSocket(app.getHttpServer(), app.get(AuthService), app.get(ProofBridgeV3ProgressService), config.origin);
+	attachBridgeReconciliationWebSocket(app.getHttpServer(), app.get(AuthService), app.get(BridgeProgressService), config.origin);
 	await app.listen(config.port, '0.0.0.0');
 	Logger.log(`Backend ready on port ${config.port}`, 'Bootstrap');
 }

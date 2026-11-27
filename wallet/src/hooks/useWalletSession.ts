@@ -1,6 +1,6 @@
 import { getErrorMessage } from '../utils/errors';
 import type { WalletAddresses, WalletInfo, WalletNetwork, WalletResult } from '../types/wallet';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTuringWallet } from 'turing-wallet-provider';
 import { logAction } from '../services/actionLog';
 import useBackendSession from './useBackendSession';
@@ -16,8 +16,19 @@ export default function useWalletSession() {
 	const [busy, setBusy] = useState(false);
 	const [connecting, setConnecting] = useState(false);
 	const [connectionAttempt, setConnectionAttempt] = useState<WalletLoginAttempt | null>(null);
+	const automaticLoginAttempts = useRef(new Set<string>());
 	const networkIsDevnet = network?.network === 'tbc' && network?.type === 'testnet';
 	const backendAuth = useBackendSession(wallet, address, networkIsDevnet, connecting, connectionAttempt);
+	const requestBackendLogin = useCallback((automatic = false) => {
+		if (!wallet.isReady || !address || !networkIsDevnet) return false;
+		const context = `${address}:tbc:testnet`;
+		if (automatic) {
+			if (automaticLoginAttempts.current.has(context)) return false;
+			automaticLoginAttempts.current.add(context);
+		}
+		setConnectionAttempt((attempt) => ({ id: (attempt?.id ?? 0) + 1, address }));
+		return true;
+	}, [address, networkIsDevnet, wallet.isReady]);
 
 	useEffect(() => {
 		let active = true;
@@ -126,5 +137,5 @@ export default function useWalletSession() {
 		}
 	}
 
-	return { wallet, address, network, walletInfo, status, setStatus, result, setResult, busy: busy || connecting || backendAuth.pending, setBusy, networkIsDevnet, connect, backendAuth };
+	return { wallet, address, network, walletInfo, status, setStatus, result, setResult, busy: busy || connecting || backendAuth.pending, setBusy, networkIsDevnet, connect, requestBackendLogin, backendAuth };
 }

@@ -75,7 +75,7 @@ export class BridgeCallVerifier {
 		return withDeploymentRpc(response, operation);
 	}
 
-	async quote(order: SettlementOrder, kind: BridgeCallKind, from: Address, response: Response, previous?: BridgeCallAttempt) {
+	async quote(order: SettlementOrder, kind: BridgeCallKind, from: Address, response?: Response, previous?: BridgeCallAttempt) {
 		const chainId = order.destinationChainId;
 		const expected = kind === 'unpause' ? order.deployment.admin : order.deployment.minter;
 		if (from.toLowerCase() !== expected.toLowerCase()) throw new BadRequestException(`Select the saved ${kind === 'unpause' ? 'admin' : 'minter'} account ${expected} in MetaMask, then prepare the next step again.`);

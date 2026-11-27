@@ -16,6 +16,7 @@ import { SepoliaNativeReleaseEngine, type NativeReleaseInput, type NativeRelease
 import { ETHEREUM_SEPOLIA_CHAIN_ID, withSepoliaRpc } from './ethereum-sepolia-rpc';
 import { NATIVE_TBC_SOURCE_ID } from './ethereum-sepolia-route.service';
 import { BridgeProgressService } from './bridge-progress.service';
+import { matchesFrozenBurnEnvelope } from './sepolia-burn-transaction.verifier';
 
 const abi = parseAbi([
 	'function paused() view returns (bool)',
@@ -270,7 +271,7 @@ export class SepoliaBurnRedemptionService {
 		if (!call.txHash) throw new ConflictException('Save the burn transaction hash from MetaMask Activity first.');
 		return withSepoliaRpc(response, async (rpc) => {
 			let tx; try { tx = await rpc.getTransaction({ hash: call.txHash as Hex }); } catch { return { pending: true as const, confirmations: 0 }; }
-			if ((tx.chainId ?? 0) !== ETHEREUM_SEPOLIA_CHAIN_ID || tx.from.toLowerCase() !== call.fromAddress || tx.to?.toLowerCase() !== call.toAddress || tx.input.toLowerCase() !== call.data.toLowerCase() || tx.value !== 0n || tx.nonce !== Number(call.nonce)) throw new ConflictException('The Sepolia burn transaction differs from the frozen sender, contract, nonce, recipient or amount.');
+			if (!(await matchesFrozenBurnEnvelope(tx, call))) throw new ConflictException('The Sepolia burn transaction is not the reviewed direct call or its exact supported MetaMask delegation.');
 			let receipt; try { receipt = await rpc.getTransactionReceipt({ hash: call.txHash as Hex }); } catch { return { pending: true as const, confirmations: 0 }; }
 			if (receipt.status !== 'success') return { reverted: true as const, confirmations: 0, blockHash: receipt.blockHash, blockNumber: receipt.blockNumber, actualFee: receipt.gasUsed * receipt.effectiveGasPrice };
 			const block = await rpc.getBlock({ blockNumber: receipt.blockNumber });
@@ -384,28 +385,31 @@ export class SepoliaBurnRedemptionService {
 			const before = this.progressState(row);
 			if (planHash !== row.releasePlanHash || !row.releaseTxid || !row.releaseRaw) throw new ConflictException('Review the exact saved TBC release before broadcasting.');
 			if (row.status === 'completed') return view(row);
-			if (!['release_signed', 'release_broadcasting', 'release_submitted', 'release_confirming'].includes(row.status)) throw new ConflictException('The Sepolia burn must be verified before releasing TBC.');
-			this.assertSigned(row, order);
-			if (row.status !== 'release_signed') throw new ConflictException(`The release submission is already being reconciled as ${row.releaseTxid}. Refresh it; do not broadcast again.`);
-			if (row.sourceAssetKind === 'native-tbc') {
-				const deposit = order.settlement!.deposit!; await this.source.nativeUnspent(order.custody!.address, deposit.txid, deposit.vout, Number(order.amountRaw.toFixed(0)), signal);
-			} else {
-				if (!row.fundingTxid || row.fundingVout === null || row.fundingValueRaw === null || !row.reserveRaw || !row.proof) throw new ConflictException('The funded TT release evidence is incomplete.');
-				const material = await this.ftMaterial(order, row.tbcRecipient, signal);
-				await this.source.nativeUnspent(order.custody!.address, row.fundingTxid, row.fundingVout, Number(row.fundingValueRaw), signal);
-				if (material.reserve.uncheckedSerialize() !== row.reserveRaw || material.proof !== row.proof) throw new ConflictException('The original TT reserve differs from the saved release proof.');
-			}
-			const changed = await this.db.sepoliaBurnRedemption.updateMany({ where: { id: row.id, status: 'release_signed', updatedAt: row.updatedAt }, data: { status: 'release_broadcasting', checkedAt: new Date(), lastError: 'Submission started. Reconcile this exact saved TBC TXID before any retry.' } });
-			if (changed.count !== 1) throw new ConflictException('The saved TBC release changed. Refresh its status.');
-			let accepted = false;
-			try {
-				const result = await fetch(API_URLS.testnetBroadcast, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ txraw: row.releaseRaw }), signal: AbortSignal.timeout(25_000) });
-				const body = await result.json(); accepted = result.ok && String(body.code) === '200' && body.data?.txid === row.releaseTxid;
-			} catch { /* Durable uncertain state deliberately prevents a second broadcast. */ }
-			await this.db.sepoliaBurnRedemption.update({ where: { id: row.id }, data: { status: accepted ? 'release_submitted' : 'release_broadcasting', checkedAt: new Date(), lastError: accepted ? null : 'Submission is uncertain. Track the exact saved TBC TXID; do not create another release.' } });
+			await this.broadcastSaved(row, order, signal);
 			await this.publishIfChanged(row.id, before, 'sepolia-release-submitted');
 			return view(await this.owned(orderId, principal));
 		});
+	}
+	private async broadcastSaved(row: Row, order: SettlementOrder, signal: AbortSignal) {
+		if (!['release_signed', 'release_broadcasting', 'release_submitted', 'release_confirming'].includes(row.status)) throw new ConflictException('The Sepolia burn must be verified before releasing TBC.');
+		this.assertSigned(row, order);
+		if (row.status !== 'release_signed') return;
+		if (row.sourceAssetKind === 'native-tbc') {
+			const deposit = order.settlement!.deposit!; await this.source.nativeUnspent(order.custody!.address, deposit.txid, deposit.vout, Number(order.amountRaw.toFixed(0)), signal);
+		} else {
+			if (!row.fundingTxid || row.fundingVout === null || row.fundingValueRaw === null || !row.reserveRaw || !row.proof) throw new ConflictException('The funded TT release evidence is incomplete.');
+			const material = await this.ftMaterial(order, row.tbcRecipient, signal);
+			await this.source.nativeUnspent(order.custody!.address, row.fundingTxid, row.fundingVout, Number(row.fundingValueRaw), signal);
+			if (material.reserve.uncheckedSerialize() !== row.reserveRaw || material.proof !== row.proof) throw new ConflictException('The original TT reserve differs from the saved release proof.');
+		}
+		const changed = await this.db.sepoliaBurnRedemption.updateMany({ where: { id: row.id, status: 'release_signed', updatedAt: row.updatedAt }, data: { status: 'release_broadcasting', checkedAt: new Date(), lastError: 'Automatic submission started. Reconcile this exact saved TBC TXID; never create a second release.' } });
+		if (changed.count !== 1) return;
+		let accepted = false;
+		try {
+			const result = await fetch(API_URLS.testnetBroadcast, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ txraw: row.releaseRaw }), signal: AbortSignal.any([signal, AbortSignal.timeout(25_000)]) });
+			const body = await result.json(); accepted = result.ok && String(body.code) === '200' && body.data?.txid === row.releaseTxid;
+		} catch { /* The exact raw transaction and TXID remain durable for reconciliation. */ }
+		await this.db.sepoliaBurnRedemption.update({ where: { id: row.id }, data: { status: accepted ? 'release_submitted' : 'release_broadcasting', checkedAt: new Date(), lastError: accepted ? null : 'Automatic submission is uncertain. Tracking the exact saved TBC TXID; no replacement payout will be created.' } });
 	}
 	private async observeRelease(row: Row, order: SettlementOrder, signal: AbortSignal) {
 		this.assertSigned(row, order);
@@ -429,13 +433,14 @@ export class SepoliaBurnRedemptionService {
 	}
 	async observeReleaseProgress(id: string) {
 		const row = await this.db.sepoliaBurnRedemption.findUnique({ where: { id }, include });
-		if (!row?.releaseTxid || !['release_broadcasting', 'release_submitted', 'release_confirming'].includes(row.status)) return;
+		if (!row?.releaseTxid || !['release_signed', 'release_broadcasting', 'release_submitted', 'release_confirming'].includes(row.status)) return;
 		const before = this.progressState(row); const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 50_000); timeout.unref();
 		try {
 			const order = this.validOrder(await this.orders.find(row.orderId));
-			await this.observeRelease(row, order, controller.signal);
+			if (row.status === 'release_signed') await this.broadcastSaved(row, order, controller.signal);
+			else await this.observeRelease(row, order, controller.signal);
 		} catch (cause) {
-			await this.db.sepoliaBurnRedemption.updateMany({ where: { id, status: { in: ['release_broadcasting', 'release_submitted', 'release_confirming'] } }, data: { checkedAt: new Date(), lastError: cause instanceof Error ? cause.message : 'Automatic TBC release check is temporarily unavailable.' } });
+			await this.db.sepoliaBurnRedemption.updateMany({ where: { id, status: { in: ['release_signed', 'release_broadcasting', 'release_submitted', 'release_confirming'] } }, data: { checkedAt: new Date(), lastError: cause instanceof Error ? cause.message : 'Automatic TBC release check is temporarily unavailable.' } });
 			throw cause;
 		} finally { clearTimeout(timeout); await this.publishIfChanged(id, before, 'sepolia-release'); }
 	}

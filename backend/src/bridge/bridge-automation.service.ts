@@ -6,15 +6,24 @@ import { BridgeCallVerifier } from './bridge-call.verifier';
 import { BridgeProgressService } from './bridge-progress.service';
 import { BridgeSettlementRepository } from './bridge-settlement.repository';
 import { SepoliaBurnRedemptionService } from './sepolia-burn-redemption.service';
+import { BridgeMintRelayerService } from './bridge-mint-relayer.service';
 
 const TBC_POLL_MS = 60_000;
 const EVM_POLL_MS = 12_000;
 const SCHEDULER_MS = 5_000;
+const RECOVERY_DELAYS_MS = [5_000, 15_000, 30_000] as const;
+
+interface RecoveryTask {
+	attempts: number;
+	nextAt: number;
+	operation: () => Promise<void>;
+}
 
 @Injectable()
 export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 	private readonly logger = new Logger(BridgeAutomationService.name);
 	private readonly running = new Set<string>();
+	private readonly recoveries = new Map<string, RecoveryTask>();
 	private timer?: NodeJS.Timeout;
 	private ticking = false;
 	constructor(
@@ -25,6 +34,7 @@ export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 		@Inject(BridgeCallVerifier) private readonly calls: BridgeCallVerifier,
 		@Inject(BridgeProgressService) private readonly progress: BridgeProgressService,
 		@Inject(SepoliaBurnRedemptionService) private readonly sepoliaRedemptions: SepoliaBurnRedemptionService,
+		@Inject(BridgeMintRelayerService) private readonly mintRelayer: BridgeMintRelayerService,
 	) {}
 
 	onModuleInit() {
@@ -35,12 +45,28 @@ export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 	}
 	onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
 
-	private async guarded(key: string, operation: () => Promise<void>) {
+	private async guarded(key: string, operation: () => Promise<void>, boundedRecovery = false, recoveryAttempt = false) {
 		if (this.running.has(key) || this.running.size >= 4) return;
 		this.running.add(key);
-		try { await operation(); }
+		try {
+			await operation();
+			if (boundedRecovery) this.recoveries.delete(key);
+		}
 		catch (cause) {
 			this.logger.warn({ key, error: cause instanceof Error ? cause.message : 'Unknown background observation error' });
+			if (boundedRecovery) {
+				const current = this.recoveries.get(key);
+				if (!recoveryAttempt && current) { /* Keep the earlier bounded schedule. */ }
+				else {
+					const attempts = recoveryAttempt ? (current?.attempts ?? 0) + 1 : 0;
+					if (attempts < RECOVERY_DELAYS_MS.length) {
+						this.recoveries.set(key, { attempts, nextAt: Date.now() + RECOVERY_DELAYS_MS[attempts], operation });
+					} else {
+						this.recoveries.delete(key);
+						this.logger.warn({ key, message: 'Bounded connection recovery exhausted; normal background observation remains active.' });
+					}
+				}
+			}
 		} finally { this.running.delete(key); }
 	}
 
@@ -66,15 +92,19 @@ export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 					confirmations: after.settlement?.deposit?.confirmations, blockHash: after.settlement?.deposit?.blockHash, lastError: after.settlement?.lastError });
 				if (next !== before) this.progress.publish(order.identityId, order.id, 'tbc-confirmations');
 			}
-		});
+		}, true);
 	}
 
 	private async observeCall(attemptId: string, orderId: string) {
 		await this.guarded(`evm:${attemptId}`, async () => {
 			const order = await this.repository.find(orderId);
-			const row = order.settlement?.attempts.find((attempt) => attempt.id === attemptId);
+			let row = order.settlement?.attempts.find((attempt) => attempt.id === attemptId);
 			if (!row?.txHash || !['submitted', 'confirming'].includes(row.status)) return;
 			const before = JSON.stringify({ status: row.status, confirmations: row.confirmations, receiptBlockHash: row.receiptBlockHash, lastError: row.lastError });
+			await this.mintRelayer.broadcast(order, row);
+			const refreshed = await this.repository.find(orderId);
+			row = refreshed.settlement?.attempts.find((attempt) => attempt.id === attemptId);
+			if (!row?.txHash || !['submitted', 'confirming'].includes(row.status)) return;
 			const observation = await this.calls.receipt(order, row);
 			await this.repository.observeCall(order, row, observation);
 			const after = await this.repository.find(orderId); const nextRow = after.settlement?.attempts.find((attempt) => attempt.id === attemptId);
@@ -86,7 +116,7 @@ export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 	private async observeSepoliaFunding(redemptionId: string) {
 		await this.guarded(`sepolia-funding:${redemptionId}`, async () => {
 			await this.sepoliaRedemptions.observeFundingProgress(redemptionId);
-		});
+		}, true);
 	}
 	private async observeSepoliaBurn(callId: string) {
 		await this.guarded(`sepolia-burn:${callId}`, async () => { await this.sepoliaRedemptions.observeBurnProgress(callId); });
@@ -94,13 +124,26 @@ export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 	private async observeSepoliaRelease(redemptionId: string) {
 		await this.guarded(`sepolia-release:${redemptionId}`, async () => { await this.sepoliaRedemptions.observeReleaseProgress(redemptionId); });
 	}
+	private async advanceMint(orderId: string) {
+		await this.guarded(`mint:${orderId}`, async () => {
+			const order = await this.repository.find(orderId);
+			try { await this.mintRelayer.advance(order); }
+			catch (cause) {
+				const message = `Automatic mint is temporarily unavailable: ${cause instanceof Error ? cause.message : 'unknown relayer error'}`;
+				await this.repository.unavailable(order, message.slice(0, 1000), false);
+				this.progress.publish(order.identityId, order.id, 'automatic-mint-retrying');
+				throw cause;
+			}
+		});
+	}
 
 	private async tick() {
 		if (this.ticking) return;
 		this.ticking = true;
 		try {
 			const now = Date.now();
-			const [settlements, calls, sepoliaFunding, sepoliaBurns, sepoliaReleases] = await Promise.all([
+			const recoveries = [...this.recoveries.entries()].filter(([, task]) => task.nextAt <= now);
+			const [settlements, calls, automaticMints, sepoliaFunding, sepoliaBurns, sepoliaReleases] = await Promise.all([
 				this.db.bridgeSettlement.findMany({
 					where: { sourceTxid: { not: null }, status: { in: ['awaiting_payment', 'confirming', 'ready_to_mint', 'mint_pending'] },
 						OR: [{ checkedAt: null }, { checkedAt: { lte: new Date(now - TBC_POLL_MS) } }] },
@@ -110,6 +153,10 @@ export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 					where: { txHash: { not: null }, status: { in: ['submitted', 'confirming'] }, updatedAt: { lte: new Date(now - EVM_POLL_MS) } },
 					select: { id: true, orderId: true }, orderBy: { updatedAt: 'asc' }, take: 8,
 				}),
+				this.mintRelayer.isConfigured() ? this.db.bridgeSettlement.findMany({
+					where: { status: 'ready_to_mint', OR: [{ checkedAt: null }, { checkedAt: { lte: new Date(now - EVM_POLL_MS) } }] },
+					select: { orderId: true }, orderBy: { checkedAt: { sort: 'asc', nulls: 'first' } }, take: 4,
+				}) : Promise.resolve([]),
 				this.db.sepoliaBurnRedemption.findMany({
 					where: { status: 'awaiting_fee', OR: [{ checkedAt: null }, { checkedAt: { lte: new Date(now - TBC_POLL_MS) } }] },
 					select: { id: true }, orderBy: { checkedAt: { sort: 'asc', nulls: 'first' } }, take: 8,
@@ -119,14 +166,16 @@ export class BridgeAutomationService implements OnModuleInit, OnModuleDestroy {
 					select: { id: true }, orderBy: { updatedAt: 'asc' }, take: 8,
 				}),
 				this.db.sepoliaBurnRedemption.findMany({
-					where: { releaseTxid: { not: null }, status: { in: ['release_broadcasting', 'release_submitted', 'release_confirming'] },
+					where: { releaseTxid: { not: null }, status: { in: ['release_signed', 'release_broadcasting', 'release_submitted', 'release_confirming'] },
 						OR: [{ checkedAt: null }, { checkedAt: { lte: new Date(now - TBC_POLL_MS) } }] },
 					select: { id: true }, orderBy: { checkedAt: { sort: 'asc', nulls: 'first' } }, take: 8,
 				}),
 			]);
 			await Promise.all([
+				...recoveries.map(([key, task]) => this.guarded(key, task.operation, true, true)),
 				...settlements.map((row) => this.observeDeposit(row.orderId)),
 				...calls.map((row) => this.observeCall(row.id, row.orderId)),
+				...automaticMints.map((row) => this.advanceMint(row.orderId)),
 				...sepoliaFunding.map((row) => this.observeSepoliaFunding(row.id)),
 				...sepoliaBurns.map((row) => this.observeSepoliaBurn(row.id)),
 				...sepoliaReleases.map((row) => this.observeSepoliaRelease(row.id)),

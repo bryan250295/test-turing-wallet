@@ -10,6 +10,9 @@ export interface Environment {
 	legacyDirectory: string;
 	sessionHours: number;
 	phase3RelayerKeyFile: string | null;
+	v15MinterKeyFile: string | null;
+	v15AdminSigner1KeyFile: string | null;
+	v15AdminSigner2KeyFile: string | null;
 	sepoliaRpcUrl: string;
 	sepoliaAdminAddress: string;
 	sepoliaWrappedTbcAddress: string;
@@ -30,6 +33,9 @@ export function environment(): Environment {
 		port, origin: origin.origin, secureCookies: origin.protocol === 'https:', keyFile: resolve(process.env.SECRET_KEY_FILE ?? '../.secrets/htlc.key'),
 		custodyKeyFile: resolve(process.env.BRIDGE_CUSTODY_KEY_FILE ?? '../.secrets/bridge-custody.key'), legacyDirectory: resolve(process.env.LEGACY_STORAGE_DIR ?? '../wallet/storage/htlc'),
 		sessionHours, phase3RelayerKeyFile: process.env.PHASE3_RELAYER_KEY_FILE ? resolve(process.env.PHASE3_RELAYER_KEY_FILE) : null,
+		v15MinterKeyFile: process.env.V15_MINTER_KEY_FILE ? resolve(process.env.V15_MINTER_KEY_FILE) : null,
+		v15AdminSigner1KeyFile: process.env.V15_ADMIN_SIGNER_1_KEY_FILE ? resolve(process.env.V15_ADMIN_SIGNER_1_KEY_FILE) : null,
+		v15AdminSigner2KeyFile: process.env.V15_ADMIN_SIGNER_2_KEY_FILE ? resolve(process.env.V15_ADMIN_SIGNER_2_KEY_FILE) : null,
 		sepoliaRpcUrl: sepoliaRpcUrl.toString(),
 		sepoliaAdminAddress: process.env.SEPOLIA_BRIDGE_ADMIN_ADDRESS ?? '0x6B8108cEe1cF06e4bdceB58B5Eb0208E52Ae479b',
 		sepoliaWrappedTbcAddress: process.env.SEPOLIA_WRAPPED_TBC_ADDRESS ?? '0x788dfe4DC76CAb6A746608660D87AE905fc2Ca7b',

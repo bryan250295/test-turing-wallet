@@ -1,8 +1,7 @@
 import { BRIDGE_ROUTE_CATALOG } from '../../../../shared/src/config/bridgeRoutes';
 import type useHyperEvmWallet from '../../hooks/useHyperEvmWallet';
-import type { VerifiedBridgeAsset } from '../../types/learningBridge';
 import type { WalletSession } from '../../types/wallet';
-import BridgeOrders from './BridgeOrders';
+import BridgeOrders, { type BridgeTransferAsset } from './BridgeOrders';
 
 type Route = typeof BRIDGE_ROUTE_CATALOG[number];
 
@@ -33,13 +32,17 @@ export function ArchivedBridgeRoute({ route }: { route: Route }) {
 interface CustodialBridgeV15TransferProps {
 	session: WalletSession;
 	evm: ReturnType<typeof useHyperEvmWallet>;
-	asset: VerifiedBridgeAsset | null;
+	asset: BridgeTransferAsset | null;
 	active: boolean;
 	direction: 'forward' | 'return';
 	onReturn: () => void;
+	orderId?: string;
+	stage?: 'all' | 'order' | 'transfer';
+	onOrderAvailable?: () => void;
+	onBackToOrder?: () => void;
 }
 
-export function CustodialBridgeV15Transfer({ session, evm, asset, active, direction, onReturn }: CustodialBridgeV15TransferProps) {
+export function CustodialBridgeV15Transfer({ session, evm, asset, active, direction, onReturn, orderId, stage, onOrderAvailable, onBackToOrder }: CustodialBridgeV15TransferProps) {
 	return <section className="htlc-section proof-transfer" aria-labelledby="custodial-transfer-title">
 		<header className="history-titlebar">
 			<div>
@@ -55,7 +58,7 @@ export function CustodialBridgeV15Transfer({ session, evm, asset, active, direct
 			<div><dt>Selected source</dt><dd>{asset ? <>{asset.name} ({asset.symbol}) · <code>{asset.contractId}</code></> : 'Choose and verify a TBC Testnet FT above'}</dd></div>
 		</dl>
 		{!asset && <p className="history-feedback">Choose a source token above and wait for its canonical-chain verification. Its matching saved V1.5 deployment will then be selected automatically.</p>}
-		<BridgeOrders session={session} evm={evm} asset={asset} active={active} direction={direction} onReturn={onReturn} />
+		<BridgeOrders session={session} evm={evm} asset={asset} active={active} direction={direction} onReturn={onReturn} orderId={orderId} stage={stage} onOrderAvailable={onOrderAvailable} onBackToOrder={onBackToOrder} />
 		<p className="history-note">No user contract deployment and no user HYPE payment. The source wallet pays the TBC transaction fee; the operator relayer pays only the destination mint gas.</p>
 	</section>;
 }

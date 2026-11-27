@@ -1,4 +1,4 @@
-import type { BridgeOrder, BridgeOrderInput, BridgeOrderSetup } from '../types/learningBridge';
+import type { BridgeOrder, BridgeOrderDraft, BridgeOrderDraftFinalizeInput, BridgeOrderDraftInput, BridgeOrderInput, BridgeOrderSetup } from '../types/learningBridge';
 import { LEARNING_BRIDGE_ORDERS as rules } from '../../../shared/src/config/learningBridge';
 import { validWrappedName, validWrappedSymbol } from '../../../shared/src/config/bridgeRoutes';
 import { backendData } from './backendClient';
@@ -27,6 +27,16 @@ function order(value: unknown): BridgeOrder {
 	return value as unknown as BridgeOrder;
 }
 
+function draft(value: unknown): BridgeOrderDraft {
+	if (!isObject(value) || !uuid(value.id) || !uuid(value.deploymentId) || !['draft', 'finalized', 'cancelled'].includes(String(value.status))
+		|| typeof value.contractId !== 'string' || !/^(?!0{64}$)[0-9a-f]{64}$/.test(value.contractId) || !['fungible-token', 'native-tbc'].includes(String(value.sourceAssetKind))
+		|| ![998, 11_155_111].includes(Number(value.destinationChainId)) || !address(value.destinationContract)
+		|| typeof value.decimals !== 'number' || !Number.isInteger(value.decimals) || value.decimals < 0 || value.decimals > 255 || typeof value.symbol !== 'string' || !value.symbol
+		|| !validWrappedName(value.wrappedName) || !validWrappedSymbol(value.wrappedSymbol) || !date(value.createdAt) || !date(value.updatedAt)
+		|| value.finalizedAt !== null && !date(value.finalizedAt) || value.cancelledAt !== null && !date(value.cancelledAt)) throw new Error('The saved transfer draft response is invalid.');
+	return value as unknown as BridgeOrderDraft;
+}
+
 export async function loadBridgeOrderSetup(signal: AbortSignal): Promise<BridgeOrderSetup> {
 	const value: unknown = await backendData('/api/bridge/orders/setup', undefined, true, signal);
 	if (!isObject(value) || typeof value.custodyReady !== 'boolean' || value.paymentEnabled !== value.custodyReady
@@ -44,6 +54,17 @@ export async function listBridgeOrders(signal: AbortSignal): Promise<BridgeOrder
 }
 export async function prepareBridgeOrder(input: BridgeOrderInput, signal: AbortSignal) {
 	return order(await backendData('/api/bridge/orders', input, true, signal));
+}
+export async function createBridgeOrderDraft(input: BridgeOrderDraftInput, signal: AbortSignal) {
+	return draft(await backendData('/api/bridge/orders/drafts', input, true, signal));
+}
+export async function loadBridgeOrderDraft(id: string, signal: AbortSignal) {
+	if (!uuid(id)) throw new Error('Invalid transfer order ID.');
+	return draft(await backendData(`/api/bridge/orders/drafts/${id}`, undefined, true, signal));
+}
+export async function finalizeBridgeOrderDraft(id: string, input: BridgeOrderDraftFinalizeInput, signal: AbortSignal) {
+	if (!uuid(id)) throw new Error('Invalid transfer order ID.');
+	return order(await backendData(`/api/bridge/orders/drafts/${id}/finalize`, input, true, signal));
 }
 export async function cancelBridgeOrder(id: string, signal: AbortSignal) {
 	if (!uuid(id)) throw new Error('Invalid order ID.');

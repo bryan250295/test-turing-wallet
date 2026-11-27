@@ -12,7 +12,7 @@ import { BridgeSteps, AttemptHistory, bridgeStatus } from './BridgeFlow';
 import SepoliaBurnReturn from './SepoliaBurnReturn';
 
 interface Props { order: BridgeOrder; session: WalletSession; evm: ReturnType<typeof useHyperEvmWallet>; active: boolean; onChanged: () => void; returnOnly: boolean; onReturn: () => void; allowReturn?: boolean }
-const labels = { awaiting_payment: 'Awaiting token payment', confirming: 'Confirming source deposit', ready_to_mint: 'Deposit verified · ready for wallet settlement', mint_pending: 'Mint wallet transaction pending', completed: 'Completed · wrapped tokens received', needs_review: 'Reconciliation required' };
+const labels = { awaiting_payment: 'Awaiting token payment', confirming: 'Confirming source deposit', ready_to_mint: 'Deposit verified · ready to mint', mint_pending: 'Mint transaction pending', completed: 'Completed · wrapped tokens received', needs_review: 'Reconciliation required' };
 export default function BridgeSettlement({ order, session, evm, active, onChanged, returnOnly, onReturn, allowReturn = true }: Props) {
 	const sepolia = order.destinationChainId === 11_155_111;
 	const flow = useBridgeSettlement(order, session, evm, active && !(returnOnly && sepolia), onChanged);
@@ -28,6 +28,7 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 		const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer);
 	}, [active, flow.value?.attempts]);
 	const value = flow.value;
+	const automaticMint = value?.mintMode === 'automatic';
 	const busy = flow.loading || !!flow.action || session.busy || !!evm.pending || evm.loading;
 	const amount = formatRawAmount(order.amountRaw, order.decimals);
 	const walletBlockReason = !flow.enabled ? 'Reconnect your original TBC wallet to continue this transfer.'
@@ -53,8 +54,8 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 		{value?.status === 'completed' && <RedemptionEscrowPreview order={order} session={session} evm={evm} active={active} />}
 	</section>;
 	return <section className="htlc-section" aria-label="Order payment and mint" aria-busy={busy}>
-		<header className="history-titlebar"><div><h4>{value ? labels[value.status] : 'Payment and mint'}</h4><p className="history-note">Background progress · {flow.realtime === 'connected' ? 'live' : flow.realtime === 'off' ? 'offline' : 'reconnecting…'}</p></div><button type="button" className="history-secondary" disabled={!flow.enabled || busy} onClick={flow.refresh}>Refresh saved progress</button></header>
-		<BridgeSteps steps={[`Pay ${order.symbol}`, 'Wait for deposit', 'Confirm mint', `Receive ${order.wrappedSymbol}`]} current={!value?.deposit ? 0 : value.status === 'confirming' ? 1 : value.status === 'completed' ? 3 : 2} complete={value?.status === 'completed'} />
+		<header className="history-titlebar"><div><h4>{value ? labels[value.status] : 'Payment and mint'}</h4><p className="history-note">Background progress · {flow.realtime === 'connected' ? 'live' : flow.realtime === 'off' ? 'offline' : flow.realtime === 'stopped' ? 'live connection stopped · refresh manually' : 'reconnecting once…'}</p></div><button type="button" className="history-secondary" disabled={!flow.enabled || busy} onClick={flow.refresh}>Refresh saved progress</button></header>
+		<BridgeSteps steps={[`Pay ${order.symbol}`, 'Wait for deposit', automaticMint ? 'Mint automatically' : 'Confirm mint', `Receive ${order.wrappedSymbol}`]} current={!value?.deposit ? 0 : value.status === 'confirming' ? 1 : value.status === 'completed' ? 3 : 2} complete={value?.status === 'completed'} />
 		{value && value.status !== 'completed' && <p className="history-note">The backend checks TBC about once per minute and submitted {destinationName} transactions about every 12 seconds. You may close this page; saved progress resumes after restart.</p>}
 		{flow.loading && <p role="status">Loading saved progress…</p>}
 		{!value && !flow.loading && !flow.error && <>
@@ -63,7 +64,7 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 			<button type="button" disabled={!flow.enabled || busy || !acknowledged} onClick={() => { void flow.open(); }}>Open payment details</button>
 		</>}
 		{value && <>
-			{value.status !== 'completed' && <p>Follow the highlighted step. Keep MetaMask open when confirming a wallet request.</p>}
+			{value.status !== 'completed' && <p>{automaticMint ? `After ${order.sourceConfirmationsRequired} source confirmations, the limited backend relayer mints automatically. You may close this page.` : 'Follow the highlighted step. Keep MetaMask open when confirming a wallet request.'}</p>}
 			<details className="bridge-flow-history"><summary>Payment amount and addresses</summary>
 			<dl className="history-detail-grid">
 				<div><dt>Exact payment · TBC Testnet</dt><dd>{amount} {order.symbol}</dd></div>
@@ -87,7 +88,11 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 				<p>Actual source network fee: {formatRawAmount(value.deposit.feeRaw, 6)} TBC</p>
 				{value.status !== 'completed' && <p role="status">Waiting for the background verifier. Manual refresh is available above.</p>}
 			</>}
-			{value.status === 'ready_to_mint' && !activeCall && <div className="htlc-section">
+			{value.status === 'ready_to_mint' && automaticMint && !activeCall && <div className="htlc-section" role="status">
+				<p><strong>Source threshold reached.</strong> The limited relayer is preparing the exact mint transaction. No MetaMask approval is required.</p>
+				<p className="history-note">The signed transaction is saved before broadcast, so a retry reuses the same nonce and hash.</p>
+			</div>}
+			{value.status === 'ready_to_mint' && !automaticMint && !activeCall && <div className="htlc-section">
 				<p>Click Prepare next wallet step, review the fee and confirm in MetaMask.</p>
 				<button type="button" disabled={!canWallet} aria-describedby={walletBlockReason ? `wallet-block-${order.id}` : undefined} onClick={() => { void flow.quote('next'); }}>Prepare next wallet step</button>
                 {walletBlockReason && <p id={`wallet-block-${order.id}`} className="history-feedback" role="status">{walletBlockReason}</p>}
@@ -101,20 +106,21 @@ export default function BridgeSettlement({ order, session, evm, active, onChange
 				<h4>{callTitle(row)} · {bridgeStatus(row.status)}</h4>
 				<p>From <code>{row.transaction.from}</code> → Contract <code>{row.transaction.to}</code></p>
 				<p>Estimated fee {formatHypeBalance(row.estimatedFeeWei)} {destinationFeeSymbol} · Budget with gas margin {formatHypeBalance(row.budgetWei)} {destinationFeeSymbol}</p>
-				{row.status === 'quoted' && <>
+				{row.status === 'quoted' && row.submissionMode === 'relayer' && <p role="status">The backend relayer is signing this exact mint. No wallet action is required.</p>}
+				{row.status === 'quoted' && row.submissionMode === 'wallet' && <>
 					<p>Confirm before {formatDateTime(row.expiresAt)} MYT.</p>
 					{row.kind === 'mint' && <p>Mint {amount} {order.wrappedSymbol} to <code>{order.recipient}</code> for this order.</p>}
 					<label className="bridge-role-choice"><input type="checkbox" checked={!!reviewed[row.id]} disabled={busy} onChange={(event) => setReviewed((old) => ({ ...old, [row.id]: event.target.checked }))} /> I reviewed this action, address, token amount and {destinationFeeSymbol} budget.</label>
 					<div className="htlc-actions"><button type="button" disabled={!canWallet || !reviewed[row.id] || now >= Date.parse(row.expiresAt) || evm.address?.toLowerCase() !== row.transaction.from} onClick={() => { void flow.send(row); }}>Confirm {row.kind} in MetaMask</button><button type="button" className="history-secondary" disabled={busy} onClick={() => { void flow.cancel(row); }}>Discard unused quote</button></div>
 				</>}
-				{row.status === 'awaiting_wallet' && !row.txHash && <>
+				{row.status === 'awaiting_wallet' && row.submissionMode === 'wallet' && !row.txHash && <>
 					<p>Open MetaMask and finish the pending request. If it was already sent, paste its transaction hash below. Do not send again.</p>
 					<label htmlFor={`call-hash-${row.id}`}>Recover {destinationName} transaction hash</label><input id={`call-hash-${row.id}`} type="text" autoComplete="off" spellCheck={false} value={hashes[row.id] ?? ''} disabled={busy} onChange={(event) => setHashes((old) => ({ ...old, [row.id]: event.target.value }))} />
 					<button type="button" disabled={busy || !/^0x[0-9a-f]{64}$/i.test(hashes[row.id]?.trim() ?? '')} onClick={() => { void flow.attach(row, hashes[row.id]); }}>Save Activity hash</button>
 					<details><summary>No transaction was sent?</summary><p>Check MetaMask Activity first. Discarding this local request cannot cancel a pending wallet or chain transaction. If a transaction exists, recover its hash above.</p><label className="bridge-role-choice"><input type="checkbox" checked={!!notSent[row.id]} disabled={busy} onChange={(event) => setNotSent((old) => ({ ...old, [row.id]: event.target.checked }))} /> I checked Activity and confirmed this request was rejected or never sent.</label><button type="button" className="history-secondary" disabled={busy || !notSent[row.id]} onClick={() => { void flow.discardUnsent(row); }}>Discard unsent wallet request</button></details>
 				</>}
 				{row.txHash && <>
-					<p>{destinationName} transaction: <code>{row.txHash}</code></p><p>Confirmations: {row.confirmations} / {order.destinationConfirmationsRequired} required{row.actualFeeWei !== null ? ` · Actual fee ${formatHypeBalance(row.actualFeeWei)} ${destinationFeeSymbol}` : ''}</p>
+					<p>{row.submissionMode === 'relayer' ? 'Automatic mint transaction' : `${destinationName} transaction`}: <code>{row.txHash}</code></p><p>Confirmations: {row.confirmations} / {order.destinationConfirmationsRequired} required{row.actualFeeWei !== null ? ` · Actual fee ${formatHypeBalance(row.actualFeeWei)} ${destinationFeeSymbol}` : ''}</p>
 					{value.status !== 'completed' && <p role="status">Receipt and destination confirmations are checked automatically.</p>}
 				</>}
 				{row.lastError && <p className="result error" role="alert">{row.lastError}</p>}

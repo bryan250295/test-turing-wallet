@@ -5,6 +5,7 @@ import type useHyperEvmWallet from './useHyperEvmWallet';
 import { beginCall, cancelCall, checkCall, checkDeposit, getSettlement, openPayment, quoteCall, rememberCallHash, savedCallHashes, submitCall } from '../services/bridgeSettlement';
 import { getErrorMessage } from '../utils/errors';
 import { evmWalletError } from '../services/evmWallet';
+import { openBoundedEventSource, type LiveConnectionState } from '../utils/boundedEventSource';
 
 interface TokenImportState {
 	context: string;
@@ -21,7 +22,7 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 	const [state, setState] = useState<{ context: string; value: BridgeSettlement | null; loading: boolean; error: string }>({ context: '', value: null, loading: false, error: '' });
 	const [action, setAction] = useState(''); const working = useRef(false); const request = useRef<AbortController | null>(null);
 	const [revision, setRevision] = useState(0);
-	const [realtime, setRealtime] = useState<'off' | 'connecting' | 'connected' | 'reconnecting'>('off');
+	const [realtime, setRealtime] = useState<LiveConnectionState>('off');
 	const [tokenImport, setTokenImport] = useState<TokenImportState>({ context: '', status: 'idle', message: '' });
 	const reportedStatus = useRef(order.settlementStatus);
 	const changedCallback = useRef(onChanged); changedCallback.current = onChanged;
@@ -50,16 +51,13 @@ export default function useBridgeSettlement(order: BridgeOrder, session: WalletS
 	useEffect(() => () => { request.current?.abort(); }, [context]);
 	useEffect(() => {
 		if (!enabled || realtimeComplete) { setRealtime('off'); return; }
-		setRealtime('connecting');
-		const source = new EventSource(`/api/bridge/orders/${order.id}/settlement/events`, { withCredentials: true });
+		const controller = new AbortController();
 		const invalidate = () => { if (live() && !working.current) setRevision((old) => old + 1); };
-		const connected = () => { if (live()) setRealtime('connected'); };
-		source.onopen = connected;
-		source.onerror = () => { if (live()) setRealtime('reconnecting'); };
-		source.addEventListener('ready', connected);
-		source.addEventListener('heartbeat', connected);
-		source.addEventListener('progress', invalidate);
-		return () => { source.close(); setRealtime('off'); };
+		const close = openBoundedEventSource({
+			url: `/api/bridge/orders/${order.id}/settlement/events`, signal: controller.signal,
+			onState: (next) => { if (live()) setRealtime(next); }, onProgress: invalidate,
+		});
+		return () => { controller.abort(); close(); setRealtime('off'); };
 	}, [context, enabled, order.id, realtimeComplete]);
 	async function run(label: string, operation: (signal: AbortSignal) => Promise<unknown>, notify = false) {
 		if (!live() || working.current) return;

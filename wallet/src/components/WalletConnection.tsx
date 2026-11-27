@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import type { WalletPageProps } from '../types/wallet';
 
 export default function WalletConnection({ session }: WalletPageProps) {
-	const { address, network, walletInfo, networkIsDevnet, busy, connect } = session;
+	const { address, network, walletInfo, networkIsDevnet, busy, connect, requestBackendLogin } = session;
 	const walletName = typeof walletInfo?.walletName === 'string'
 		? walletInfo.walletName
 		: typeof walletInfo?.name === 'string' ? walletInfo.name : 'Turing Wallet';
@@ -15,10 +16,22 @@ export default function WalletConnection({ session }: WalletPageProps) {
 	const connectionLabel = !connected ? 'Wallet not connected to Devnet'
 		: session.backendAuth.pending ? 'Completing your connection…'
 			: session.backendAuth.ready ? 'TBC Devnet connected' : 'Wallet connected · login required';
+	useEffect(() => {
+		if (!connected || session.backendAuth.ready || session.backendAuth.pending || session.backendAuth.error) return;
+		requestBackendLogin(true);
+	}, [connected, requestBackendLogin, session.backendAuth.error, session.backendAuth.pending, session.backendAuth.ready]);
+	const retryLogin = () => {
+		if (connected) requestBackendLogin(false);
+		else void connect();
+	};
 	return (
 		<div className="connection">
 			<div className="connection-info">
-				<strong><span className={`dot ${session.backendAuth.ready ? 'ok' : ''}`} />{connectionLabel}</strong>
+				{connected && !session.backendAuth.ready && !session.backendAuth.pending
+					? <button type="button" className="connection-status connection-status-action" onClick={retryLogin} disabled={busy}>
+						<span className="dot" aria-hidden="true" /><span>{connectionLabel}</span><small>Click to reconnect</small>
+					</button>
+					: <strong className="connection-status"><span className={`dot ${session.backendAuth.ready ? 'ok' : ''}`} />{connectionLabel}</strong>}
 				<dl className="wallet-details">
 					<div><dt>Wallet</dt><dd>{walletName}</dd></div>
 					<div><dt>Network</dt><dd>{networkLabel}</dd></div>
@@ -26,10 +39,10 @@ export default function WalletConnection({ session }: WalletPageProps) {
 					{walletVersion !== null && <div><dt>Version</dt><dd>{walletVersion}</dd></div>}
 				</dl>
 				{session.backendAuth.pending && address && networkIsDevnet && <p role="status">Completing your connection. Confirm the login signature if your wallet asks.</p>}
-				{connected && !session.backendAuth.ready && !session.backendAuth.pending && !session.backendAuth.error && <p role="status">Click Reconnect to confirm your wallet login and continue.</p>}
+				{connected && !session.backendAuth.ready && !session.backendAuth.pending && !session.backendAuth.error && <p role="status">Automatic login opens once. If no request appears, click the status above to retry.</p>}
 				{session.backendAuth.error && <p className="result error" role="alert">{session.backendAuth.error}</p>}
 			</div>
-			<button type="button" onClick={connect} disabled={busy}>
+			<button type="button" onClick={retryLogin} disabled={busy}>
 				{session.backendAuth.pending ? 'Connecting…' : busy ? 'Working…' : address ? 'Reconnect' : 'Connect wallet'}
 			</button>
 		</div>

@@ -34,7 +34,8 @@ export default function BridgeSourcePayment({ order, settlement, session, enable
  }, [context, revision]);
  const visible = state.context === context ? state : { receipt: null, loaded: false, error: '' };
  const receipt = visible.receipt;
- const canPay = enabled && visible.loaded && !busy && !action && !visible.error && !pendingSourcePayment(order) && (!receipt || receipt.status === 'cancelled');
+ const canPrepare = enabled && visible.loaded && !busy && !action && !visible.error && !pendingSourcePayment(order) && (!receipt || receipt.status === 'cancelled');
+ const canOpenWallet = enabled && visible.loaded && !busy && !action && !pendingSourcePayment(order) && receipt?.status === 'awaiting_wallet';
  useEffect(() => {
   if (!receipt?.txid || busy || action || verificationError || visible.error || !enabled || verifiedTxid.current === receipt.txid) return;
   verifiedTxid.current = receipt.txid;
@@ -45,30 +46,47 @@ export default function BridgeSourcePayment({ order, settlement, session, enable
   const address = addresses as WalletAddresses | undefined;
   if (!live() || !enabled || network?.network !== 'tbc' || network.type !== 'testnet' || (address?.tbcAddress ?? address?.addresses?.tbcAddress) !== order.sender) throw new Error('Reconnect the original TBC wallet on Testnet. No new wallet prompt was opened.');
  }
- async function pay() {
-  if (!canPay || working.current) return;
-  working.current = true; setAction('pay'); session.setBusy(true);
-  let reserved = false;
+ async function prepare() {
+  if (!canPrepare || working.current) return;
+  working.current = true; setAction('prepare'); session.setBusy(true);
   try {
    await verifyWallet();
-   const request = await beginSourcePayment(order, settlement, AbortSignal.timeout(20_000)); reserved = true;
+   const request = await beginSourcePayment(order, settlement, AbortSignal.timeout(20_000));
    if (live()) setState({ context, receipt: request, loaded: true, error: '' });
-   await verifyWallet();
-   // Exactly one explicit wallet request. Never retry a send or time out a pending approval.
-   const result = order.sourceAssetKind === 'native-tbc'
-    ? await session.wallet.sendTransaction([{ flag: 'P2PKH', address: request.custodyAddress, satoshis: order.amountRaw, broadcastEnabled: true, domain: DEVNET_DOMAIN }])
-    : await session.wallet.sendTransaction([{ flag: 'FT_TRANSFER', ft_contract_address: order.contractId, address: request.custodyAddress,
+  } catch (cause) {
+   if (live()) setState(old => ({ ...old, loaded: true, error: getErrorMessage(cause) }));
+  } finally { working.current = false; session.setBusy(false); if (live()) setAction(''); }
+ }
+ async function pay() {
+  if (!canOpenWallet || !receipt || working.current) return;
+  working.current = true;
+  // Call the wallet immediately in the click event. Awaiting a backend request first
+  // can consume the browser's user activation and prevent the wallet from opening.
+  let walletRequest: ReturnType<typeof session.wallet.sendTransaction>;
+  try {
+   if (session.address !== order.sender || !session.networkIsDevnet) throw new Error('Reconnect the original TBC wallet on Testnet before opening this payment.');
+   walletRequest = order.sourceAssetKind === 'native-tbc'
+    ? session.wallet.sendTransaction([{ flag: 'P2PKH', address: receipt.custodyAddress, satoshis: order.amountRaw, broadcastEnabled: true, domain: DEVNET_DOMAIN }])
+    : session.wallet.sendTransaction([{ flag: 'FT_TRANSFER', ft_contract_address: order.contractId, address: receipt.custodyAddress,
      ft_amount: walletTokenAmount(order.amountRaw, order.decimals), broadcastEnabled: true, domain: DEVNET_DOMAIN }]);
+  } catch (cause) {
+   working.current = false;
+   if (live()) setState(old => ({ ...old, error: getErrorMessage(cause) }));
+   return;
+  }
+  setAction('pay'); session.setBusy(true);
+  try {
+   const result = await walletRequest;
    const txid = result?.txid?.trim().toLowerCase();
-   if (!txid || !/^(?!0{64}$)[0-9a-f]{64}$/.test(txid)) throw new Error('Turing Wallet did not return a single payment TXID. Check its transaction history before retrying; the payment request remains reserved.');
-   rememberSourcePayment(order, { attemptId: request.attemptId, txid });
-   const saved = await submitSourcePayment(order, settlement, request.attemptId, txid);
+   if (!txid || !/^(?!0{64}$)[0-9a-f]{64}$/.test(txid)) throw new Error(result?.error || 'Turing Wallet did not return a payment TXID. Check its transaction history before retrying; the prepared payment remains reserved.');
+   rememberSourcePayment(order, { attemptId: receipt.attemptId, txid });
+   const saved = await submitSourcePayment(order, settlement, receipt.attemptId, txid);
    rememberSourcePayment(order, null);
    if (live()) setState({ context, receipt: saved, loaded: true, error: '' });
   } catch (cause) {
    if (live()) {
-    let saved: Receipt | null = null, loaded = !reserved;
-    try { saved = await loadSourcePayment(order, settlement, AbortSignal.timeout(20_000)); loaded = true; } catch { loaded = false; }
+    let saved: Receipt | null = receipt, loaded = true;
+    try { saved = await loadSourcePayment(order, settlement, AbortSignal.timeout(20_000)); } catch { /* Keep the prepared request visible. */ }
     if (live()) setState({ context, receipt: saved, loaded, error: `${getErrorMessage(cause)}${pendingSourcePayment(order) ? ` Saved payment TXID: ${pendingSourcePayment(order)!.txid}. Refresh payment status to recover it; do not pay again.` : ''}` });
    }
   } finally { working.current = false; session.setBusy(false); if (live()) setAction(''); }
@@ -82,12 +100,13 @@ export default function BridgeSourcePayment({ order, settlement, session, enable
  }
  return <div className="htlc-section" aria-busy={!!action}>
   {(!receipt || receipt.status === 'cancelled') && <>
-   <p>Review the payment in Turing Wallet. The {order.sourceAssetKind === 'native-tbc' ? 'native TBC' : 'token'}, amount and address are filled in automatically.</p>
-   <button type="button" disabled={!canPay} onClick={() => { void pay(); }}>{action === 'pay' ? 'Confirm in Turing Wallet…' : `Pay ${formatRawAmount(order.amountRaw, order.decimals)} ${order.symbol} with Turing Wallet`}</button>
-   <p className="history-note">Already paid this order? Use “Already paid or need recovery?” below. Do not send a second payment.</p>
+   <p>Prepare the exact token amount and unique custody address. This step does not open the wallet or send a transaction.</p>
+   <button type="button" disabled={!canPrepare} onClick={() => { void prepare(); }}>{action === 'prepare' ? 'Preparing payment…' : 'Prepare Turing Wallet payment'}</button>
   </>}
   {receipt?.status === 'awaiting_wallet' && <>
-   <p role="status">{action === 'pay' ? 'Open Turing Wallet and approve or reject the payment. Keep this page open.' : 'A payment request was started. Check Turing Wallet history and recover its TXID below if it was sent. Do not pay again.'}</p>
+   <p role="status">{action === 'pay' ? 'Review and approve or reject the payment in Turing Wallet. Keep this page open.' : 'Payment details are prepared. The next button opens exactly one Turing Wallet request.'}</p>
+   <button type="button" disabled={!canOpenWallet} onClick={() => { void pay(); }}>{action === 'pay' ? 'Waiting for Turing Wallet…' : `Open Turing Wallet · Pay ${formatRawAmount(order.amountRaw, order.decimals)} ${order.symbol}`}</button>
+   <p className="history-note">Already paid this order? Use “Already paid or need recovery?” below. Do not send a second payment.</p>
    {!action && <details><summary>No payment was sent?</summary><label className="bridge-role-choice"><input type="checkbox" checked={notSent} disabled={busy} onChange={event => setNotSent(event.target.checked)} /> I checked Turing Wallet and confirmed the request was rejected or never sent.</label><button type="button" className="history-secondary" disabled={!notSent || busy || !!pendingSourcePayment(order)} onClick={() => { void discard(); }}>Clear unsent payment request</button></details>}
   </>}
   {receipt?.txid && <><p role="status">Payment submitted. The backend checks it about once per minute—do not pay again.</p><p className="history-note">TBC TXID: <code>{receipt.txid}</code></p></>}

@@ -65,6 +65,9 @@ services:
       DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-learning_bridge}?schema=public
       BRIDGE_CUSTODY_KEY_FILE: /run/secrets/bridge_custody_key
       PHASE3_RELAYER_KEY_FILE: /run/secrets/phase3_relayer_key
+      V15_MINTER_KEY_FILE: /run/secrets/v15_minter_key
+      V15_ADMIN_SIGNER_1_KEY_FILE: /run/secrets/v15_admin_signer_1_key
+      V15_ADMIN_SIGNER_2_KEY_FILE: /run/secrets/v15_admin_signer_2_key
     secrets:
       - htlc_key
       - bridge_custody_key
@@ -73,6 +76,9 @@ services:
       - ./backend/src:/app/backend/src:ro
       - ./backend/scripts:/app/backend/scripts:ro
       - ./shared/src:/app/shared/src:ro
+      - ${V15_MINTER_KEY_FILE:-/dev/null}:/run/secrets/v15_minter_key:ro
+      - ${V15_ADMIN_SIGNER_1_KEY_FILE:-/dev/null}:/run/secrets/v15_admin_signer_1_key:ro
+      - ${V15_ADMIN_SIGNER_2_KEY_FILE:-/dev/null}:/run/secrets/v15_admin_signer_2_key:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -29,8 +29,8 @@ export default function useBackendSession(
 	const handledAttempt = useRef(0);
 	walletRef.current = wallet;
 
-	// Reading a previously authorized wallet only restores the existing session.
-	// A fresh signature requires one explicit Connect/Reconnect action for this account.
+	// Always try the existing cookie first. A new signature is requested only when
+	// WalletConnection supplies one guarded automatic attempt or the user retries.
 	useEffect(() => {
 		let active = true;
 		setError('');
@@ -71,7 +71,7 @@ export default function useBackendSession(
 				await verifyWallet();
 				const signed = await walletRef.current.signMessage({ message: challenge.message, encoding: 'utf8' });
 				if (!active) return;
-				if (signed?.error) throw new Error(signed.error);
+				if (signed?.error) throw new Error(getErrorMessage(signed.error));
 				if (!signed?.sig) throw new Error('Login signature was cancelled.');
 				await verifyWallet();
 				const result = await backendData('/api/auth/verify', { challengeId: challenge.challengeId, signature: signed.sig }, false);
@@ -79,7 +79,10 @@ export default function useBackendSession(
 				if (!matchesWallet(result, address, networkIsDevnet)) throw new Error('Invalid wallet login response.');
 				acceptBackendSession(result);
 			} catch (cause) {
-				if (active) setError(`${getErrorMessage(cause)} Reconnect to try again.`);
+				if (active) {
+					const message = getErrorMessage(cause);
+					setError(`${['{}', '[object Object]'].includes(message) ? 'The wallet login request failed or was dismissed.' : message} Click the login status to retry.`);
+				}
 			} finally {
 				if (active) setPending(false);
 			}

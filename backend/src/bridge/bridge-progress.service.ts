@@ -4,12 +4,14 @@ import type { MessageEvent } from '@nestjs/common';
 import type { Principal } from '../auth/auth.service';
 import { BridgeSettlementRepository } from './bridge-settlement.repository';
 
-interface ProgressInvalidation {
+export interface ProgressInvalidation {
 	identityId: string;
 	orderId: string;
 	reason: string;
 	at: string;
 }
+
+type ProgressListener = (update: ProgressInvalidation) => void;
 
 @Injectable()
 export class BridgeProgressService {
@@ -18,6 +20,13 @@ export class BridgeProgressService {
 
 	publish(identityId: string, orderId: string, reason: string) {
 		this.updates.next({ identityId, orderId, reason, at: new Date().toISOString() });
+	}
+
+	subscribe(identityId: string, listener: ProgressListener) {
+		const subscription = this.updates.subscribe((update) => {
+			if (update.identityId === identityId) listener(update);
+		});
+		return () => subscription.unsubscribe();
 	}
 
 	stream(orderId: string, principal: Principal): Observable<MessageEvent> {

@@ -11,14 +11,15 @@ export const activeCallStates = ['quoted', 'awaiting_wallet', 'submitted', 'conf
 export function publicAttempt(row: BridgeCallAttempt): PublicAttempt {
 	const chainId = row.chainId === 11_155_111 ? '0xaa36a7' : '0x3e6';
 	return { id: row.id, kind: row.kind as PublicAttempt['kind'], status: row.status as PublicAttempt['status'],
+		submissionMode: row.submissionMode as PublicAttempt['submissionMode'],
 		transaction: { from: row.fromAddress, to: row.toAddress, chainId, value: '0x0', data: row.data, nonce: `0x${row.nonce.toString(16)}`, gas: `0x${row.gasLimit.toString(16)}`, gasPrice: `0x${BigInt(row.gasPriceWei.toFixed(0)).toString(16)}` },
 		estimatedFeeWei: row.estimatedFeeWei.toFixed(0), budgetWei: row.budgetWei.toFixed(0), expiresAt: row.expiresAt.toISOString(), createdAt: row.createdAt.toISOString(),
 		txHash: row.txHash, confirmations: row.confirmations, actualFeeWei: row.actualFeeWei?.toFixed(0) ?? null, lastError: row.lastError };
 }
-export function publicSettlement(order: SettlementOrder): BridgeSettlement | null {
+export function publicSettlement(order: SettlementOrder, mintMode: BridgeSettlement['mintMode'] = 'manual'): BridgeSettlement | null {
 	const row = order.settlement;
 	if (!row || !order.custody) return null;
-	return { orderId: order.id, status: row.status as BridgeSettlement['status'], custodyAddress: order.custody.address, paymentOpenedAt: row.paymentOpenedAt.toISOString(), checkedAt: row.checkedAt?.toISOString() ?? null, lastError: row.lastError,
+	return { orderId: order.id, status: row.status as BridgeSettlement['status'], mintMode, custodyAddress: order.custody.address, paymentOpenedAt: row.paymentOpenedAt.toISOString(), checkedAt: row.checkedAt?.toISOString() ?? null, lastError: row.lastError,
 		deposit: row.deposit ? { txid: row.deposit.txid, vout: row.deposit.vout, amountRaw: row.deposit.amountRaw.toFixed(0), feeRaw: row.deposit.feeRaw.toFixed(0), confirmations: row.deposit.confirmations, blockHash: row.deposit.blockHash, blockHeight: row.deposit.blockHeight, checkedAt: row.deposit.checkedAt.toISOString() } : null,
 		attempts: row.attempts.map(publicAttempt) };
 }
@@ -80,6 +81,26 @@ export class BridgeSettlementRepository {
 			const row = await tx.bridgeCallAttempt.create({ data });
 			await tx.auditEvent.create({ data: { identityId: order.identityId, action: 'bridge.call.quoted', data: { orderId: order.id, attemptId: row.id, kind: row.kind } } });
 			return row;
+		});
+	}
+	async submitRelayer(order: SettlementOrder, attempt: BridgeCallAttempt, rawTransaction: string, txHash: string) {
+		return this.db.$transaction(async (tx) => {
+			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`bridge-settlement:${order.id}`}, 0))`;
+			const changed = await tx.bridgeCallAttempt.updateMany({
+				where: { id: attempt.id, submissionMode: 'relayer', txHash: null, rawTransaction: null, status: 'quoted', updatedAt: attempt.updatedAt, expiresAt: { gt: new Date() } },
+				data: { rawTransaction, txHash, status: 'submitted' },
+			});
+			if (!changed.count) throw new ConflictException('The automatic mint quote changed before its signed transaction could be saved.');
+			await tx.bridgeSettlement.update({ where: { orderId: order.id }, data: { status: 'mint_pending', lastError: null } });
+			await tx.auditEvent.create({ data: { identityId: order.identityId, action: 'bridge.call.relayer_submitted', data: { orderId: order.id, attemptId: attempt.id, txHash } } });
+			return tx.bridgeCallAttempt.findUniqueOrThrow({ where: { id: attempt.id } });
+		});
+	}
+	async failRelayer(order: SettlementOrder, row: BridgeCallAttempt, message: string) {
+		await this.db.$transaction(async (tx) => {
+			await tx.bridgeCallAttempt.updateMany({ where: { id: row.id, submissionMode: 'relayer', updatedAt: row.updatedAt }, data: { status: 'invalid', lastError: message } });
+			await tx.bridgeSettlement.update({ where: { orderId: order.id }, data: { status: 'needs_review', lastError: message, checkedAt: new Date() } });
+			await tx.auditEvent.create({ data: { identityId: order.identityId, action: 'bridge.call.relayer_failed', data: { orderId: order.id, attemptId: row.id, message } } });
 		});
 	}
 	async begin(order: SettlementOrder, attempt: BridgeCallAttempt) {

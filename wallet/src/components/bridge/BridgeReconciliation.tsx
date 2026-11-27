@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { BridgeReconciliation as Report } from '../../../../shared/src/types/bridgeReconciliation';
 import type { WalletPageProps } from '../../types/wallet';
 import useBridgeReconciliation from '../../hooks/useBridgeReconciliation';
 import WalletConnection from '../WalletConnection';
 import { formatDateTime } from '../../utils/dateTime';
 import { reconciliationRequests, matchesReconciliationSearch, reconciliationAmount, shortReference, requestStatusLabels, requestStageLabel, requestDirectionLabel, requestFlowLabel, requestStatusLabel } from '../../utils/bridgeReconciliation';
-import ReconciliationRequestDetails from './ReconciliationRequestDetails';
 import ReconciliationBalances from './ReconciliationBalances';
 
 type ReportState = ReturnType<typeof useBridgeReconciliation>;
@@ -18,14 +18,12 @@ function History({ report, state }: { report: Report; state: ReportState }) {
  const [sort, setSort] = useState('newest');
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(10);
- const [selected, setSelected] = useState<string | null>(null);
  const requests = useMemo(() => reconciliationRequests(report), [report]);
  const matches = requests.filter(row => matchesReconciliationSearch(row, query) && (direction === 'all' || row.direction === direction) && (status === 'all' || row.category === status) && (contract === 'all' || row.route.deploymentId === contract));
  if (sort === 'oldest') matches.reverse();
  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
  const currentPage = Math.min(page, pages);
  const offset = (currentPage - 1) * pageSize;
- const selection = requests.find(row => row.key === selected);
  const filtered = query !== '' || direction !== 'all' || status !== 'all' || contract !== 'all' || sort !== 'newest';
  function reset() { setQuery(''); setDirection('all'); setStatus('all'); setContract('all'); setSort('newest'); setPage(1); }
  return <>
@@ -54,9 +52,9 @@ function History({ report, state }: { report: Report; state: ReportState }) {
       <td>{formatDateTime(row.createdAt)}</td>
       <td><code title={row.id}>{shortReference(row.id)}</code></td>
       <td>{requestDirectionLabel(row)}</td>
-      <td className="recon-amount-cell">{reconciliationAmount(row.amountRaw, row.route.decimals)} <small>{requestFlowLabel(row)}</small></td>
+      <td className="recon-amount-cell">{row.amountRaw === null ? 'Not set' : reconciliationAmount(row.amountRaw, row.route.decimals)} <small>{requestFlowLabel(row)}</small></td>
       <td><span className={`recon-status recon-status-${row.category}`}>{requestStatusLabel(row)}</span><small>{requestStageLabel(row) !== requestStatusLabel(row) ? requestStageLabel(row) : ''}</small></td>
-      <td><button className="history-secondary" type="button" aria-label={`View request ${row.id}`} onClick={() => setSelected(row.key)}>View</button></td>
+      <td><Link className="history-secondary" aria-label={`View request ${row.id}`} to={`/bridge-transfer/${row.id}`}>View</Link></td>
      </tr>)}</tbody>
     </table>
    </div>}
@@ -66,13 +64,12 @@ function History({ report, state }: { report: Report; state: ReportState }) {
     <div><button className="history-secondary" type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage} of {pages}</span><button className="history-secondary" type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Next</button></div>
    </div>
   </>}
-  {selection && <ReconciliationRequestDetails request={selection} onClose={() => setSelected(null)} onRelated={setSelected} />}
  </>;
 }
 export default function BridgeReconciliation({ session, active }: WalletPageProps & { active: boolean }) {
  const state = useBridgeReconciliation(session, active);
  return <section className="bridge-reconciliation" aria-labelledby="reconciliation-title" aria-busy={state.loading || !!state.checking}>
-  <header className="history-titlebar recon-page-header"><div><h2 id="reconciliation-title">Bridge history</h2><p className="intro">Find a transfer and view its progress, transactions and fees.</p></div><button type="button" onClick={state.refresh} disabled={!state.enabled || state.loading || !!state.checking}>{state.loading ? 'Refreshing…' : 'Refresh history'}</button></header>
+  <header className="history-titlebar recon-page-header"><div><h2 id="reconciliation-title">Bridge history</h2><p className="intro">Find a transfer and view its progress, transactions and fees.</p></div><div className="recon-live-actions"><span className={`history-live history-live-${state.realtime}`} role="status" title="The list refreshes only after the backend reports saved bridge progress changes."><span>●</span>{state.realtime === 'connected' ? 'Live updates' : state.realtime === 'reconnecting' ? 'Reconnecting once…' : state.realtime === 'connecting' ? 'Connecting…' : state.realtime === 'stopped' ? 'Live stopped' : 'Live off'}</span><button type="button" onClick={state.refresh} disabled={!state.enabled || state.loading || !!state.checking}>{state.loading ? 'Refreshing…' : 'Refresh history'}</button></div></header>
   {!state.enabled && <><WalletConnection session={session} /><p>Connect your TBC Testnet wallet to view your requests.</p></>}
   {state.error && <p className="result error" role="alert">{state.error}</p>}
   {state.report && <History key={state.report.identityAddress} report={state.report} state={state} />}

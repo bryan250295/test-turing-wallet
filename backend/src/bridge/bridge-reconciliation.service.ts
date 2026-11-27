@@ -1,6 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
-import type { BridgeReconciliation, ReconciliationRoute, ReconciliationTransaction as Transaction } from '../../../shared/src/types/bridgeReconciliation';
+import type { BridgeReconciliation, ReconciliationDraft, ReconciliationRoute, ReconciliationTransaction as Transaction } from '../../../shared/src/types/bridgeReconciliation';
 import { AuthService, type Principal } from '../auth/auth.service';
 import { PrismaService } from '../database/prisma.service';
 import { wrappedMetadata } from '../../../shared/src/config/bridgeRoutes';
@@ -52,6 +52,7 @@ export class BridgeReconciliationService {
 		return this.db.$transaction(async (tx) => {
 			// Bound the whole report before fetching nested collections. Never report partial totals.
 			const counts = await Promise.all([
+				tx.bridgeOrderDraft.count({ where: { identityId: principal.id } }),
 				tx.bridgeOrder.count({ where: { identityId: principal.id } }),
 				tx.bridgeCallAttempt.count({ where: { settlement: { order: { identityId: principal.id } } } }),
 				tx.redemptionOrder.count({ where: { identityId: principal.id } }),
@@ -59,8 +60,15 @@ export class BridgeReconciliationService {
 				tx.sepoliaBurnCall.count({ where: { redemption: { identityId: principal.id } } }),
 			]);
 			if (counts.some((count) => count > 200)) throw new ConflictException('This reconciliation exceeds the 200-record limit for a record category. No partial totals are displayed.');
-			const orders = await tx.bridgeOrder.findMany({ where: { identityId: principal.id }, select, orderBy: { createdAt: 'desc' }, take: 201 });
+			const [orders, draftRows] = await Promise.all([
+				tx.bridgeOrder.findMany({ where: { identityId: principal.id }, select, orderBy: { createdAt: 'desc' }, take: 201 }),
+				tx.bridgeOrderDraft.findMany({ where: { identityId: principal.id, status: 'draft' }, include: { deployment: { include: { asset: true } } }, orderBy: { createdAt: 'desc' }, take: 201 }),
+			]);
 			limited(orders);
+			limited(draftRows);
+			const drafts: ReconciliationDraft[] = draftRows.map((row) => ({ id: row.id, deploymentId: row.deploymentId, contractId: row.deployment.contractId,
+				destinationChainId: row.deployment.chainId, wrappedToken: row.deployment.contractAddress!, decimals: row.deployment.decimals,
+				symbol: row.deployment.asset.symbol, ...wrappedMetadata(row.deployment.quote), createdAt: row.createdAt.toISOString(), status: 'draft' }));
 			const ids = [...new Set(orders.map((order) => order.deploymentId))];
 			const deployments = await tx.bridgeDeployment.findMany({ where: { id: { in: ids }, identityId: principal.id }, select: {
 				id: true, quote: true, contractAddress: true, txHash: true, status: true, confirmations: true, actualFeeWei: true, checkedAt: true, lastError: true,
@@ -81,7 +89,7 @@ export class BridgeReconciliationService {
 				routes.push({ ...this.route(group, setup, deployment.status !== 'verified' || !!deployment.lastError), ...wrappedMetadata(deployment.quote) });
 			}
 			if (deployments.length !== ids.length) throw new NotFoundException('A deployment record is missing from this wallet report.');
-			return { identityAddress: principal.address, generatedAt: new Date().toISOString(), basis: 'saved_verification', routes };
+			return { identityAddress: principal.address, generatedAt: new Date().toISOString(), basis: 'saved_verification', drafts, routes };
 		}, { isolationLevel: 'RepeatableRead', timeout: 15_000 });
 	}
 	private route(rows: Order[], setupTransactions: Transaction[], deploymentIssue: boolean): Omit<ReconciliationRoute, 'wrappedName' | 'wrappedSymbol'> {

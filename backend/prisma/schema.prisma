@@ -17,6 +17,7 @@ model WalletIdentity {
 	createdAt DateTime @default(now()) @db.Timestamptz(3)
 	sessions  AuthSession[]
 	deployments BridgeDeployment[]
+	bridgeOrderDrafts BridgeOrderDraft[]
 	bridgeOrders BridgeOrder[]
 	escrowDeployments RedemptionEscrowDeployment[]
 	redemptionOrders RedemptionOrder[]
@@ -273,11 +274,71 @@ model BridgeDeployment {
 	createdAt            DateTime @default(now()) @db.Timestamptz(3)
 	updatedAt            DateTime @updatedAt @db.Timestamptz(3)
 	orders               BridgeOrder[]
+	orderDrafts          BridgeOrderDraft[]
 	escrowDeployments    RedemptionEscrowDeployment[]
+	adminActivation      BridgeAdminActivation?
 	@@unique([chainId, txHash])
 	@@unique([chainId, contractAddress])
 	@@index([identityId, createdAt])
 	@@map("bridge_deployments")
+}
+
+// Durable, backend-signed execution of the configured 2-of-2 Admin's exact
+// unpause() action. Both signed transactions are saved before broadcast so an
+// uncertain RPC response can only re-submit the same nonce/hash.
+model BridgeAdminActivation {
+	deploymentId               String @id @db.Uuid
+	deployment                 BridgeDeployment @relation(fields: [deploymentId], references: [id], onDelete: Restrict)
+	identityId                  String @db.Uuid
+	chainId                    Int
+	adminAddress               String @db.VarChar(42)
+	targetAddress              String @db.VarChar(42)
+	actionId                   String @db.VarChar(66)
+	status                     String @default("proposal_signed") @db.VarChar(32)
+	proposalNonce              BigInt
+	proposalData               String
+	proposalGasLimit           BigInt
+	proposalGasPriceWei        Decimal @db.Decimal(78, 0)
+	proposalRawTransaction     String
+	proposalTxHash             String @unique @db.VarChar(66)
+	proposalConfirmations      Int @default(0)
+	proposalReceiptBlockHash   String? @db.VarChar(66)
+	proposalReceiptBlockNumber BigInt?
+	proposalActualFeeWei       Decimal? @db.Decimal(78, 0)
+	approvalNonce              BigInt?
+	approvalData               String?
+	approvalGasLimit           BigInt?
+	approvalGasPriceWei        Decimal? @db.Decimal(78, 0)
+	approvalRawTransaction     String?
+	approvalTxHash             String? @unique @db.VarChar(66)
+	approvalConfirmations      Int @default(0)
+	approvalReceiptBlockHash   String? @db.VarChar(66)
+	approvalReceiptBlockNumber BigInt?
+	approvalActualFeeWei       Decimal? @db.Decimal(78, 0)
+	checkedAt                  DateTime? @db.Timestamptz(3)
+	lastError                  String?
+	createdAt                  DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt                  DateTime @updatedAt @db.Timestamptz(3)
+	@@unique([chainId, adminAddress, targetAddress])
+	@@index([status, checkedAt])
+	@@map("bridge_admin_activations")
+}
+
+model BridgeOrderDraft {
+	id             String @id @default(uuid()) @db.Uuid
+	identityId     String @db.Uuid
+	identity       WalletIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict, map: "bridge_order_drafts_identity_fkey")
+	idempotencyKey String @db.Uuid
+	deploymentId   String @db.Uuid
+	deployment     BridgeDeployment @relation(fields: [deploymentId], references: [id], onDelete: Restrict, map: "bridge_order_drafts_deployment_fkey")
+	status         String @default("draft") @db.VarChar(24)
+	createdAt      DateTime @default(now()) @db.Timestamptz(3)
+	updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+	finalizedAt    DateTime? @db.Timestamptz(3)
+	cancelledAt    DateTime? @db.Timestamptz(3)
+	@@unique([identityId, idempotencyKey])
+	@@index([identityId, createdAt])
+	@@map("bridge_order_drafts")
 }
 
 model BridgeOrder {
@@ -441,6 +502,7 @@ model BridgeCallAttempt {
 	settlement        BridgeSettlement @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
 	kind              String @db.VarChar(16)
 	status            String @default("quoted") @db.VarChar(24)
+	submissionMode    String @default("wallet") @db.VarChar(16)
 	chainId           Int @default(998)
 	fromAddress       String @db.VarChar(42)
 	toAddress         String @db.VarChar(42)
@@ -451,6 +513,7 @@ model BridgeCallAttempt {
 	estimatedFeeWei   Decimal @db.Decimal(78, 0)
 	budgetWei         Decimal @db.Decimal(78, 0)
 	txHash            String? @unique @db.VarChar(66)
+	rawTransaction     String?
 	confirmations     Int @default(0)
 	receiptBlockHash  String? @db.VarChar(66)
 	receiptBlockNumber BigInt?

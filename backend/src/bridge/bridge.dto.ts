@@ -136,3 +136,24 @@ export class PrepareBridgeOrderDto {
 	@IsEthereumAddress()
 	recipient!: string;
 }
+
+export class CreateBridgeOrderDraftDto {
+	@ApiProperty({ type: String, description: 'Stable request ID retained across retries of this route selection.' })
+	@IsUUID('4')
+	idempotencyKey!: string;
+	@ApiProperty({ type: String, description: 'Verified source asset selected on TBC Testnet.' })
+	@IsString() @Matches(/^(?!0{64}$)[0-9a-f]{64}$/i)
+	contractId!: string;
+	@ApiProperty({ type: Number, enum: [998, 11155111] })
+	@IsIn([998, 11_155_111])
+	destinationChainId!: 998 | 11_155_111;
+}
+
+export class FinalizeBridgeOrderDraftDto {
+	@ApiProperty({ type: String, example: '100.5' })
+	@IsString() @MaxLength(278) @Matches(/^(0|[1-9]\d{0,19})(\.\d{1,255})?$/)
+	amount!: string;
+	@ApiProperty({ type: String, description: 'Nonzero destination receiving wallet.' })
+	@IsEthereumAddress()
+	recipient!: string;
+}
