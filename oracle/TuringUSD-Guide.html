@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/><meta content="TuringUSD" name="author"/><meta content="TuringUSD Lending Protocol bilingual user guide." name="description"/><title>Borrow TuringUSD Against TBC | TuringUSD Lending Protocol Guide</title><style>
+    @page {
+      size: A4;
+      margin: 0 0 15mm;
+      @bottom-right {
+        content: counter(page) " / " counter(pages);
+        margin-right: 13mm;
+        color: #676176;
+        font: 10pt sans-serif;
+      }
+    }
+    * { box-sizing: border-box; }
+    :root {
+      --ink: #211d38;
+      --muted: #514d63;
+      --purple: #5635a8;
+      --line: #dfdbe8;
+      --tint: #f1edfb;
+    }
+    body {
+      margin: 0;
+      background: #ebeaf1;
+      color: var(--ink);
+      font: 16px/1.7 "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .sheet {
+      max-width: 794px;
+      margin: 28px auto;
+      background: white;
+      padding: 34px 50px;
+    }
+    p, h1, h2, h3 { margin: 0; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 2px solid var(--ink);
+    }
+    .brand { white-space: nowrap; }
+    .brand svg { vertical-align: middle; width: 27px; height: 27px; margin-right: 4px; }
+    .brand strong { vertical-align: middle; font: bold 25px/1 "DejaVu Sans", sans-serif; letter-spacing: -.06em; }
+    .brand span { vertical-align: middle; margin-left: 10px; font-size: 13px; color: var(--muted); }
+    header time, .running-title { font-size: 13px; color: var(--muted); }
+    h1, .page-title { font-size: 44px; line-height: 1.32; letter-spacing: -.04em; margin: 24px 0 12px; }
+    h1 span, .page-title span { color: var(--purple); }
+    .page-title span { display: inline-block; }
+    .intro { font-size: 18px; line-height: 1.7; }
+    .definition { margin-top: 8px; color: var(--muted); }
+    h2, h3 { line-height: 1.42; }
+    h2 { font-size: 22px; margin-bottom: 9px; }
+    h3 { color: var(--purple); font-size: 17px; margin-bottom: 4px; }
+    .block { margin-top: 22px; }
+    .panel { background: var(--tint); padding: 16px 21px; border-radius: 12px; }
+    .step { padding: 9px 0; border-top: 1px solid var(--line); }
+    .step h3 { display: inline; margin-right: 8px; }
+    .step p { display: inline; }
+    .costs { display: table; width: 100%; table-layout: fixed; border-collapse: collapse; }
+    .cost { display: table-cell; vertical-align: top; width: 50%; }
+    .cost:first-child { padding-right: 19px; }
+    .cost:last-child { padding-left: 19px; border-left: 1px solid var(--line); }
+    .cost p, .small { color: var(--muted); }
+    .status { margin-top: 22px; border-top: 2px solid var(--ink); padding-top: 12px; }
+    .status p + p { margin-top: 7px; }
+    .example { margin-top: 16px; }
+    .example h3 { color: var(--ink); }
+    table { width: 100%; border-collapse: collapse; text-align: left; margin: 10px 0 2px; }
+    th { font-size: 14px; font-weight: 400; color: var(--muted); }
+    td, th { padding: 5px 6px 5px 0; }
+    td { border-top: 1px solid #d4cbe5; }
+    td:nth-child(2) { font-weight: bold; }
+    .risk { color: #843629; font-weight: bold; }
+    .caption { margin-top: 8px; font-size: 14px; color: var(--muted); }
+    @media screen and (max-width: 650px) {
+      .sheet { margin: 0; padding: 22px 20px; }
+      .sheet + .sheet { padding-top: 10px; }
+      .continuation header { display: none; }
+      .brand span { margin-left: 5px; }
+      header time { font-size: 12px; }
+      h1, .page-title { font-size: clamp(28px, 7vw, 40px); }
+      .page-title { margin-top: 0; }
+      .costs, .cost { display: block; width: 100%; }
+      .cost:first-child { padding: 0 0 10px; }
+      .cost:last-child { padding: 9px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+      .panel { padding: 15px; }
+      td, th { font-size: 14px; }
+      td:first-child, td:nth-child(2) { white-space: nowrap; }
+    }
+    @media print {
+      html, body { background: white; }
+      body { font-size: 15.5px; line-height: 1.55; }
+      .sheet { max-width: none; margin: 0; padding-bottom: 0; }
+      .sheet + .sheet { break-before: page; }
+      .page-title { font-size: 36px; }
+      .block, .status { margin-top: 18px; }
+      .intro { line-height: 1.56; }
+      .step { padding: 8px 0; }
+      .continuation { padding: 28px 44px 0; line-height: 1.48; }
+      .continuation .block, .continuation .status { margin-top: 14px; }
+      .continuation .page-title { margin: 17px 0 7px; }
+      .continuation .panel { padding: 12px 17px; }
+      .continuation .step { padding: 5px 0; }
+      .continuation td, .continuation th { padding-top: 4px; padding-bottom: 4px; }
+    }
+  
+
+/* CSS-only bilingual controls; no JavaScript required */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;overflow-x:hidden}
+.language-choice{position:absolute;opacity:0;width:1px;height:1px;left:-9999px}
+.langbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;
+ width:100%;max-width:794px;margin:0 auto;padding:8px 14px;background:#fff;
+ border-bottom:1px solid var(--line);box-shadow:0 3px 12px #211d3812;box-sizing:border-box}
+.langbar .switchlabel{margin-right:auto;font-size:12px;color:var(--muted)}
+.langbar label{display:inline-flex;align-items:center;justify-content:center;min-width:78px;min-height:46px;
+ padding:8px 14px;border:1px solid #cfc5e5;border-radius:24px;background:#fff;color:var(--purple);
+ font:600 14px/1.2 system-ui,-apple-system,sans-serif;cursor:pointer;touch-action:manipulation;
+ -webkit-tap-highlight-color:transparent;user-select:none}
+#lang-zh:checked~.langbar label[for="lang-zh"],#lang-en:checked~.langbar label[for="lang-en"]{
+ background:var(--purple);border-color:var(--purple);color:#fff}
+#lang-zh:focus-visible~.langbar label[for="lang-zh"],#lang-en:focus-visible~.langbar label[for="lang-en"]{
+ outline:3px solid #a999f4;outline-offset:3px}
+#lang-zh:checked~#content-en{display:none!important}
+#lang-en:checked~#content-zh{display:none!important}
+#content-zh,#content-en{display:block}
+.sheet{width:100%;min-width:0;box-sizing:border-box}
+.sheet p,.sheet h1,.sheet h2,.sheet h3,.sheet td,.sheet th{overflow-wrap:anywhere}
+@media(max-width:650px){
+ body{font-size:15px}
+ .langbar{padding:7px 10px;gap:7px}
+ .langbar .switchlabel{font-size:11px;max-width:calc(100% - 172px)}
+ .langbar label{min-width:74px;min-height:46px;padding:8px 11px}
+ .sheet{margin:0;padding:22px 17px;box-shadow:none}
+ .sheet+.sheet{padding-top:24px;border-top:1px solid var(--line)}
+ .continuation header{display:none}
+ header{gap:8px;flex-wrap:wrap}
+ .brand{white-space:normal}
+ .brand span{margin-left:5px}
+ header time{font-size:11px}
+ h1,.page-title{font-size:clamp(27px,7vw,36px);line-height:1.23;letter-spacing:-.025em}
+ .page-title{margin-top:0}
+ h2{font-size:20px}
+ .intro{font-size:16px;line-height:1.65}
+ .panel{padding:14px}
+ .costs,.cost{display:block;width:100%}
+ .cost:first-child{padding:0 0 11px}
+ .cost:last-child{padding:10px 0 0;border-left:0;border-top:1px solid var(--line)}
+ table{width:100%;table-layout:fixed}
+ td,th{font-size:12px;line-height:1.45;padding:7px 4px;white-space:normal!important;overflow-wrap:anywhere;vertical-align:top}
+ td:first-child,td:nth-child(2){white-space:normal}
+}
+@media(max-width:360px){
+ .sheet{padding:18px 12px}
+ .langbar{padding:6px 8px;gap:5px}
+ .langbar .switchlabel{font-size:10px;max-width:calc(100% - 154px)}
+ .langbar label{min-width:68px;padding:7px 9px}
+ td,th{font-size:11px;padding:6px 3px}
+}
+@media print{.langbar{display:none!important}#content-en{display:none!important}#content-zh{display:block!important}}
+</style></head><body><input checked="checked" class="language-choice" id="lang-zh" name="language" type="radio"/><input class="language-choice" id="lang-en" name="language" type="radio"/><nav aria-label="Language selection" class="langbar"><span class="switchlabel">TuringUSD · 中文 / English</span><label for="lang-zh" lang="zh-CN">中文</label><label for="lang-en" lang="en">English</label></nav><div id="content-zh" lang="zh-CN"><article aria-labelledby="title">
+<div class="sheet">
+<header>
+<div class="brand">
+<svg aria-hidden="true" viewbox="0 0 48 48">
+<rect fill="#a999f4" height="48" rx="14" width="48"></rect>
+<path d="M24 8v32M8 24h32M13 13l22 22M13 35l22-22" fill="none" stroke="#1c1434" stroke-linecap="round" stroke-width="5"></path>
+</svg>
+<strong>TuringUSD</strong><span>借贷协议 · 测试版</span>
+</div>
+<time datetime="2026-11-24">2026 年 11 月 24 日</time>
+</header>
+<h1 id="title">抵押 TBC，<span>借出 TuringUSD</span></h1>
+<p class="intro">想保留手中的 TBC，又需要一笔链上资金？你可以把 TBC 锁入智能合约，借出 TuringUSD。还清债务后，就可以按协议取回仓位中剩余的 TBC。</p>
+<p class="definition">TuringUSD 是 TBC 链上的稳定币，价格目标为 1 美元。借款时，协议根据你的抵押仓位发行 TuringUSD，无需等待另一位用户出借。TuringUSD 的市场价格可能偏离 1 美元，你的债务仍以 TuringUSD 计量。</p>
+<section aria-labelledby="limit" class="block panel">
+<h2 id="limit">同样多的 TBC，能借多少 TuringUSD？</h2>
+<p>按新版原生 TBC 的借款规则，抵押价值 <strong>2,000 美元</strong>的 TBC，最多可借 <strong>1,000 TuringUSD</strong>。借满时，抵押率正好是 <strong>200%</strong>（2,000 ÷ 1,000）。抵押估值采用协议认可的报价，实际额度还受仓位和系统上限约束。</p>
+<p class="definition">首版网页使用原生 TBC 抵押。协议也支持经准入的 TBC20 Standard 代币。每个仓位只用一种抵押资产，各类资产可有不同的抵押率和利率，借出的都是 TuringUSD。</p>
+</section>
+<section aria-labelledby="borrow" class="block">
+<h2 id="borrow">从抵押借款到还款</h2>
+<div class="step">
+<h3>预览借款</h3>
+<p>在「总览」查看原生 TBC 的参考价格、最低抵押率和计息年率。填入要抵押的 TBC 与想借的 TuringUSD 后，页面会获取新报价，显示这笔借款的预计抵押率。</p>
+</div>
+<div class="step">
+<h3>签名并确认</h3>
+<p>核对网络、金额和手续费，用自己的签名器先签准备交易，再签借款交易。私钥由你保管。借款交易确认后，到「我的仓位」查看抵押的 TBC 和欠下的 TuringUSD。</p>
+</div>
+<div class="step">
+<h3>偿还并取回抵押品</h3>
+<p>在对应仓位选择「偿还 TuringUSD」，可部分还款或按当前债务还清。请通过还款入口操作，普通钱包转账不会抵减仓位债务。首版网页支持还款，清偿后提取剩余 TBC 可通过协议开发工具完成。</p>
+</div>
+</section>
+<section aria-labelledby="costs" class="block">
+<h2 id="costs">除了归还本金，还要支付哪些费用？</h2>
+<div class="costs">
+<div class="cost">
+<h3>借款利息用 TuringUSD 计</h3>
+<p>利息随时间计入债务。页面年率按当前计息参数换算，参数可调整。还清仓位时，以当时的应还 TuringUSD 数量为准。</p>
+</div>
+<div class="cost">
+<h3>网络手续费用 TBC 付</h3>
+<p>钱包要为准备交易和借款交易分别留出 TBC。预览页会列出两笔费用。准备交易上链后，即使取消后续借款，已付的准备手续费也不会退回。</p>
+</div>
+</div>
+</section>
+<p class="status small">本文介绍新版 TBC 参数。新规则需部署新合约实例后生效，已有公共测试网实例继续按原合约运行。</p>
+</div>
+<div class="sheet continuation">
+<header>
+<div class="brand"><strong>TuringUSD</strong><span>借贷协议 · 测试版</span></div>
+<span class="running-title">仓位管理</span>
+</header>
+<h2 class="page-title">借了 1,000 TuringUSD，<span>何时会清算？</span></h2>
+<p class="intro">接着看这笔借满的仓位。假设暂不计息，债务维持在 1,000 TuringUSD，按目标价折合 1,000 美元。原生 TBC 的清算线为 120%，对应这笔仓位的抵押总值为 <strong>1,200 美元</strong>。</p>
+<section aria-labelledby="example" class="panel example">
+<h3 id="example">同一笔 TBC，从抵押价值变化与清算线</h3>
+<table aria-label="同一笔债务在四种抵押估值下的清算风险">
+<thead><tr><th scope="col">抵押的 TBC 总值</th><th scope="col">抵押率</th><th scope="col">风险状态</th></tr></thead>
+<tbody>
+<tr><td>2,000 美元</td><td>200%</td><td>恰好达到初始抵押率，已借满额度</td></tr>
+<tr><td>1,800 美元</td><td>180%</td><td>低于初始抵押率，仍高于清算线</td></tr>
+<tr><td>1,200 美元</td><td>120%</td><td>总值下跌 40%，恰好到线，此时还不能启动清算</td></tr>
+<tr><td>1,199 美元</td><td>119.9%</td><td class="risk">跌破清算线，可以发起整仓拍卖</td></tr>
+</tbody>
+</table>
+<p class="caption">利息也计入债务。如果应还金额已增至 1,010 TuringUSD，清算线就升至 1,212 美元（1,010 × 120%）。</p>
+</section>
+<section aria-labelledby="manage" class="block">
+<h2 id="manage">在清算前，怎样给仓位多留一些余地？</h2>
+<p>抵押总值为 1,800 美元时，偿还 <strong>100 TuringUSD</strong>，债务降至 900，抵押率就回到 200%（1,800 ÷ 900）。按同一报价，用协议开发工具追加价值 <strong>200 美元的 TBC</strong>，也能让抵押率回到 200%。</p>
+</section>
+<section aria-labelledby="auction" class="block">
+<h2 id="auction">跌破 1,200 美元后，抵押的 TBC 怎么卖？</h2>
+<div class="step">
+<h3>启动拍卖</h3>
+<p>按表中 1,199 美元这一行，任何人都可以提交清算交易，无需你签名。合约核验报价、债务和可用拍卖额度后，整个仓位进入拍卖。</p>
+</div>
+<div class="step">
+<h3>买家分批买入</h3>
+<p>每枚 TBC 的起拍价为协议报价的 1.1 倍。例如，报价为 0.10 美元时，从 0.11 TuringUSD 起拍，随后按时间线性降价。买家选定数量，用 TuringUSD 按当时的拍卖价买走 TBC。若拍卖价降至本轮起拍价的 30%，可用新报价重开。</p>
+</div>
+<div class="step">
+<h3>结算并退回余量</h3>
+<p>成交款先还 1,000 TuringUSD 债务，再支付 13% 的清算罚金（130 TuringUSD）。累计收足 <strong>1,130 TuringUSD</strong> 就结束拍卖，剩余 TBC 直接退回你的地址。若全部 TBC 卖完只收回 950 TuringUSD，协议将剩余 50 TuringUSD 记为坏账，并取消未收取的罚金。</p>
+</div>
+</section>
+<section aria-labelledby="status" class="status">
+<h2 id="status">现在如何体验</h2>
+<p><strong>查看公共测试网。</strong> 向服务提供方获取访问入口和个人只读凭证，即可查看原测试实例的状态。截至 2026 年 11 月 23 日，正式价格源仍待准入并完成七天校准，之后才能开放依赖报价的借还款交易。</p>
+<p><strong>演练一笔借还款。</strong> 在隔离测试环境，用交易凭证和兼容的签名器可以走一遍借还流程。网页已在该环境验证借出 1 TuringUSD、偿还 0.1 TuringUSD。演练时，可在「交易记录」核对链上确认，再到「我的仓位」查看债务变化。</p>
+</section>
+</div>
+</article></div><div id="content-en" lang="en"><article aria-labelledby="title">
+<div class="sheet">
+<header>
+<div class="brand">
+<svg aria-hidden="true" viewbox="0 0 48 48">
+<rect fill="#a999f4" height="48" rx="14" width="48"></rect>
+<path d="M24 8v32M8 24h32M13 13l22 22M13 35l22-22" fill="none" stroke="#1c1434" stroke-linecap="round" stroke-width="5"></path>
+</svg>
+<strong>TuringUSD</strong><span>Lending Protocol · Beta</span>
+</div>
+<time datetime="2026-11-24">November 24, 2026</time>
+</header>
+<h1 id="title">Collateralize TBC, <span>Borrow TuringUSD</span></h1>
+<p class="intro">Want to keep your TBC while accessing funds on-chain? Lock TBC in a smart contract to borrow TuringUSD. After repaying the debt, you can withdraw the TBC remaining in your position in accordance with the protocol.</p>
+<p class="definition">TuringUSD is a stablecoin on the TBC blockchain that targets US$1. When you borrow, the protocol issues TuringUSD against your collateral position, so you do not need to wait for another user to lend it. TuringUSD may trade above or below US$1, but your debt remains denominated in TuringUSD.</p>
+<section aria-labelledby="limit" class="block panel">
+<h2 id="limit">How Much TuringUSD Can You Borrow Against the Same Amount of TBC?</h2>
+<p>Under the updated borrowing rules for native TBC, US$2,000 worth of TBC collateral supports a maximum loan of <strong>1,000 TuringUSD</strong>. At that borrowing amount, the collateralization ratio is exactly <strong>200%</strong> (2,000 ÷ 1,000). Collateral is valued using prices accepted by the protocol. Actual borrowing capacity is also subject to position-level and system-wide limits.</p>
+<p class="definition">The initial web interface accepts native TBC as collateral. The protocol also supports approved TBC20 Standard tokens. Each position can use only one collateral asset. Different assets may have different collateralization requirements and interest rates, but all loans are issued in TuringUSD.</p>
+</section>
+<section aria-labelledby="borrow" class="block">
+<h2 id="borrow">From Borrowing to Repayment</h2>
+<div class="step">
+<h3>Preview Your Loan</h3>
+<p>On “Overview,” check the reference price of native TBC, the minimum collateralization ratio, and the annualized interest rate. Enter the amount of TBC you want to use as collateral and the amount of TuringUSD you want to borrow. The page will fetch a fresh quote and display the estimated collateralization ratio.</p>
+</div>
+<div class="step">
+<h3>Sign and Confirm</h3>
+<p>Check the network, amounts, and fees. Use your own signing tool to sign the preparation transaction first, then sign the borrowing transaction. You remain in control of your private key. Once the borrowing transaction is confirmed, go to “My Positions” to view your TBC collateral and outstanding TuringUSD debt.</p>
+</div>
+<div class="step">
+<h3>Repay and Recover Collateral</h3>
+<p>In the relevant position, select “Repay TuringUSD” to make a partial repayment or pay the current debt in full. Use the designated repayment function: an ordinary wallet transfer will not reduce the debt recorded for your position. The initial web interface supports repayment. After the debt is fully repaid, the remaining TBC can be withdrawn using the protocol developer tools.</p>
+</div>
+</section>
+<section aria-labelledby="costs" class="block">
+<h2 id="costs">What Fees Do You Pay in Addition to Principal?</h2>
+<div class="costs">
+<div class="cost">
+<h3>Borrowing Interest Is Charged in TuringUSD</h3>
+<p>Interest accrues to your debt over time. The annualized rate shown on the page is calculated from the current interest parameters, which may be adjusted. When repaying in full, the amount due is the TuringUSD debt outstanding at that time.</p>
+</div>
+<div class="cost">
+<h3>Network Fees Are Paid in TBC</h3>
+<p>Keep enough TBC in your wallet to pay for the preparation transaction and the borrowing transaction separately. The preview page lists both fees. Once the preparation transaction is recorded on-chain, its fee is non-refundable, even if you cancel the subsequent borrowing transaction.</p>
+</div>
+</div>
+</section>
+<p class="status small">This guide describes the updated TBC parameters. The new rules take effect only after a new contract instance is deployed. Existing public testnet instances will continue to operate under their original contracts.</p>
+</div>
+<div class="sheet continuation">
+<header>
+<div class="brand"><strong>TuringUSD</strong><span>Lending Protocol · Beta</span></div>
+<span class="running-title">Position Management</span>
+</header>
+<h2 class="page-title">After Borrowing 1,000 TuringUSD, <span>When Could Liquidation Occur?</span></h2>
+<p class="intro">Now consider this fully borrowed position. Assume no interest has accrued and the debt remains 1,000 TuringUSD, equivalent to US$1,000 at the target price. The liquidation threshold for native TBC is 120%, which means the total collateral value at the threshold is <strong>US$1,200</strong>.</p>
+<section aria-labelledby="example" class="panel example">
+<h3 id="example">How the Same TBC Collateral Moves Toward the Liquidation Threshold</h3>
+<table aria-label="同一笔债务在四种抵押估值下的清算风险">
+<thead><tr><th scope="col">Total Value of TBC Collateral</th><th scope="col">Collateralization Ratio</th><th scope="col">Risk Status</th></tr></thead>
+<tbody>
+<tr><td>US$2,000</td><td>200%</td><td>At the borrowing limit; the full available amount has been borrowed</td></tr>
+<tr><td>US$1,800</td><td>180%</td><td>Below the initial borrowing ratio, but still above the liquidation threshold</td></tr>
+<tr><td>US$1,200</td><td>120%</td><td>Collateral value has fallen 40% and reached the threshold; liquidation cannot be initiated at this exact level</td></tr>
+<tr><td>US$1,199</td><td>119.9%</td><td class="risk">Below the liquidation threshold; a full-position auction can be initiated</td></tr>
+</tbody>
+</table>
+<p class="caption">Accrued interest is also included in the debt. If the amount owed increases to 1,010 TuringUSD, the liquidation threshold rises to US$1,212 (1,010 × 120%).</p>
+</section>
+<section aria-labelledby="manage" class="block">
+<h2 id="manage">How Can You Create More Safety Margin Before Liquidation?</h2>
+<p>When total collateral is worth US$1,800, repaying <strong>100 TuringUSD</strong> reduces the debt to 900 TuringUSD and raises the collateralization ratio to 200% (1,800 ÷ 900). At the same quoted price, you can also use the protocol developer tools to add <strong>US$200 worth of TBC</strong>, which likewise brings the collateralization ratio back to 200%.</p>
+</section>
+<section aria-labelledby="auction" class="block">
+<h2 id="auction">How Is TBC Collateral Sold After Its Value Falls Below US$1,200?</h2>
+<div class="step">
+<h3>Start the Auction</h3>
+<p>As shown in the US$1,199 row, anyone can submit a liquidation transaction without your signature. After the contract verifies the quote, debt, and available auction capacity, the entire position enters auction.</p>
+</div>
+<div class="step">
+<h3>Buyers Purchase Collateral in Batches</h3>
+<p>The starting auction price for each TBC is 1.1 times the protocol quote. For example, if the quoted price is US$0.10, the auction starts at 0.11 TuringUSD per TBC and then decreases linearly over time. Buyers choose an amount and purchase TBC using TuringUSD at the current auction price. If the auction price falls to 30% of that round’s starting price, the auction can be restarted using a fresh quote.</p>
+</div>
+<div class="step">
+<h3>Settle the Debt and Return Any Surplus</h3>
+<p>Auction proceeds first repay the 1,000 TuringUSD debt, then cover the 13% liquidation penalty (130 TuringUSD). Once a total of <strong>1,130 TuringUSD</strong> has been collected, the auction ends and any remaining TBC is returned directly to your address. If all TBC is sold but only 950 TuringUSD is recovered, the protocol records the remaining 50 TuringUSD as bad debt and waives any unpaid penalty.</p>
+</div>
+</section>
+<section aria-labelledby="status" class="status">
+<h2 id="status">How to Try It Now</h2>
+<p><strong>View the Public Testnet.</strong>Obtain an access URL and personal read-only credentials from the service provider to view the original test instance. As of November 23, 2026, the production price feed still requires approval and seven days of calibration before quote-dependent borrowing and repayment transactions can be enabled.</p>
+<p><strong>Practice a Borrowing and Repayment Cycle.</strong>In the isolated test environment, you can complete the borrowing and repayment flow using transaction credentials and a compatible signing tool. The web interface has been tested there with a 1 TuringUSD loan and a 0.1 TuringUSD repayment. Check on-chain confirmation under “Transaction History,” then visit “My Positions” to review the debt change.</p>
+</section>
+</div>
+</article></div><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"45c2bf8136a245cd97f1c2e9a96c0730","spa":2}' crossorigin="anonymous"></script>
+</body></html>

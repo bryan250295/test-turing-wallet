@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="TAI" name="author"/><meta content="Bilingual TBC Oracle introduction and reference-price guide." name="description"/>
+<title>TBC Oracle 价格预言机</title><style>
+    @page {
+      size: A4;
+      margin: 0 0 15mm;
+      @bottom-right {
+        content: counter(page) " / " counter(pages);
+        margin-right: 13mm;
+        color: #676176;
+        font: 10pt sans-serif;
+      }
+    }
+    * { box-sizing: border-box; }
+    :root {
+      --ink: #211d38;
+      --muted: #514d63;
+      --purple: #5635a8;
+      --line: #dfdbe8;
+      --tint: #f1edfb;
+    }
+    body {
+      margin: 0;
+      background: #ebeaf1;
+      color: var(--ink);
+      font: 16px/1.7 "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .sheet {
+      max-width: 794px;
+      margin: 28px auto;
+      background: white;
+      padding: 34px 50px;
+    }
+    p, h1, h2, h3 { margin: 0; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 2px solid var(--ink);
+    }
+    .brand { white-space: nowrap; }
+    .brand svg { vertical-align: middle; width: 27px; height: 27px; margin-right: 4px; }
+    .brand strong { vertical-align: middle; font: bold 25px/1 "DejaVu Sans", sans-serif; letter-spacing: -.06em; }
+    .brand span { vertical-align: middle; margin-left: 10px; font-size: 13px; color: var(--muted); }
+    header time, .running-title { font-size: 13px; color: var(--muted); }
+    h1, .page-title { font-size: 44px; line-height: 1.32; letter-spacing: -.04em; margin: 24px 0 12px; }
+    h1 span, .page-title span { color: var(--purple); }
+    .intro { font-size: 18px; line-height: 1.7; }
+    .definition { margin-top: 8px; color: var(--muted); }
+    h2, h3 { line-height: 1.42; }
+    h2 { font-size: 22px; margin-bottom: 9px; }
+    h3 { color: var(--purple); font-size: 17px; margin-bottom: 4px; }
+    .block { margin-top: 22px; }
+    .panel { background: var(--tint); padding: 16px 21px; border-radius: 12px; }
+    .step { padding: 9px 0; border-top: 1px solid var(--line); }
+    .step h3 { display: inline; margin-right: 8px; }
+    .step p { display: inline; }
+    .costs { display: table; width: 100%; table-layout: fixed; border-collapse: collapse; }
+    .cost { display: table-cell; vertical-align: top; width: 50%; }
+    .cost:first-child { padding-right: 19px; }
+    .cost:last-child { padding-left: 19px; border-left: 1px solid var(--line); }
+    .cost p, .small { color: var(--muted); }
+    .status { margin-top: 22px; border-top: 2px solid var(--ink); padding-top: 12px; }
+    .status p + p { margin-top: 7px; }
+    .example { margin-top: 16px; }
+    .example h3 { color: var(--ink); }
+    table { width: 100%; border-collapse: collapse; text-align: left; margin: 10px 0 2px; }
+    th { font-size: 14px; font-weight: 400; color: var(--muted); }
+    td, th { padding: 5px 6px 5px 0; }
+    td { border-top: 1px solid #d4cbe5; }
+    td:nth-child(2) { font-weight: bold; }
+    .risk { color: #843629; font-weight: bold; }
+    .caption { margin-top: 8px; font-size: 14px; color: var(--muted); }
+    @media screen and (max-width: 650px) {
+      .sheet { margin: 0; padding: 22px 20px; }
+      .sheet + .sheet { padding-top: 10px; }
+      .continuation header { display: none; }
+      .brand span { margin-left: 5px; }
+      header time { font-size: 12px; }
+      h1, .page-title { font-size: clamp(28px, 7vw, 40px); }
+      .page-title { margin-top: 0; }
+      .costs, .cost { display: block; width: 100%; }
+      .cost:first-child { padding: 0 0 10px; }
+      .cost:last-child { padding: 9px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+      .panel { padding: 15px; }
+      td, th { font-size: 14px; }
+      td:first-child, td:nth-child(2) { white-space: nowrap; }
+    }
+    @media print {
+      html, body { background: white; }
+      body { font-size: 15.5px; line-height: 1.55; }
+      .sheet { max-width: none; margin: 0; padding-bottom: 0; }
+      .sheet + .sheet { break-before: page; }
+      .block, .status { margin-top: 18px; }
+      .intro { line-height: 1.56; }
+      .step { padding: 8px 0; }
+    }
+  
+.oracle-doc .markdown-body h1{font-size:40px;line-height:1.22;letter-spacing:-.035em;margin:25px 0 14px}
+.oracle-doc .markdown-body h2{font-size:22px;line-height:1.4;margin:25px 0 10px;color:var(--ink)}
+.oracle-doc .markdown-body p{margin:9px 0 12px}
+.oracle-doc .markdown-body strong{color:var(--purple)}
+.oracle-doc .markdown-body blockquote{margin:18px 0;padding:15px 20px;background:var(--tint);border-left:4px solid var(--purple);border-radius:0 10px 10px 0}
+.oracle-doc .markdown-body blockquote p{margin:0}
+.oracle-doc .markdown-body table{table-layout:auto;font-size:14px;margin:14px 0 19px}
+.oracle-doc .markdown-body th{background:var(--tint);color:var(--ink);font-weight:700;padding:9px 10px}
+.oracle-doc .markdown-body td{padding:9px 10px;border-top:1px solid var(--line);vertical-align:top}
+.oracle-doc .markdown-body td:nth-child(2){font-weight:400}
+.oracle-doc .markdown-body a{color:var(--purple);text-decoration:underline}
+.oracle-doc .markdown-body h2,.oracle-doc .markdown-body blockquote,.oracle-doc .markdown-body table{break-inside:avoid}
+@media screen and (max-width:650px){.oracle-doc .markdown-body h1{font-size:32px}.oracle-doc .markdown-body table{font-size:12px}.oracle-doc .markdown-body th,.oracle-doc .markdown-body td{padding:7px 5px}}
+
+
+.langbar{position:sticky;top:0;z-index:10;max-width:794px;margin:0 auto;background:#fff;
+ display:flex;align-items:center;justify-content:flex-end;gap:9px;padding:10px 22px;
+ border-bottom:1px solid #dfdbe8;box-shadow:0 3px 12px #211d3810}
+.langbar button{border:1px solid #cfc5e5;background:#fff;color:#5635a8;border-radius:18px;
+ padding:6px 16px;font:600 13px sans-serif;cursor:pointer}
+.langbar button[aria-pressed=true]{background:#5635a8;color:white}
+.langbar .switchlabel{margin-right:auto;font-size:12px;color:#514d63}
+[hidden]{display:none!important}
+@media print{.langbar{display:none}.sheet{break-inside:avoid}}
+@media screen and (max-width:650px){.langbar{padding:9px 16px}}
+
+/* Mobile-first usability enhancements */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{overflow-x:hidden}
+.sheet{width:100%;min-width:0}
+.langbar{width:100%;box-sizing:border-box;min-height:56px}
+.langbar button{min-width:76px;min-height:44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.langbar button:focus-visible{outline:3px solid #a999f4;outline-offset:2px}
+.sheet p,.sheet h1,.sheet h2,.sheet h3,.sheet td,.sheet th{overflow-wrap:break-word}
+.sheet table{max-width:100%}
+@media screen and (max-width:650px){
+ .sheet{padding:22px 18px;margin:0 auto;box-shadow:none}
+ .sheet+.sheet{padding-top:24px;border-top:1px solid var(--line)}
+ .langbar{position:sticky;top:0;padding:7px 12px;gap:7px;box-shadow:0 3px 10px #211d3815}
+ .langbar .switchlabel{font-size:11px;line-height:1.3;max-width:calc(100% - 174px);overflow-wrap:anywhere}
+ .langbar button{min-width:74px;padding:9px 11px}
+ .sheet header{gap:8px;flex-wrap:wrap}
+ .sheet .brand{white-space:normal}
+ .sheet .brand span{display:inline-block}
+ .sheet h1,.sheet .page-title{font-size:clamp(27px,7vw,36px);line-height:1.22;letter-spacing:-.025em}
+ .sheet h2{font-size:20px}
+ .sheet p{line-height:1.7}
+ .sheet .intro{font-size:16px}
+ .sheet .panel{padding:14px}
+ .sheet table{width:100%;table-layout:fixed}
+ .sheet td,.sheet th{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;hyphens:auto;vertical-align:top;font-size:12px;line-height:1.45}
+ .sheet th:nth-child(1),.sheet td:nth-child(1){width:27%}
+ .sheet th:nth-child(2),.sheet td:nth-child(2){width:23%}
+ .sheet th:nth-child(3),.sheet td:nth-child(3){width:50%}
+ .oracle-doc .markdown-body table th:nth-child(1),.oracle-doc .markdown-body table td:nth-child(1){width:30%}
+ .oracle-doc .markdown-body table th:nth-child(2),.oracle-doc .markdown-body table td:nth-child(2){width:70%}
+ .oracle-doc .markdown-body h1{font-size:clamp(27px,7vw,34px)}
+}
+@media screen and (max-width:360px){
+ .sheet{padding:18px 12px}
+ .langbar{padding:6px 8px;gap:5px}
+ .langbar .switchlabel{font-size:10px;max-width:calc(100% - 150px)}
+ .langbar button{min-width:68px;padding:8px}
+ .sheet td,.sheet th{font-size:11px;padding:5px 3px}
+}
+@media print{.langbar{display:none!important}}
+
+
+
+/* Telegram-friendly progressive enhancement: CSS-only language selection */
+.language-choice{position:absolute;opacity:0;width:1px;height:1px;left:-9999px}
+#lang-zh:checked ~ #content-en{display:none!important}
+#lang-en:checked ~ #content-zh{display:none!important}
+#lang-zh:checked ~ #content-zh,#lang-en:checked ~ #content-en{display:block!important}
+.langbar label{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+ min-height:46px;min-width:82px;padding:8px 14px;border:1px solid #cfc5e5;
+ border-radius:24px;color:#5635a8;background:#fff;font:600 14px/1.2 system-ui,sans-serif;
+ user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#lang-zh:checked ~ .langbar label[for="lang-zh"],
+#lang-en:checked ~ .langbar label[for="lang-en"]{background:#5635a8;color:#fff;border-color:#5635a8}
+#lang-zh:focus-visible ~ .langbar label[for="lang-zh"],
+#lang-en:focus-visible ~ .langbar label[for="lang-en"]{outline:3px solid #a999f4;outline-offset:3px}
+@media(max-width:360px){.langbar label{min-width:68px;padding:7px 9px}}
+@media print{#content-en{display:none!important}#content-zh{display:block!important}}
+</style></head>
+<body><input checked="" class="language-choice" id="lang-zh" name="language" type="radio" value="zh"/><input class="language-choice" id="lang-en" name="language" type="radio" value="en"/><nav aria-label="Language selection" class="langbar"><span class="switchlabel">TAI / TBC · 中文 / English</span><label for="lang-zh" lang="zh-CN">中文</label><label for="lang-en" lang="en">English</label></nav>
+<div id="content-zh" lang="zh-CN"><article class="oracle-doc">
+<div class="sheet"><header><div class="brand"><svg aria-hidden="true" viewbox="0 0 48 48"><rect fill="#a999f4" height="48" rx="14" width="48"></rect><path d="M24 8v32M8 24h32M13 13l22 22M13 35l22-22" fill="none" stroke="#1c1434" stroke-linecap="round" stroke-width="5"></path></svg><strong>TBC</strong><span>价格预言机 · 使用介绍</span></div><span class="running-title">TBC Oracle</span></header>
+<div class="markdown-body"><h1>TBC Oracle 价格预言机</h1>
+<p>钱包里的一笔 TBC 折合多少美元？即使 TBC 对 USDT 的价格没动，只要 USDT 对美元的汇率变了，这笔余额的美元估值也会变。TBC Oracle 把多个交易市场的行情整理成带数字签名的参考价。钱包和行情看板可以在演练环境中用它展示估值，让用户看到每笔估值采用的行情和汇率。</p>
+<h2>四种参考报价</h2>
+<table>
+<thead>
+<tr>
+<th>报价</th>
+<th>可以查到什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BTC/USD</td>
+<td>一枚比特币的美元参考价</td>
+</tr>
+<tr>
+<td>TBC/USDT</td>
+<td>一枚 TBC 折合多少 USDT</td>
+</tr>
+<tr>
+<td>USDT/USD</td>
+<td>一枚 USDT 的美元参考价</td>
+</tr>
+<tr>
+<td>TBC/USD</td>
+<td>由 TBC/USDT 和 USDT/USD 换算出的一枚 TBC 的美元参考价</td>
+</tr>
+</tbody>
+</table>
+<h2>市场行情如何变成参考价</h2>
+<p>以 BTC/USD 为例，预言机先检查 Coinbase、Kraken 和 Bitstamp 各自的行情。买卖双方的报价相差多大？接近当前价格的挂单有多少？最近是否还有成交？这些检查有助于识别交易稀少或更新滞后的行情。三家行情都合格、价格差异也在设定范围内时，系统把各市场的买卖中间价从低到高排列，取居中的一个作为参考价。</p>
+<p>TBC/USDT 还支持按固定权重汇总三个市场的中间价，其中 Hyperliquid 占 50%，LBank 占 40%，MEXC 占 10%。Hyperliquid 以 USDC 计价，系统先用 Kraken 的 USDC/USDT 汇率换算，再把三个价格加权。启用这套配置时，只要任一必要来源失效，TBC/USDT 和依赖它的 TBC/USD 就会暂停报价。</p>
+<h2>TBC 的美元价怎么算</h2>
+<blockquote>
+<p><strong>假设行情</strong>　若 1 TBC 值 2.00 USDT，1 USDT 值 0.99 美元，换算后 1 TBC 值 <strong>1.98 美元</strong>。</p>
+</blockquote>
+<p>假设钱包里有 100 TBC 和 20 USDT。按上面的行情，两笔余额分别值 198.00 美元和 19.80 美元，合计 <strong>217.80 美元</strong>。钱包只需请求一次估值快照，就能同时拿到 TBC/USD 和它引用的两份基础报价。这样，两笔余额用的是同一份 USDT 汇率，用户也能按原数复算总额。</p>
+</div></div>
+<div class="sheet continuation"><header><div class="brand"><strong>TBC</strong><span>价格预言机 · 使用介绍</span></div><span class="running-title">报价验证与使用</span></header>
+<div class="markdown-body"><h2>怎样判断一份报价还能不能用</h2>
+<p><strong>核对是谁签发的。</strong> 当前版本由单节点签发报价。应用通过独立可信渠道取得报价公钥，就能验证报告的数字签名。如果有人改动价格、轮次或有效期，签名校验就会失败。</p>
+<p><strong>读懂报告上的三个时间。</strong> 观察时间说明这份价格依据的是何时的行情，签发时间说明预言机何时签署报告，到期时间给出使用期限。即使刚收到报告，也应按行情的观察时间判断新鲜度。两份基础报价中只要有一份到期，应用就要停用这轮 TBC/USD。</p>
+<p><strong>使用前检查在线状态。</strong> 例如，钱包刚收到快照，预言机随后检测到一个必要行情源断连。即使报告尚在有效期内，这次在线检查也会提示报价不可用。钱包可以暂时显示“参考价暂不可用”。待相关行情连续五分钟通过质量检查、服务恢复后，再获取新快照更新估值。</p>
+<h2>怎样回查一次估值</h2>
+<p>如果用户想核对昨天看到的余额，钱包可以凭当时保存的币对和报价轮次，调出原始签名报告与对应的证据摘要。TBC/USD 报告还记录了它采用的两份基础报价的轮次。结合当时的持仓数量，就能重算那次美元估值。需要了解报价的链上发布进度时，还可以查询交易 ID 和确认数。</p>
+<h2>如何体验</h2>
+<p>当前版本适合在独立环境中试做钱包估值、行情展示和历史查询。真实市场准入、七天校准及随后的十四天报价观察仍待完成，当前版本不能用于真实抵押、借款或清算。</p>
+<p>首次体验可从示例中的钱包余额开始。向部署负责人获取演练环境的 HTTPS 地址和 CA 证书，通过独立可信渠道取得验签配置，再按手册查询一份 TBC/USD 快照，验证签名，并用返回的两份基础报价算一遍美元价。具体步骤见部署包内的<a href="USAGE.md">《报价 API 使用手册》</a>。</p>
+</div></div></article></div>
+<div id="content-en" lang="en"><article class="oracle-doc">
+<div class="sheet"><header><div class="brand"><svg aria-hidden="true" viewbox="0 0 48 48"><rect fill="#a999f4" height="48" rx="14" width="48"></rect><path d="M24 8v32M8 24h32M13 13l22 22M13 35l22-22" fill="none" stroke="#1c1434" stroke-linecap="round" stroke-width="5"></path></svg><strong>TBC</strong><span>Price Oracle · User Guide</span></div><span class="running-title">TBC Oracle</span></header>
+<div class="markdown-body"><h1>TBC Oracle Price Oracle</h1>
+<p>How much is the TBC in your wallet worth in US dollars? Even if the TBC/USDT price stays unchanged, the dollar value of your holdings changes when the USDT/USD exchange rate moves. TBC Oracle aggregates market data from multiple trading venues into digitally signed reference prices. In a test environment, wallets and market dashboards can use these prices to display valuations and show users which market quotes and exchange rates were used.</p>
+<h2>Four Reference Price Pairs</h2>
+<table>
+<thead>
+<tr>
+<th>Price pair</th>
+<th>What it tells you</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BTC/USD</td>
+<td>Reference price of one bitcoin in US dollars</td>
+</tr>
+<tr>
+<td>TBC/USDT</td>
+<td>How many USDT one TBC is worth</td>
+</tr>
+<tr>
+<td>USDT/USD</td>
+<td>Reference dollar value of one USDT</td>
+</tr>
+<tr>
+<td>TBC/USD</td>
+<td>Reference dollar value of one TBC, calculated from TBC/USDT and USDT/USD</td>
+</tr>
+</tbody>
+</table>
+<h2>How Market Data Becomes a Reference Price</h2>
+<p>Take BTC/USD as an example. The oracle first examines market data from Coinbase, Kraken, and Bitstamp. How wide is the spread between bids and asks? How much order-book liquidity is available near the current price? Have trades occurred recently? These checks help identify thinly traded or stale markets. When all three venues pass the checks and their prices fall within the configured deviation range, the system sorts their bid–ask midpoints and selects the median as the reference price.</p>
+<p>TBC/USDT also supports a fixed-weight aggregation of mid-market prices from three venues: Hyperliquid at 50%, LBank at 40%, and MEXC at 10%. Because Hyperliquid quotes in USDC, the system first converts its price using Kraken's USDC/USDT exchange rate, then computes the weighted average. When this configuration is enabled, a failure of any required source suspends both TBC/USDT and the dependent TBC/USD quote.</p>
+<h2>How Is the Dollar Price of TBC Calculated?</h2>
+<blockquote>
+<p><strong>Illustrative market prices:</strong> If 1 TBC is worth 2.00 USDT and 1 USDT is worth US$0.99, then 1 TBC is worth <strong>US$1.98</strong>.</p>
+</blockquote>
+<p>Suppose a wallet holds 100 TBC and 20 USDT. At those prices, the balances are worth US$198.00 and US$19.80 respectively, for a combined value of <strong>US$217.80</strong>. With a single valuation-snapshot request, the wallet receives TBC/USD along with the two underlying quotes it references. Both balances therefore use the same USDT exchange rate, and the user can independently reproduce the total from the original figures.</p>
+</div></div>
+<div class="sheet continuation"><header><div class="brand"><strong>TBC</strong><span>Price Oracle · User Guide</span></div><span class="running-title">Quote Verification &amp; Usage</span></header>
+<div class="markdown-body"><h2>How Can You Tell Whether a Quote Is Still Usable?</h2>
+<p><strong>Verify who signed it.</strong> In the current version, a single node signs price reports. An application can verify the digital signature using the oracle's public verification key, obtained through an independent, trusted channel. Any alteration to the price, round number, or validity period will cause signature verification to fail.</p>
+<p><strong>Understand the three timestamps in the report.</strong> The observation time indicates when the underlying market data was observed; the issuance time indicates when the oracle signed the report; and the expiration time defines how long it remains valid. Even if a report has just arrived, its freshness should be judged by the observation time. If either underlying quote has expired, the application must stop using that round of TBC/USD.</p>
+<p><strong>Check live availability before use.</strong> For example, a wallet might receive a snapshot just before the oracle detects that a required market feed has disconnected. Even if the signed report has not expired, a live status check will flag the quote as unavailable. The wallet can temporarily display “Reference price unavailable.” Once the affected market feeds have continuously passed quality checks for five minutes and the service has recovered, the wallet can request a fresh snapshot to update its valuations.</p>
+<h2>How to Audit a Past Valuation</h2>
+<p>If a user wants to verify a wallet balance shown yesterday, the wallet can use the saved trading pair and quote round to retrieve the original signed report and its corresponding evidence summary. A TBC/USD report also records the round numbers of its two underlying quotes. Together with the holdings at that time, this information allows the dollar valuation to be recalculated. To inspect the on-chain publication progress of a quote, the application can also look up its transaction ID and confirmation count.</p>
+<h2>How to Try It</h2>
+<p>The current version is suitable for experimenting with wallet valuations, market-price displays, and historical lookups in an isolated environment. Approval for live market use, seven days of calibration, and a subsequent fourteen-day quote-observation period are still pending. The current version must not be used for real collateralization, borrowing, or liquidation.</p>
+<p>For a first trial, start with the sample wallet balances above. Obtain the test environment's HTTPS address and CA certificate from the deployment administrator, and acquire the signature-verification configuration through a separate trusted channel. Then follow the manual to request a TBC/USD snapshot, verify its signature, and calculate the dollar price using the two underlying quotes returned. For step-by-step instructions, see the <a href="USAGE.md">Quote API User Guide</a> included in the deployment package.</p>
+</div></div></article></div>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"45c2bf8136a245cd97f1c2e9a96c0730","spa":2}' crossorigin="anonymous"></script>
+</body></html>
